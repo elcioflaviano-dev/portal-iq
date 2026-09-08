@@ -3,7 +3,9 @@ import pandas as pd
 from PIL import Image
 import os
 import urllib.parse
-from datetime import datetime
+import json
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 
 # --- 1. Configuração Inicial ---
 st.set_page_config(page_title="Portal IQ - Totale", layout="wide", initial_sidebar_state="expanded")
@@ -13,40 +15,82 @@ if 'logado' not in st.session_state: st.session_state['logado'] = False
 if 'pagina_atual' not in st.session_state: st.session_state['pagina_atual'] = "Dashboard"
 if 'agenda_matinal' not in st.session_state: st.session_state['agenda_matinal'] = {}
 
-# --- 2. Leitura de Dados ---
-@st.cache_data
-def carregar_dados():
+# --- 2. Conexão com Google Sheets ---
+def conectar_planilha():
     try:
-        dados_iqs = pd.read_excel('PORTAL IQ.xlsx', sheet_name='Base_IQ')
-        dados_tecnicos = pd.read_excel('PORTAL IQ.xlsx', sheet_name='Base_Tecnicos')
-        dados_certificados = pd.read_excel('PORTAL IQ.xlsx', sheet_name='Certificados')
-        
-        dados_iqs['re_iq'] = dados_iqs['re_iq'].astype(str).str.strip().str.replace('.0', '', regex=False)
-        dados_iqs['senha'] = dados_iqs['senha'].astype(str).str.strip()
-        dados_iqs['PERFIL'] = dados_iqs.get('PERFIL', 'IQ').astype(str).str.strip().str.upper()
-        
-        dados_tecnicos['login'] = dados_tecnicos['login'].astype(str).str.strip().str.replace('.0', '', regex=False)
-        dados_tecnicos['re_iq_responsavel'] = dados_tecnicos['re_iq_responsavel'].astype(str).str.strip().str.replace('.0', '', regex=False)
-        dados_tecnicos['status_certificacao'] = dados_tecnicos['status_certificacao'].astype(str).str.strip().str.upper()
-
-        if 'LOGIN' in dados_certificados.columns:
-            dados_certificados['LOGIN'] = dados_certificados['LOGIN'].astype(str).str.strip().str.replace('.0', '', regex=False)
-            dados_completos = pd.merge(dados_tecnicos, dados_certificados, left_on='login', right_on='LOGIN', how='left')
-        else:
-            dados_completos = dados_tecnicos
-            
-        return dados_iqs, dados_completos
+        # Puxa o JSON salvo nos Secrets do Streamlit
+        creds_dict = json.loads(st.secrets["gcp_service_account"])
+        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+        client = gspread.authorize(creds)
+        return client.open("PORTAL IQ")
     except Exception as e:
-        st.error(f"Erro ao ler a planilha. Detalhe: {e}")
+        st.error(f"Erro ao conectar com o Google Sheets. Verifique se o e-mail do robô foi adicionado como Editor na planilha. Detalhe: {e}")
         st.stop()
 
-dados_iqs, dados_completos = carregar_dados()
+# Função para ler os dados (com cache de 60 segundos para não sobrecarregar o Google)
+@st.cache_data(ttl=60)
+def carregar_dados():
+    planilha = conectar_planilha()
+    
+    dados_iqs = pd.DataFrame(planilha.worksheet("Base_IQ").get_all_records())
+    dados_tecnicos = pd.DataFrame(planilha.worksheet("Base_Tecnicos").get_all_records())
+    dados_certificados = pd.DataFrame(planilha.worksheet("Certificados").get_all_records())
+    
+    # Padronização e Limpeza
+    dados_iqs['re_iq'] = dados_iqs['re_iq'].astype(str).str.strip().str.replace('.0', '', regex=False)
+    dados_iqs['senha'] = dados_iqs['senha'].astype(str).str.strip()
+    dados_iqs['PERFIL'] = dados_iqs.get('PERFIL', 'IQ').astype(str).str.strip().str.upper()
+    
+    dados_tecnicos['login'] = dados_tecnicos['login'].astype(str).str.strip().str.replace('.0', '', regex=False)
+    dados_tecnicos['re_iq_responsavel'] = dados_tecnicos['re_iq_responsavel'].astype(str).str.strip().str.replace('.0', '', regex=False)
+    dados_tecnicos['status_certificacao'] = dados_tecnicos['status_certificacao'].astype(str).str.strip().str.upper()
+    dados_tecnicos['Acompanhamento'] = dados_tecnicos.get('Acompanhamento', 'NÃO').astype(str).str.strip().str.upper()
 
-# Função para colorir a tabela (SIM verde / NÃO vermelho)
+    if 'LOGIN' in dados_certificados.columns:
+        dados_certificados['LOGIN'] = dados_certificados['LOGIN'].astype(str).str.strip().str.replace('.0', '', regex=False)
+        dados_completos = pd.merge(dados_tecnicos, dados_certificados, left_on='login', right_on='LOGIN', how='left')
+    else:
+        dados_completos = dados_tecnicos
+        
+    return dados_iqs, dados_completos
+
+# Funções para SALVAR dados no Google Sheets em tempo real
+def salvar_nova_senha(re_usuario, nova_senha):
+    ws = conectar_planilha().worksheet("Base_IQ")
+    registros = ws.get_all_records()
+    for idx, row in enumerate(registros):
+        if str(row.get('re_iq', '')).strip().replace('.0','') == str(re_usuario):
+            col_idx = list(row.keys()).index('senha') + 1
+            ws.update_cell(idx + 2, col_idx, nova_senha) # +2 por causa do cabeçalho
+            break
+    st.cache_data.clear() # Limpa o cache para ler a nova senha
+
+def atualizar_acompanhamento(login_tecnico, status, contrato="", data_mon="", obs=""):
+    ws = conectar_planilha().worksheet("Base_Tecnicos")
+    registros = ws.get_all_records()
+    for idx, row in enumerate(registros):
+        if str(row.get('login', '')).strip().replace('.0','') == str(login_tecnico):
+            # Atualiza o status principal
+            if 'Acompanhamento' in row:
+                col_idx = list(row.keys()).index('Acompanhamento') + 1
+                ws.update_cell(idx + 2, col_idx, status)
+            
+            # Se as colunas extras existirem no Sheets, ele salva. Se não, apenas ignora.
+            if 'Contrato' in row: ws.update_cell(idx + 2, list(row.keys()).index('Contrato') + 1, contrato)
+            if 'Data_Monitoramento' in row: ws.update_cell(idx + 2, list(row.keys()).index('Data_Monitoramento') + 1, data_mon)
+            if 'Observacao' in row: ws.update_cell(idx + 2, list(row.keys()).index('Observacao') + 1, obs)
+            break
+    st.cache_data.clear()
+
+# --- Helpers Visuais ---
 def colorir_sim_nao(val):
     if val == 'SIM': return 'background-color: #d4edda; color: #155724; font-weight: bold;'
     elif val == 'NÃO': return 'background-color: #f8d7da; color: #721c24; font-weight: bold;'
     return ''
+
+# Carregamento Principal
+dados_iqs, dados_completos = carregar_dados()
 
 # --- 3. Tela de Login e Alteração de Senha ---
 if not st.session_state['logado']:
@@ -74,12 +118,17 @@ if not st.session_state['logado']:
                 st.error("RE ou Senha incorretos.")
                 
     with tab_senha:
-        st.warning("⚠️ Na versão final, essa alteração será salva no Google Sheets. No momento, está em modo demonstração.")
+        st.info("Para alterar sua senha, confirme seu RE e sua senha atual.")
         re_esqueci = st.text_input("Seu RE", key="re_esqueci")
         senha_atual = st.text_input("Senha Atual (ou Provisória)", type="password", key="senha_atual")
         senha_nova = st.text_input("Nova Senha", type="password", key="senha_nova")
         if st.button("Salvar Nova Senha"):
-            st.success("Configuração de senha atualizada com sucesso!")
+            iq_valido = dados_iqs[(dados_iqs['re_iq'] == re_esqueci.strip()) & (dados_iqs['senha'] == senha_atual.strip())]
+            if not iq_valido.empty:
+                salvar_nova_senha(re_esqueci.strip(), senha_nova.strip())
+                st.success("Senha alterada com sucesso no Google Sheets! Você já pode fazer login.")
+            else:
+                st.error("RE ou Senha atual não conferem.")
 
 # --- 4. Sistema Principal ---
 else:
@@ -105,13 +154,11 @@ else:
     if st.session_state['pagina_atual'] == "Dashboard":
         st.title(f"Painel IQ - {st.session_state['nome_iq']}")
         
-        # Filtro de colunas (removendo Região)
-        colunas_exibicao = ['login', 'nome', 'status_certificacao']
+        colunas_exibicao = ['login', 'nome', 'status_certificacao', 'Acompanhamento']
         colunas_meses = [col for col in equipe_iq.columns if 'CERTIFICADO ' in str(col).upper()]
         colunas_exibicao.extend(colunas_meses)
         equipe_exibicao = equipe_iq[[col for col in colunas_exibicao if col in equipe_iq.columns]]
         
-        # Tabela Certificados (Colorida)
         st.subheader("✅ Técnicos Certificados (Histórico)")
         df_certificados = equipe_exibicao[equipe_exibicao['status_certificacao'] == 'SIM']
         if df_certificados.empty:
@@ -119,25 +166,27 @@ else:
         else:
             st.dataframe(df_certificados.style.applymap(colorir_sim_nao, subset=['status_certificacao']), hide_index=True, use_container_width=True)
         
-        # Monitoramento Manual
         st.divider()
         st.subheader("⚠️ Técnicos em Monitoramento (Seleção Manual)")
-        st.write("Adicione manualmente os técnicos que necessitam de acompanhamento:")
         
-        tecnicos_nao_cert = equipe_exibicao[equipe_exibicao['status_certificacao'] == 'NÃO']['nome'].tolist()
-        tecnicos_selecionados = st.multiselect("Selecione os Técnicos para Acompanhamento:", options=tecnicos_nao_cert)
+        tecnicos_nao_cert_df = equipe_exibicao[equipe_exibicao['status_certificacao'] == 'NÃO']
+        opcoes_tecnicos = tecnicos_nao_cert_df['nome'].tolist()
+        
+        tecnicos_selecionados = st.multiselect("Selecione os Técnicos para abrir o painel de Acompanhamento:", options=opcoes_tecnicos)
         
         if tecnicos_selecionados:
-            for tec in tecnicos_selecionados:
-                with st.expander(f"👤 {tec}"):
+            for tec_nome in tecnicos_selecionados:
+                tec_login = tecnicos_nao_cert_df[tecnicos_nao_cert_df['nome'] == tec_nome]['login'].iloc[0]
+                with st.expander(f"👤 {tec_nome}"):
                     col1, col2 = st.columns(2)
                     with col1:
-                        st.text_input("Contrato Atual:", key=f"cont_{tec}")
-                        st.date_input("Data do Monitoramento:", key=f"data_{tec}", format="DD/MM/YYYY")
+                        contrato = st.text_input("Contrato Atual:", key=f"cont_{tec_login}")
+                        data_mon = st.date_input("Data do Monitoramento:", key=f"data_{tec_login}")
                     with col2:
-                        st.text_area("Observações:", key=f"obs_{tec}")
-                    if st.button("Salvar Dados do Acompanhamento", key=f"btn_{tec}"):
-                        st.success("Salvo com sucesso!")
+                        obs = st.text_area("Observações:", key=f"obs_{tec_login}")
+                    if st.button("Salvar Dados no Banco de Dados", key=f"btn_{tec_login}", type="primary"):
+                        atualizar_acompanhamento(tec_login, "SIM", contrato, data_mon.strftime("%d/%m/%Y"), obs)
+                        st.success("Dados salvos e status de Acompanhamento alterado para SIM na planilha!")
 
     # --- MATINAL ---
     elif st.session_state['pagina_atual'] == "Matinal":
@@ -152,7 +201,7 @@ else:
             with col_a2:
                 data_agendada = st.date_input("Escolha o Dia e Mês:", format="DD/MM/YYYY")
                 
-            if st.button("Adicionar à Agenda", type="primary"):
+            if st.button("Adicionar à Agenda Interna", type="primary"):
                 if tec_agendar != "Selecione...":
                     st.session_state['agenda_matinal'][tec_agendar] = data_agendada.strftime("%d/%m/%Y")
                     st.success(f"Agendado para {data_agendada.strftime('%d/%m/%Y')}!")
@@ -172,7 +221,6 @@ else:
                 st.info("⚠️ Assinale **apenas o que estiver faltando ou irregular** no checklist.")
                 faltas = []
                 
-                # Lista Completa Baseada no Matinal_2026.xlsx
                 t1, t2, t3, t4, t5 = st.tabs(["Manuais", "Acessórios", "GPON/Fibra", "EPI/Segurança", "Veículo/Asseio"])
                 
                 with t1:
@@ -213,5 +261,12 @@ else:
                     if not foto_upload:
                         st.warning("⚠️ A foto é obrigatória.")
                     else:
-                        st.success(f"Matinal de {tec_atual} concluída!")
+                        tec_login = equipe_iq[equipe_iq['nome'] == tec_atual]['login'].iloc[0]
+                        # Dá baixa na Matinal marcando que NÃO precisa mais de Acompanhamento pendente no momento
+                        atualizar_acompanhamento(tec_login, "NÃO", obs=f"Matinal Concluída em {datetime.now().strftime('%d/%m/%Y')}")
+                        
+                        # Remove da agenda
+                        del st.session_state['agenda_matinal'][tec_atual]
+                        
+                        st.success(f"Matinal de {tec_atual} concluída e gravada na planilha Google!")
                         st.markdown(f'📩 **[Clique aqui para enviar o relatório por E-mail]({url_email})**')
