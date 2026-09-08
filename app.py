@@ -6,6 +6,7 @@ import urllib.parse
 import json
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+from datetime import datetime
 
 # --- 1. Configuração Inicial ---
 st.set_page_config(page_title="Portal IQ - Totale", layout="wide", initial_sidebar_state="expanded")
@@ -78,26 +79,25 @@ def salvar_nova_senha(re_usuario, nova_senha):
             col_idx = list(row.keys()).index('senha') + 1
             ws.update_cell(idx + 2, col_idx, nova_senha) # +2 por causa do cabeçalho
             break
-    st.cache_data.clear() # Limpa o cache para ler a nova senha
+    st.cache_data.clear() 
 
 def atualizar_acompanhamento(login_tecnico, status, contrato="", data_mon="", obs=""):
     ws = conectar_planilha().worksheet("Base_Tecnicos")
     registros = ws.get_all_records()
     for idx, row in enumerate(registros):
         if str(row.get('login', '')).strip().replace('.0','') == str(login_tecnico):
-            # Atualiza o status principal
             if 'Acompanhamento' in row:
-                col_idx = list(row.keys()).index('Acompanhamento') + 1
-                ws.update_cell(idx + 2, col_idx, status)
-            
-            # Se as colunas extras existirem no Sheets, ele salva. Se não, apenas ignora.
-            if 'Contrato' in row: ws.update_cell(idx + 2, list(row.keys()).index('Contrato') + 1, contrato)
-            if 'Data_Monitoramento' in row: ws.update_cell(idx + 2, list(row.keys()).index('Data_Monitoramento') + 1, data_mon)
-            if 'Observacao' in row: ws.update_cell(idx + 2, list(row.keys()).index('Observacao') + 1, obs)
+                ws.update_cell(idx + 2, list(row.keys()).index('Acompanhamento') + 1, status)
+            if 'Contrato' in row: 
+                ws.update_cell(idx + 2, list(row.keys()).index('Contrato') + 1, contrato)
+            if 'Data_Monitoramento' in row: 
+                ws.update_cell(idx + 2, list(row.keys()).index('Data_Monitoramento') + 1, data_mon)
+            if 'Observacao' in row: 
+                ws.update_cell(idx + 2, list(row.keys()).index('Observacao') + 1, obs)
             break
     st.cache_data.clear()
 
-# --- Helpers Visuais ---
+# Helpers Visuais
 def colorir_sim_nao(val):
     if val == 'SIM': return 'background-color: #d4edda; color: #155724; font-weight: bold;'
     elif val == 'NÃO': return 'background-color: #f8d7da; color: #721c24; font-weight: bold;'
@@ -178,7 +178,8 @@ else:
         if df_certificados.empty:
             st.info("Nenhum técnico certificado.")
         else:
-            st.dataframe(df_certificados.style.applymap(colorir_sim_nao, subset=['status_certificacao']), hide_index=True, use_container_width=True)
+            # Correção do applymap para map
+            st.dataframe(df_certificados.style.map(colorir_sim_nao, subset=['status_certificacao']), hide_index=True, use_container_width=True)
         
         st.divider()
         st.subheader("⚠️ Técnicos em Monitoramento (Seleção Manual)")
@@ -195,11 +196,14 @@ else:
                     col1, col2 = st.columns(2)
                     with col1:
                         contrato = st.text_input("Contrato Atual:", key=f"cont_{tec_login}")
-                        data_mon = st.date_input("Data do Monitoramento:", key=f"data_{tec_login}")
+                        # Correção para aceitar data vazia (value=None)
+                        data_mon = st.date_input("Data do Monitoramento:", value=None, format="DD/MM/YYYY", key=f"data_{tec_login}")
                     with col2:
                         obs = st.text_area("Observações:", key=f"obs_{tec_login}")
+                    
                     if st.button("Salvar Dados no Banco de Dados", key=f"btn_{tec_login}", type="primary"):
-                        atualizar_acompanhamento(tec_login, "SIM", contrato, data_mon.strftime("%d/%m/%Y"), obs)
+                        data_str = data_mon.strftime("%d/%m/%Y") if data_mon else ""
+                        atualizar_acompanhamento(tec_login, "SIM", contrato, data_str, obs)
                         st.success("Dados salvos e status de Acompanhamento alterado para SIM na planilha!")
 
     # --- MATINAL ---
@@ -213,12 +217,15 @@ else:
             with col_a1:
                 tec_agendar = st.selectbox("Técnico:", ["Selecione..."] + equipe_iq['nome'].tolist())
             with col_a2:
-                data_agendada = st.date_input("Escolha o Dia e Mês:", format="DD/MM/YYYY")
+                # Correção para aceitar data vazia (value=None)
+                data_agendada = st.date_input("Escolha o Dia e Mês:", value=None, format="DD/MM/YYYY")
                 
             if st.button("Adicionar à Agenda Interna", type="primary"):
-                if tec_agendar != "Selecione...":
+                if tec_agendar != "Selecione..." and data_agendada is not None:
                     st.session_state['agenda_matinal'][tec_agendar] = data_agendada.strftime("%d/%m/%Y")
                     st.success(f"Agendado para {data_agendada.strftime('%d/%m/%Y')}!")
+                else:
+                    st.warning("Selecione o técnico e preencha uma data válida.")
             
             st.divider()
             st.write("**Sua Agenda Atual:**")
@@ -276,10 +283,7 @@ else:
                         st.warning("⚠️ A foto é obrigatória.")
                     else:
                         tec_login = equipe_iq[equipe_iq['nome'] == tec_atual]['login'].iloc[0]
-                        # Dá baixa na Matinal marcando que NÃO precisa mais de Acompanhamento pendente no momento
                         atualizar_acompanhamento(tec_login, "NÃO", obs=f"Matinal Concluída em {datetime.now().strftime('%d/%m/%Y')}")
-                        
-                        # Remove da agenda
                         del st.session_state['agenda_matinal'][tec_atual]
                         
                         st.success(f"Matinal de {tec_atual} concluída e gravada na planilha Google!")
