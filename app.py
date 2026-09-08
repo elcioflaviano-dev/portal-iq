@@ -3,16 +3,15 @@ import pandas as pd
 from PIL import Image
 import os
 import urllib.parse
+from datetime import datetime
 
 # --- 1. Configuração Inicial ---
 st.set_page_config(page_title="Portal IQ - Totale", layout="wide", initial_sidebar_state="expanded")
 
-# Inicialização de Variáveis de Sessão para manter os dados salvos enquanto o app roda
+# Variáveis de Sessão
 if 'logado' not in st.session_state: st.session_state['logado'] = False
 if 'pagina_atual' not in st.session_state: st.session_state['pagina_atual'] = "Dashboard"
-if 'horas_monitoria' not in st.session_state: st.session_state['horas_monitoria'] = 40
-if 'agenda_matinal' not in st.session_state: st.session_state['agenda_matinal'] = []
-if 'matinal_ativa' not in st.session_state: st.session_state['matinal_ativa'] = None
+if 'agenda_matinal' not in st.session_state: st.session_state['agenda_matinal'] = {}
 
 # --- 2. Leitura de Dados ---
 @st.cache_data
@@ -22,19 +21,14 @@ def carregar_dados():
         dados_tecnicos = pd.read_excel('PORTAL IQ.xlsx', sheet_name='Base_Tecnicos')
         dados_certificados = pd.read_excel('PORTAL IQ.xlsx', sheet_name='Certificados')
         
-        # Padronização e Limpeza
         dados_iqs['re_iq'] = dados_iqs['re_iq'].astype(str).str.strip().str.replace('.0', '', regex=False)
         dados_iqs['senha'] = dados_iqs['senha'].astype(str).str.strip()
         dados_iqs['PERFIL'] = dados_iqs.get('PERFIL', 'IQ').astype(str).str.strip().str.upper()
         
         dados_tecnicos['login'] = dados_tecnicos['login'].astype(str).str.strip().str.replace('.0', '', regex=False)
         dados_tecnicos['re_iq_responsavel'] = dados_tecnicos['re_iq_responsavel'].astype(str).str.strip().str.replace('.0', '', regex=False)
-        
-        # Correção do Bug: Padroniza para SIM e NÃO
         dados_tecnicos['status_certificacao'] = dados_tecnicos['status_certificacao'].astype(str).str.strip().str.upper()
-        dados_tecnicos['Acompanhamento'] = dados_tecnicos.get('Acompanhamento', 'NÃO').astype(str).str.strip().str.upper()
 
-        # Mescla histórico de meses se existir a coluna LOGIN na aba Certificados
         if 'LOGIN' in dados_certificados.columns:
             dados_certificados['LOGIN'] = dados_certificados['LOGIN'].astype(str).str.strip().str.replace('.0', '', regex=False)
             dados_completos = pd.merge(dados_tecnicos, dados_certificados, left_on='login', right_on='LOGIN', how='left')
@@ -43,208 +37,181 @@ def carregar_dados():
             
         return dados_iqs, dados_completos
     except Exception as e:
-        st.error(f"Erro ao ler a planilha. Verifique os nomes das abas e colunas. Detalhe: {e}")
+        st.error(f"Erro ao ler a planilha. Detalhe: {e}")
         st.stop()
 
 dados_iqs, dados_completos = carregar_dados()
 
-def mudar_pagina(nome_pagina):
-    st.session_state['pagina_atual'] = nome_pagina
+# Função para colorir a tabela (SIM verde / NÃO vermelho)
+def colorir_sim_nao(val):
+    if val == 'SIM': return 'background-color: #d4edda; color: #155724; font-weight: bold;'
+    elif val == 'NÃO': return 'background-color: #f8d7da; color: #721c24; font-weight: bold;'
+    return ''
 
-# --- 3. Tela de Login ---
+# --- 3. Tela de Login e Alteração de Senha ---
 if not st.session_state['logado']:
-    col_logo, col_vazia = st.columns([1, 2])
+    col_logo, _ = st.columns([1, 2])
     with col_logo:
         if os.path.exists("novo-logo-totale.png"):
-            st.image(Image.open("novo-logo-totale.png"), width=250)
+            st.image(Image.open("novo-logo-totale.png"), use_container_width=True)
             
-    st.title("Acesso - Portal Operacional Totale")
-    re_input = st.text_input("RE (Login)")
-    senha_input = st.text_input("Senha", type="password")
+    st.title("Acesso Operacional - Totale")
     
-    if st.button("Entrar", type="primary"):
-        iq_valido = dados_iqs[(dados_iqs['re_iq'] == re_input.strip()) & (dados_iqs['senha'] == senha_input.strip())]
-        
-        if not iq_valido.empty:
-            st.session_state['logado'] = True
-            st.session_state['re_usuario'] = re_input.strip()
-            st.session_state['nome_iq'] = iq_valido.iloc[0]['nome_iq']
-            st.session_state['perfil'] = iq_valido.iloc[0]['PERFIL']
-            st.rerun()
-        else:
-            st.error("RE ou Senha incorretos.")
+    tab_login, tab_senha = st.tabs(["🔑 Fazer Login", "🔄 Alterar Senha"])
+    
+    with tab_login:
+        re_input = st.text_input("RE (Login)")
+        senha_input = st.text_input("Senha", type="password")
+        if st.button("Entrar", type="primary"):
+            iq_valido = dados_iqs[(dados_iqs['re_iq'] == re_input.strip()) & (dados_iqs['senha'] == senha_input.strip())]
+            if not iq_valido.empty:
+                st.session_state['logado'] = True
+                st.session_state['re_usuario'] = re_input.strip()
+                st.session_state['nome_iq'] = iq_valido.iloc[0]['nome_iq']
+                st.session_state['perfil'] = iq_valido.iloc[0]['PERFIL']
+                st.rerun()
+            else:
+                st.error("RE ou Senha incorretos.")
+                
+    with tab_senha:
+        st.warning("⚠️ Na versão final, essa alteração será salva no Google Sheets. No momento, está em modo demonstração.")
+        re_esqueci = st.text_input("Seu RE", key="re_esqueci")
+        senha_atual = st.text_input("Senha Atual (ou Provisória)", type="password", key="senha_atual")
+        senha_nova = st.text_input("Nova Senha", type="password", key="senha_nova")
+        if st.button("Salvar Nova Senha"):
+            st.success("Configuração de senha atualizada com sucesso!")
 
 # --- 4. Sistema Principal ---
 else:
-    # Filtra a equipe (Gestão vê todos, IQ vê apenas os seus)
     if st.session_state.get('perfil') == 'GESTÃO':
         equipe_iq = dados_completos
     else:
         equipe_iq = dados_completos[dados_completos['re_iq_responsavel'] == st.session_state['re_usuario']]
 
-    # SIDEBAR (Menu)
-    # SIDEBAR (Menu)
+    # SIDEBAR
     with st.sidebar:
         if os.path.exists("novo-logo-totale.png"):
             st.image(Image.open("novo-logo-totale.png"), use_container_width=True)
         st.write(f"**Usuário:** {st.session_state['nome_iq']}")
-        st.write(f"**Perfil:** {st.session_state['perfil']}")
         st.divider()
-        
-        if st.button("📊 Dashboard Inicial", use_container_width=True): mudar_pagina("Dashboard")
-        if st.button("📅 Agenda e Matinal", use_container_width=True): mudar_pagina("Matinal")
-            
+        if st.button("📊 Dashboard Inicial", use_container_width=True): st.session_state['pagina_atual'] = "Dashboard"; st.rerun()
+        if st.button("📅 Agenda e Matinal", use_container_width=True): st.session_state['pagina_atual'] = "Matinal"; st.rerun()
         st.divider()
         if st.button("Sair", use_container_width=True):
             st.session_state['logado'] = False
             st.rerun()
 
-    # --- PÁGINA 1: DASHBOARD ---
+    # --- DASHBOARD ---
     if st.session_state['pagina_atual'] == "Dashboard":
-        st.title(f"Portal IQ - {st.session_state['nome_iq']}")
+        st.title(f"Painel IQ - {st.session_state['nome_iq']}")
         
-        # Cálculos de Porcentagem
-        total_tecnicos = len(equipe_iq)
-        certificados_sim = len(equipe_iq[equipe_iq['status_certificacao'] == 'SIM'])
-        certificados_nao = len(equipe_iq[equipe_iq['status_certificacao'] == 'NÃO'])
+        # Filtro de colunas (removendo Região)
+        colunas_exibicao = ['login', 'nome', 'status_certificacao']
+        colunas_meses = [col for col in equipe_iq.columns if 'CERTIFICADO ' in str(col).upper()]
+        colunas_exibicao.extend(colunas_meses)
+        equipe_exibicao = equipe_iq[[col for col in colunas_exibicao if col in equipe_iq.columns]]
         
-        pct_sim = round((certificados_sim / total_tecnicos * 100), 1) if total_tecnicos > 0 else 0
-        pct_nao = round((certificados_nao / total_tecnicos * 100), 1) if total_tecnicos > 0 else 0
-        
-        # Faltam Matinal: Técnicos que ainda não estão na agenda de hoje e não são certificados
-        tecnicos_nao_cert = equipe_iq[(equipe_iq['status_certificacao'] == 'NÃO') & (equipe_iq['Acompanhamento'] == 'NÃO')]
-        tecnicos_pendentes_matinal = [t for t in tecnicos_nao_cert['nome'].tolist() if t not in st.session_state['agenda_matinal']]
-        
-        # Cards Superiores
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric(label="🏆 Certificados", value=f"{pct_sim}% SIM", delta=f"{pct_nao}% NÃO (Total: {total_tecnicos})", delta_color="off")
-        with col2:
-            nova_hora = st.number_input("⏱️ Horas de Monitoria (Manual)", value=st.session_state['horas_monitoria'], step=1)
-            st.session_state['horas_monitoria'] = nova_hora
-        with col3:
-            st.metric(label="⚠️ Faltam Matinal", value=f"{len(tecnicos_pendentes_matinal)} Técnicos", delta_color="inverse")
-
-        st.divider()
-        
-        # Tabela de Certificados (SIM)
-        st.subheader("✅ Técnicos Certificados (Histórico Mensal)")
-        df_certificados = equipe_iq[equipe_iq['status_certificacao'] == 'SIM']
+        # Tabela Certificados (Colorida)
+        st.subheader("✅ Técnicos Certificados (Histórico)")
+        df_certificados = equipe_exibicao[equipe_exibicao['status_certificacao'] == 'SIM']
         if df_certificados.empty:
             st.info("Nenhum técnico certificado.")
         else:
-            colunas_mostrar = [c for c in df_certificados.columns if c in ['login', 'nome', 'regiao'] or 'CERTIFICADO ' in c.upper()]
-            st.dataframe(df_certificados[colunas_mostrar], hide_index=True, use_container_width=True)
+            st.dataframe(df_certificados.style.applymap(colorir_sim_nao, subset=['status_certificacao']), hide_index=True, use_container_width=True)
         
-        # Acordeão de Acompanhamento (Clicável)
-        st.subheader("⚠️ Técnicos em Monitoramento (Acompanhamento)")
-        st.markdown("*Clique no nome do técnico abaixo para registrar detalhes do acompanhamento:*")
+        # Monitoramento Manual
+        st.divider()
+        st.subheader("⚠️ Técnicos em Monitoramento (Seleção Manual)")
+        st.write("Adicione manualmente os técnicos que necessitam de acompanhamento:")
         
-        if tecnicos_nao_cert.empty:
-            st.success("Nenhum técnico pendente de acompanhamento no momento.")
-        else:
-            for index, row in tecnicos_nao_cert.iterrows():
-                # Cria uma barra expansível (clicável) para cada técnico
-                with st.expander(f"👤 {row['login']} - {row['nome']} | Região: {row['regiao']}"):
-                    col_form1, col_form2 = st.columns(2)
-                    with col_form1:
-                        contrato = st.text_input(f"Contrato (Téc: {row['nome']})", key=f"cont_{row['login']}")
-                        data_mon = st.date_input(f"Data do Monitoramento", key=f"data_{row['login']}")
-                    with col_form2:
-                        obs = st.text_area("Observações", key=f"obs_{row['login']}")
-                    
-                    if st.button("Salvar Acompanhamento", key=f"btn_{row['login']}", type="primary"):
-                        st.success("Dados salvos com sucesso! (Na versão final, isso atualizará o Excel).")
+        tecnicos_nao_cert = equipe_exibicao[equipe_exibicao['status_certificacao'] == 'NÃO']['nome'].tolist()
+        tecnicos_selecionados = st.multiselect("Selecione os Técnicos para Acompanhamento:", options=tecnicos_nao_cert)
+        
+        if tecnicos_selecionados:
+            for tec in tecnicos_selecionados:
+                with st.expander(f"👤 {tec}"):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.text_input("Contrato Atual:", key=f"cont_{tec}")
+                        st.date_input("Data do Monitoramento:", key=f"data_{tec}", format="DD/MM/YYYY")
+                    with col2:
+                        st.text_area("Observações:", key=f"obs_{tec}")
+                    if st.button("Salvar Dados do Acompanhamento", key=f"btn_{tec}"):
+                        st.success("Salvo com sucesso!")
 
-    # --- PÁGINA 2: AGENDA E MATINAL ---
+    # --- MATINAL ---
     elif st.session_state['pagina_atual'] == "Matinal":
-        st.title("📅 Matinal e Vistoria")
+        st.title("📅 Agendamento e Realização da Matinal")
+        tab_agenda, tab_exec = st.tabs(["1. Agendar", "2. Executar Formulário"])
         
-        tab_agenda, tab_executar = st.tabs(["1. Agendar Matinal", "2. Realizar Matinal"])
-        
-        # Aba 1: Agendamento
         with tab_agenda:
-            st.subheader("Agendar novo técnico para Matinal")
-            lista_elegiveis = equipe_iq[equipe_iq['status_certificacao'] == 'NÃO']['nome'].tolist()
-            
+            st.subheader("Agendar nova Matinal")
             col_a1, col_a2 = st.columns(2)
             with col_a1:
-                tec_agendar = st.selectbox("Selecione o Técnico:", ["Selecione..."] + lista_elegiveis)
+                tec_agendar = st.selectbox("Técnico:", ["Selecione..."] + equipe_iq['nome'].tolist())
             with col_a2:
-                if st.button("Adicionar à Agenda de Hoje"):
-                    if tec_agendar != "Selecione..." and tec_agendar not in st.session_state['agenda_matinal']:
-                        st.session_state['agenda_matinal'].append(tec_agendar)
-                        st.success(f"{tec_agendar} adicionado à agenda!")
-                        st.rerun()
+                data_agendada = st.date_input("Escolha o Dia e Mês:", format="DD/MM/YYYY")
+                
+            if st.button("Adicionar à Agenda", type="primary"):
+                if tec_agendar != "Selecione...":
+                    st.session_state['agenda_matinal'][tec_agendar] = data_agendada.strftime("%d/%m/%Y")
+                    st.success(f"Agendado para {data_agendada.strftime('%d/%m/%Y')}!")
             
             st.divider()
-            st.write("**Agenda de Matinais de Hoje:**")
-            if len(st.session_state['agenda_matinal']) == 0:
-                st.info("Nenhum técnico agendado para hoje.")
+            st.write("**Sua Agenda Atual:**")
+            if not st.session_state['agenda_matinal']:
+                st.info("Nenhuma matinal agendada.")
             else:
-                for tec in st.session_state['agenda_matinal']:
-                    col_nome, col_acao = st.columns([3, 1])
-                    col_nome.write(f"📌 **{tec}**")
-                    if col_acao.button("Iniciar Matinal", key=f"iniciar_{tec}", type="primary"):
-                        st.session_state['matinal_ativa'] = tec
-                        st.rerun()
+                for tec, data in st.session_state['agenda_matinal'].items():
+                    st.write(f"📌 **{data}** - Técnico: {tec}")
 
-        # Aba 2: Execução da Matinal
-        with tab_executar:
-            tec_atual = st.session_state['matinal_ativa']
+        with tab_exec:
+            tec_atual = st.selectbox("Selecione o Técnico para Iniciar a Vistoria:", ["Selecione..."] + list(st.session_state['agenda_matinal'].keys()))
             
-            if tec_atual is None:
-                st.warning("Nenhuma matinal em andamento. Vá na aba 'Agendar Matinal' e clique em Iniciar.")
-            else:
-                st.subheader(f"📋 Executando Matinal: {tec_atual}")
-                st.info("⚠️ Marque os itens que estão **FALTANDO** ou **IRREGULARES**.")
-                
-                # Checklists baseados no arquivo Matinal_2026.xlsx
-                st.markdown("**Ferramental Básico e Específico**")
-                col_c1, col_c2, col_c3 = st.columns(3)
+            if tec_atual != "Selecione...":
+                st.info("⚠️ Assinale **apenas o que estiver faltando ou irregular** no checklist.")
                 faltas = []
-                with col_c1:
-                    if st.checkbox("Alicates (Crimpador, Bico, Corte)"): faltas.append("Alicates Básicos")
-                    if st.checkbox("Chaves Fenda/Phillips"): faltas.append("Chaves Fenda/Phillips")
-                with col_c2:
-                    if st.checkbox("Fita Guia / Furadeira"): faltas.append("Fita Guia/Furadeira")
-                    if st.checkbox("Clivador / Gabaritos"): faltas.append("Clivador/Gabaritos")
-                with col_c3:
-                    if st.checkbox("Power Meter / Caneta Óptica"): faltas.append("Power Meter/Caneta")
-                    if st.checkbox("DBAM / Trilithic"): faltas.append("DBAM/Trilithic")
                 
-                st.markdown("**EPIs, Asseio e Veículo**")
-                col_e1, col_e2, col_e3 = st.columns(3)
-                with col_e1:
-                    if st.checkbox("Capacete / Cinto / Luvas"): faltas.append("EPIs (Capacete/Cinto/Luvas)")
-                    if st.checkbox("Óculos de Proteção"): faltas.append("Óculos de Proteção")
-                with col_e2:
-                    if st.checkbox("Escada / Cones / Fita Zebrada"): faltas.append("Sinalização/Escada")
-                    if st.checkbox("Uniforme / Crachá / Higiene"): faltas.append("Asseio (Uniforme/Crachá)")
-                with col_e3:
-                    if st.checkbox("Veículo (Sujo / Desorganizado)"): faltas.append("Veículo Irregular")
-                    if st.checkbox("PDA (Bateria Baixa / Deslogado)"): faltas.append("PDA Irregular")
+                # Lista Completa Baseada no Matinal_2026.xlsx
+                t1, t2, t3, t4, t5 = st.tabs(["Manuais", "Acessórios", "GPON/Fibra", "EPI/Segurança", "Veículo/Asseio"])
                 
+                with t1:
+                    if st.checkbox("Alicates (Crimpador, Bico, Corte, Universal)"): faltas.append("Alicates faltantes")
+                    if st.checkbox("Chaves de Fenda / Phillips (Todas)"): faltas.append("Chaves faltantes")
+                    if st.checkbox("Chave Trava Lock / GTP Segurança"): faltas.append("Chaves de segurança")
+                    if st.checkbox("Estilete / Striper / Martelo"): faltas.append("Estilete/Striper/Martelo")
+                with t2:
+                    if st.checkbox("Fita Guia / Fuzimec"): faltas.append("Fita Guia/Fuzimec")
+                    if st.checkbox("Furadeira e Brocas de Wídea"): faltas.append("Furadeira/Brocas")
+                    if st.checkbox("Mala / Bornal / Lanterna"): faltas.append("Mala/Lanterna")
+                    if st.checkbox("Escadas (Fibra 6m / 4 Degraus)"): faltas.append("Escada Inadequada")
+                with t3:
+                    if st.checkbox("Clivador / Gabaritos de Conector"): faltas.append("Clivador/Gabarito")
+                    if st.checkbox("Alicate Decapador Fibra/Drop"): faltas.append("Alicate Óptico")
+                    if st.checkbox("DBAM / Trilithic / Power Meter"): faltas.append("Medidores Ópticos")
+                    if st.checkbox("Álcool Isopropílico / Dispenser / Lenços"): faltas.append("Kit Limpeza Fibra")
+                with t4:
+                    if st.checkbox("Capacete / Jugular"): faltas.append("Capacete")
+                    if st.checkbox("Cinto Segurança / Talabarte"): faltas.append("Cinto/Talabarte")
+                    if st.checkbox("Luvas / Óculos / Máscara"): faltas.append("Luvas/Óculos")
+                    if st.checkbox("Cones / Bandeirola / Fita Zebrada"): faltas.append("Sinalização Visual")
+                with t5:
+                    if st.checkbox("Barba, Cabelo, Higiene / Adornos"): faltas.append("Higiene Pessoal")
+                    if st.checkbox("Uniforme Incompleto / Sem Crachá"): faltas.append("Uniforme/Crachá")
+                    if st.checkbox("Veículo (Sujo, Desorganizado ou com Avarias)"): faltas.append("Problemas no Veículo")
+                    if st.checkbox("PDA (Deslogado ou Bateria < 50%)"): faltas.append("PDA Irregular")
+
                 st.divider()
-                st.markdown("### Conclusão")
-                foto_upload = st.file_uploader("📸 Enviar Foto da Matinal", type=['png', 'jpg', 'jpeg'])
+                foto_upload = st.file_uploader("📸 Enviar Foto Comprobatória", type=['png', 'jpg'])
                 obs_final = st.text_area("Observações Finais:")
                 
-                # Preparação do E-mail
-                faltas_str = ", ".join(faltas) if len(faltas) > 0 else "Nenhuma irregularidade apontada."
-                corpo_email = f"Matinal Realizada - Técnico: {tec_atual}\n\nIQ Responsável: {st.session_state['nome_iq']}\n\nItens Faltantes/Irregulares:\n{faltas_str}\n\nObservações: {obs_final}"
-                
-                # Botão que cria o link para o aplicativo de email do celular
-                url_email = f"mailto:?subject=Relatório de Matinal - {tec_atual}&body={urllib.parse.quote(corpo_email)}"
-                
-                if st.button("Finalizar Matinal e Dar Baixa", type="primary"):
-                    if foto_upload is None:
-                        st.warning("A foto é obrigatória para finalizar.")
+                resumo_faltas = ", ".join(faltas) if faltas else "Nenhuma irregularidade apontada."
+                corpo_email = f"Matinal de {tec_atual}\nIQ: {st.session_state['nome_iq']}\n\nFALTAS/IRREGULARIDADES:\n{resumo_faltas}\n\nObs: {obs_final}"
+                url_email = f"mailto:?subject=Matinal - {tec_atual}&body={urllib.parse.quote(corpo_email)}"
+
+                if st.button("Concluir e Enviar E-mail", type="primary"):
+                    if not foto_upload:
+                        st.warning("⚠️ A foto é obrigatória.")
                     else:
-                        st.session_state['agenda_matinal'].remove(tec_atual)
-                        st.session_state['matinal_ativa'] = None
-                        st.success(f"Matinal finalizada! A baixa foi dada para {tec_atual}.")
-                        st.markdown(f'📩 **[Clique aqui para enviar o E-mail com o Resumo]({url_email})**')
-                        
-                        if st.button("Voltar para a Agenda"):
-                            st.rerun()
+                        st.success(f"Matinal de {tec_atual} concluída!")
+                        st.markdown(f'📩 **[Clique aqui para enviar o relatório por E-mail]({url_email})**')
