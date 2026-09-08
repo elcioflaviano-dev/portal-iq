@@ -1,9 +1,11 @@
 import streamlit as st
 import pandas as pd
 
-# 1. Simulação do Banco de Dados (Excel)
-dados_iqs = pd.DataFrame({ ... })
-dados_tecnicos = pd.DataFrame({ ... })
+# 1. Lendo o Banco de Dados Real (Excel)
+# O Streamlit vai ler as abas do arquivo que você subiu
+dados_iqs = pd.read_excel('base_dados.xlsx', sheet_name='Base_IQ')
+# Lendo os técnicos e garantindo que login e re sejam tratados como texto para não perder zeros
+dados_tecnicos = pd.read_excel('base_dados.xlsx', sheet_name='Base_Tecnicos', dtype={'login': str, 're_iq_responsavel': str})
 
 # 2. Configuração da Página
 st.set_page_config(page_title="Portal do IQ", layout="centered")
