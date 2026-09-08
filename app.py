@@ -28,7 +28,7 @@ if 're_usuario' not in st.session_state:
 
 # 3. Tela de Login
 if not st.session_state['logado']:
-    st.title("Portal do IQ - Acesso Móvel")
+    st.title("Portal do IQ")
     re_input = st.text_input("RE (Login)")
     senha_input = st.text_input("Senha", type="password")
     
