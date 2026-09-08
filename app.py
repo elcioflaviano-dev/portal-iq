@@ -62,3 +62,28 @@ else:
     
     st.write("⚠️ **Técnicos em Monitoramento (Necessitam Matinal)**")
     st.dataframe(monitoramento, hide_index=True, use_container_width=True)
+
+st.divider()
+    st.subheader("📝 Registro de Matinal / Monitoria")
+    
+    # Seleção do Técnico
+    tecnico_selecionado = st.selectbox("Selecione o Técnico:", equipe['nome'].tolist())
+    
+    # Escolha do Dia da Semana
+    dias_semana = ['Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado']
+    dia_matinal = st.selectbox("Dia da Semana para Matinal:", dias_semana)
+    
+    # Campo para apontar as falhas
+    falhas = st.text_area("Apontamento de Falhas / Pontos de Atenção:")
+    
+    # OBRIGATÓRIO: Botão para enviar foto (abre a câmera no celular)
+    foto_upload = st.file_uploader("📸 Enviar Foto Obrigatória (Matinal/Monitoria)", type=['png', 'jpg', 'jpeg'])
+    
+    if st.button("Registrar e Enviar Aviso"):
+        if foto_upload is None:
+            st.warning("⚠️ O envio da foto é obrigatório para registrar a ação.")
+        elif falhas == "":
+            st.warning("⚠️ É necessário preencher o apontamento de falhas.")
+        else:
+            st.success(f"✅ Matinal de {tecnico_selecionado} agendada para {dia_matinal} com sucesso!")
+            # Aqui entrará a automação de e-mail e WhatsApp no próximo passo
