@@ -14,7 +14,7 @@ st.set_page_config(page_title="Portal IQ - Totale", layout="wide", initial_sideb
 if 'logado' not in st.session_state: st.session_state['logado'] = False
 if 'pagina_atual' not in st.session_state: st.session_state['pagina_atual'] = "Dashboard"
 if 'agenda_matinal' not in st.session_state: st.session_state['agenda_matinal'] = {}
-if 'horas_meta_geral' not in st.session_state: st.session_state['horas_meta_geral'] = 40 # Variável temporária de horas
+if 'horas_meta_geral' not in st.session_state: st.session_state['horas_meta_geral'] = 40
 if 'email_pronto' not in st.session_state: st.session_state['email_pronto'] = None
 
 # --- 2. Conexão com Google Sheets ---
@@ -48,7 +48,7 @@ def carregar_dados():
         st.error("Planilha do Google está vazia ou sem cabeçalhos.")
         st.stop()
     
-    # Padronização
+    # Padronização Base
     dados_iqs['re_iq'] = dados_iqs['re_iq'].astype(str).str.strip().str.replace('.0', '', regex=False)
     dados_iqs['senha'] = dados_iqs.get('senha', '').astype(str).str.strip()
     dados_iqs['PERFIL'] = dados_iqs.get('PERFIL', 'IQ').astype(str).str.strip().str.upper()
@@ -56,10 +56,21 @@ def carregar_dados():
     dados_tecnicos['login'] = dados_tecnicos.get('login', '').astype(str).str.strip().str.replace('.0', '', regex=False)
     dados_tecnicos['re_iq_responsavel'] = dados_tecnicos.get('re_iq_responsavel', '').astype(str).str.strip().str.replace('.0', '', regex=False)
     dados_tecnicos['status_certificacao'] = dados_tecnicos.get('status_certificacao', 'NÃO').astype(str).str.strip().str.upper()
+    dados_tecnicos['Acompanhamento'] = dados_tecnicos.get('Acompanhamento', 'NÃO').astype(str).str.strip().str.upper()
 
-    if not dados_certificados.empty and 'LOGIN' in dados_certificados.columns:
-        dados_certificados['LOGIN'] = dados_certificados['LOGIN'].astype(str).str.strip().str.replace('.0', '', regex=False)
-        dados_completos = pd.merge(dados_tecnicos, dados_certificados, left_on='login', right_on='LOGIN', how='left')
+    # Tratamento BLINDADO para a aba Certificados
+    if not dados_certificados.empty:
+        # Força todos os nomes das colunas para maiúsculas e sem espaços para evitar erro de leitura
+        dados_certificados.columns = [str(c).strip().upper() for c in dados_certificados.columns]
+        
+        if 'LOGIN' in dados_certificados.columns:
+            dados_certificados['LOGIN'] = dados_certificados['LOGIN'].astype(str).str.strip().str.replace('.0', '', regex=False)
+            if 'RE_IQ' in dados_certificados.columns:
+                dados_certificados['RE_IQ'] = dados_certificados['RE_IQ'].astype(str).str.strip().str.replace('.0', '', regex=False)
+                
+            dados_completos = pd.merge(dados_tecnicos, dados_certificados, left_on='login', right_on='LOGIN', how='left')
+        else:
+            dados_completos = dados_tecnicos
     else:
         dados_completos = dados_tecnicos
         
@@ -76,8 +87,9 @@ def atualizar_planilha_tecnicos(login_tecnico, coluna, valor):
     st.cache_data.clear()
 
 def colorir_sim_nao(val):
-    if str(val).strip().upper() == 'SIM': return 'background-color: #d4edda; color: #155724; font-weight: bold;'
-    elif str(val).strip().upper() == 'NÃO': return 'background-color: #f8d7da; color: #721c24; font-weight: bold;'
+    texto = str(val).strip().upper()
+    if texto == 'SIM': return 'background-color: #d4edda; color: #155724; font-weight: bold;'
+    elif texto == 'NÃO' or texto == 'NAO': return 'background-color: #f8d7da; color: #721c24; font-weight: bold;'
     return ''
 
 dados_iqs, dados_completos = carregar_dados()
@@ -103,38 +115,47 @@ if not st.session_state['logado']:
             st.error("RE ou Senha incorretos.")
 
 else:
-    # Lógica de Equipe Vigente vs Histórico
-    # O dashboard mostra tudo, mas o acompanhamento foca no mês vigente.
+    re_logado = st.session_state['re_usuario']
+    
     if st.session_state.get('perfil') == 'GESTÃO':
-        equipe_iq = dados_completos
+        equipe_vigente = dados_completos
+        equipe_historico = dados_completos
     else:
-        equipe_iq = dados_completos[dados_completos['re_iq_responsavel'] == st.session_state['re_usuario']]
+        equipe_vigente = dados_completos[dados_completos['re_iq_responsavel'] == re_logado]
+        if 'RE_IQ' in dados_completos.columns:
+            equipe_historico = dados_completos[dados_completos['RE_IQ'] == re_logado]
+        else:
+            equipe_historico = equipe_vigente
 
     with st.sidebar:
         if os.path.exists("novo-logo-totale.png"): st.image(Image.open("novo-logo-totale.png"), use_container_width=True)
         st.write(f"**Usuário:** {st.session_state['nome_iq']}")
         st.write(f"**Perfil:** {st.session_state['perfil']}")
         st.divider()
+        
+        # NOVOS BOTÕES NO MENU LATERAL
         if st.button("📊 Dashboard Inicial", use_container_width=True): 
             st.session_state['pagina_atual'] = "Dashboard"
-            st.session_state['email_pronto'] = None
+            st.rerun()
+        if st.button("🏆 Histórico de Certificados", use_container_width=True): 
+            st.session_state['pagina_atual'] = "Historico"
             st.rerun()
         if st.button("📋 Executar Matinal", use_container_width=True): 
             st.session_state['pagina_atual'] = "Matinal"
-            st.session_state['email_pronto'] = None
             st.rerun()
+            
         st.divider()
         if st.button("Sair", use_container_width=True):
             st.session_state['logado'] = False
             st.rerun()
 
-    # --- DASHBOARD ---
+    meses_certificacao = [col for col in dados_completos.columns if 'CERTIFICADO' in str(col).upper() and col.upper() != 'STATUS_CERTIFICACAO']
+
+    # --- PÁGINA 1: DASHBOARD ---
     if st.session_state['pagina_atual'] == "Dashboard":
         st.title(f"Painel Operacional - {st.session_state['nome_iq']}")
         
         col1, col2, col3 = st.columns(3)
-        
-        # Lógica de Horas: Gestor edita, IQ visualiza
         with col2:
             if st.session_state['perfil'] == 'GESTÃO':
                 nova_meta = st.number_input("⏱️ Definir Meta de Horas (Monitoria):", value=st.session_state['horas_meta_geral'], step=1)
@@ -142,28 +163,24 @@ else:
             else:
                 st.metric("⏱️ Meta de Horas (Monitoria)", f"{st.session_state['horas_meta_geral']}h")
                 
-        # Percentual de Certificação por Mês (Lendo a aba Certificados)
-        meses_certificacao = [col for col in dados_completos.columns if 'CERTIFICADO' in str(col).upper() and col.upper() != 'STATUS_CERTIFICACAO']
-        
         with col1:
             if meses_certificacao:
-                mes_selecionado = st.selectbox("📅 Selecione o Mês:", meses_certificacao)
-                # Filtra os dados apenas para o mês selecionado e IQ (se aplicável via RE na aba certificados futuramente)
-                total_mes = len(equipe_iq[equipe_iq[mes_selecionado].notna() & (equipe_iq[mes_selecionado] != '')])
-                sim_mes = len(equipe_iq[equipe_iq[mes_selecionado].astype(str).str.upper() == 'SIM'])
+                mes_selecionado = st.selectbox("📅 Selecione o Mês (Para %):", meses_certificacao)
+                total_mes = len(equipe_historico[equipe_historico[mes_selecionado].notna() & (equipe_historico[mes_selecionado] != '')])
+                sim_mes = len(equipe_historico[equipe_historico[mes_selecionado].astype(str).str.upper() == 'SIM'])
                 pct_mes = round((sim_mes / total_mes * 100), 1) if total_mes > 0 else 0
-                st.metric(f"🏆 Certificados ({mes_selecionado.replace('CERTIFICADO ','')})", f"{pct_mes}% SIM", f"Base: {total_mes} Téc", delta_color="off")
+                st.metric(f"🏆 % Certificados ({mes_selecionado.replace('CERTIFICADO ','')})", f"{pct_mes}% SIM", f"Base: {total_mes} Téc", delta_color="off")
             else:
-                st.metric("🏆 Certificados", "N/A", "Nenhuma coluna de mês encontrada.")
+                st.metric("🏆 Certificados", "N/A", "Aba Certificados vazia.")
         
         with col3:
-            pendentes_hoje = len(equipe_iq[equipe_iq['status_certificacao'] == 'NÃO'])
+            # Conta apenas quem tem status NÃO e o acompanhamento também é NÃO (ou seja, falta fazer)
+            pendentes_hoje = len(equipe_vigente[(equipe_vigente['status_certificacao'] == 'NÃO') & (equipe_vigente['Acompanhamento'] == 'NÃO')])
             st.metric("⚠️ Monitoramento Pendente (Atual)", f"{pendentes_hoje} Técnicos", delta_color="inverse")
 
         st.divider()
 
-        # Agenda na Tela Inicial
-        st.subheader("📅 Sua Agenda de Matinais")
+        st.subheader("📅 Sua Agenda de Matinais (Hoje)")
         if not st.session_state['agenda_matinal']:
             st.info("Sua agenda está vazia. Vá em 'Executar Matinal' para agendar.")
         else:
@@ -172,22 +189,14 @@ else:
 
         st.divider()
 
-        # Botão Expansível para Certificados
-        with st.expander("👁️ Ver Lista de Técnicos Certificados (Histórico)"):
-            if meses_certificacao:
-                df_exibir = equipe_iq[['login', 'nome'] + meses_certificacao]
-                st.dataframe(df_exibir.style.map(colorir_sim_nao), hide_index=True, use_container_width=True)
-            else:
-                st.write("Sem histórico disponível.")
-
-        # Monitoramento Automático (Técnicos com Status Atual = NÃO)
-        st.subheader("⚠️ Acompanhamento / Monitoramento Automático")
-        st.write("*Abaixo estão os técnicos não certificados no mês vigente que necessitam da sua tratativa:*")
+        # Monitoramento Automático: Mostra só quem é NÃO certificado e ainda NÃO tem Acompanhamento
+        st.subheader("⚠️ Acompanhamento Pendente")
+        st.write("*Abaixo estão os técnicos da sua equipe atual que necessitam de tratativa:*")
         
-        tecnicos_nao_cert = equipe_iq[equipe_iq['status_certificacao'] == 'NÃO']
+        tecnicos_nao_cert = equipe_vigente[(equipe_vigente['status_certificacao'] == 'NÃO') & (equipe_vigente['Acompanhamento'] == 'NÃO')]
         
         if tecnicos_nao_cert.empty:
-            st.success("Todos os técnicos estão certificados ou sem pendências.")
+            st.success("Todos os técnicos pendentes já possuem acompanhamento registrado.")
         else:
             for index, row in tecnicos_nao_cert.iterrows():
                 with st.expander(f"👤 {row['nome']} (Login: {row['login']})"):
@@ -202,9 +211,29 @@ else:
                         if data_mon: atualizar_planilha_tecnicos(row['login'], 'Data_Monitoramento', data_mon.strftime("%d/%m/%Y"))
                         atualizar_planilha_tecnicos(row['login'], 'Contrato', novo_contrato)
                         atualizar_planilha_tecnicos(row['login'], 'Observacao', obs)
-                        st.success("Salvo no Google Sheets!")
+                        
+                        # ALTERA O ACOMPANHAMENTO PARA SIM AUTOMATICAMENTE
+                        atualizar_planilha_tecnicos(row['login'], 'Acompanhamento', 'SIM')
+                        
+                        st.success("Salvo! Status alterado para 'SIM'.")
+                        st.rerun()
 
-    # --- MATINAL (Checklist Completo) ---
+    # --- PÁGINA 2: HISTÓRICO DE CERTIFICADOS ---
+    elif st.session_state['pagina_atual'] == "Historico":
+        st.title(f"🏆 Histórico de Certificados - {st.session_state['nome_iq']}")
+        st.write("Visão completa de todos os meses para a sua equipe histórica (baseada na coluna RE_IQ da aba Certificados).")
+        
+        if not meses_certificacao:
+            st.warning("Nenhum mês de certificação encontrado na aba 'Certificados'.")
+        else:
+            colunas_exibir = ['login', 'nome']
+            if 'RE_IQ' in equipe_historico.columns: colunas_exibir.append('RE_IQ')
+            colunas_exibir.extend(meses_certificacao)
+            
+            df_exibir = equipe_historico[colunas_exibir]
+            st.dataframe(df_exibir.style.map(colorir_sim_nao), hide_index=True, use_container_width=True)
+
+    # --- PÁGINA 3: MATINAL ---
     elif st.session_state['pagina_atual'] == "Matinal":
         st.title("📋 Agendamento e Execução da Matinal")
         
@@ -213,7 +242,7 @@ else:
         with tab_agendar:
             col_a1, col_a2 = st.columns(2)
             with col_a1:
-                tec_agendar = st.selectbox("Selecione o Técnico:", ["Selecione..."] + equipe_iq['nome'].tolist())
+                tec_agendar = st.selectbox("Selecione o Técnico:", ["Selecione..."] + equipe_vigente['nome'].tolist())
             with col_a2:
                 data_agendada = st.date_input("Escolha o Dia:", value=None, format="DD/MM/YYYY")
                 
@@ -231,7 +260,6 @@ else:
                     st.rerun()
 
         with tab_executar:
-            # Controle de Tela Pós-Email
             if st.session_state['email_pronto']:
                 st.success("✅ Matinal gravada com sucesso! O Relatório está pronto.")
                 st.markdown(f'<a href="{st.session_state["email_pronto"]}" target="_blank" style="display: inline-block; padding: 0.8em 1.5em; color: white; background-color: #007BFF; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">📩 ABRIR E-MAIL COM O RELATÓRIO</a>', unsafe_allow_html=True)
@@ -246,7 +274,6 @@ else:
                     st.info("⚠️ Assinale abaixo os itens que estão **FALTANDO** ou **IRREGULARES**.")
                     faltas = []
                     
-                    # AS 84 COLUNAS DIVIDIDAS EM BLOCOS CATEGORIZADOS
                     t1, t2, t3, t4, t5 = st.tabs(["🛠️ Ferramental", "📡 GPON / Fibra", "👷 EPI / EPC", "🧹 Asseio", "🚗 Veículo / Outros"])
                     
                     with t1:
@@ -314,6 +341,9 @@ else:
                         if not foto_upload:
                             st.warning("⚠️ O envio da foto é obrigatório para comprovação.")
                         else:
-                            del st.session_state['agenda_matinal'][tec_atual] # Remove da agenda
-                            st.session_state['email_pronto'] = url_email # Salva o link e apaga a tela
+                            tec_login = equipe_vigente[equipe_vigente['nome'] == tec_atual]['login'].iloc[0]
+                            atualizar_planilha_tecnicos(tec_login, 'Acompanhamento', 'SIM') # Força o SIM ao fazer matinal
+                            
+                            del st.session_state['agenda_matinal'][tec_atual]
+                            st.session_state['email_pronto'] = url_email
                             st.rerun()
