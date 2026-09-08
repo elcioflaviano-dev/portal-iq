@@ -2,20 +2,8 @@ import streamlit as st
 import pandas as pd
 
 # 1. Simulação do Banco de Dados (Excel)
-# Na prática, você usará pd.read_excel('caminho_do_arquivo.xlsx')
-dados_iqs = pd.DataFrame({
-    're_iq': ['1234', '5678'],
-    'senha': ['senha123', 'senha456'],
-    'nome_iq': ['João Silva', 'Maria Souza']
-})
-
-dados_tecnicos = pd.DataFrame({
-    'login': ['t001', 't002', 't003', 't004'],
-    'nome': ['Carlos Alberto', 'Ana Paula', 'Lucas Mendes', 'Fernanda Lima'],
-    're_iq_responsavel': ['1234', '1234', '5678', '1234'],
-    'regiao': ['ABCDM', 'São Paulo', 'Guarulhos', 'ABCDM'],
-    'status_certificacao': ['Certificado', 'Em Monitoramento', 'Certificado', 'Em Monitoramento']
-})
+dados_iqs = pd.DataFrame({ ... })
+dados_tecnicos = pd.DataFrame({ ... })
 
 # 2. Configuração da Página
 st.set_page_config(page_title="Portal do IQ", layout="centered")
@@ -28,7 +16,7 @@ if 're_usuario' not in st.session_state:
 
 # 3. Tela de Login
 if not st.session_state['logado']:
-    st.title("Portal do IQ")
+    st.title("Portal do IQ - Acesso Móvel")
     re_input = st.text_input("RE (Login)")
     senha_input = st.text_input("Senha", type="password")
     
