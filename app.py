@@ -28,26 +28,40 @@ def conectar_planilha():
         st.error(f"Erro ao conectar com o Google Sheets. Verifique se o e-mail do robô foi adicionado como Editor na planilha. Detalhe: {e}")
         st.stop()
 
-# Função para ler os dados (com cache de 60 segundos para não sobrecarregar o Google)
+# Função para ler os dados (com cache de 60 segundos)
 @st.cache_data(ttl=60)
 def carregar_dados():
     planilha = conectar_planilha()
     
-    dados_iqs = pd.DataFrame(planilha.worksheet("Base_IQ").get_all_records())
-    dados_tecnicos = pd.DataFrame(planilha.worksheet("Base_Tecnicos").get_all_records())
-    dados_certificados = pd.DataFrame(planilha.worksheet("Certificados").get_all_records())
+    # Função auxiliar para ler abas evitando erro de aba vazia
+    def ler_aba(nome_aba):
+        try:
+            registros = planilha.worksheet(nome_aba).get_all_records()
+            if not registros: return pd.DataFrame()
+            return pd.DataFrame(registros)
+        except:
+            return pd.DataFrame()
+            
+    dados_iqs = ler_aba("Base_IQ")
+    dados_tecnicos = ler_aba("Base_Tecnicos")
+    dados_certificados = ler_aba("Certificados")
+    
+    # Se a base principal estiver vazia, para o sistema com um aviso amigável
+    if dados_iqs.empty or dados_tecnicos.empty:
+        st.error("A planilha do Google está vazia ou sem cabeçalhos. Preencha a Base_IQ e Base_Tecnicos.")
+        st.stop()
     
     # Padronização e Limpeza
     dados_iqs['re_iq'] = dados_iqs['re_iq'].astype(str).str.strip().str.replace('.0', '', regex=False)
-    dados_iqs['senha'] = dados_iqs['senha'].astype(str).str.strip()
+    dados_iqs['senha'] = dados_iqs.get('senha', '').astype(str).str.strip()
     dados_iqs['PERFIL'] = dados_iqs.get('PERFIL', 'IQ').astype(str).str.strip().str.upper()
     
-    dados_tecnicos['login'] = dados_tecnicos['login'].astype(str).str.strip().str.replace('.0', '', regex=False)
-    dados_tecnicos['re_iq_responsavel'] = dados_tecnicos['re_iq_responsavel'].astype(str).str.strip().str.replace('.0', '', regex=False)
-    dados_tecnicos['status_certificacao'] = dados_tecnicos['status_certificacao'].astype(str).str.strip().str.upper()
+    dados_tecnicos['login'] = dados_tecnicos.get('login', '').astype(str).str.strip().str.replace('.0', '', regex=False)
+    dados_tecnicos['re_iq_responsavel'] = dados_tecnicos.get('re_iq_responsavel', '').astype(str).str.strip().str.replace('.0', '', regex=False)
+    dados_tecnicos['status_certificacao'] = dados_tecnicos.get('status_certificacao', 'NÃO').astype(str).str.strip().str.upper()
     dados_tecnicos['Acompanhamento'] = dados_tecnicos.get('Acompanhamento', 'NÃO').astype(str).str.strip().str.upper()
 
-    if 'LOGIN' in dados_certificados.columns:
+    if not dados_certificados.empty and 'LOGIN' in dados_certificados.columns:
         dados_certificados['LOGIN'] = dados_certificados['LOGIN'].astype(str).str.strip().str.replace('.0', '', regex=False)
         dados_completos = pd.merge(dados_tecnicos, dados_certificados, left_on='login', right_on='LOGIN', how='left')
     else:
