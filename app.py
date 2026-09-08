@@ -85,7 +85,7 @@ else:
     # SIDEBAR (Menu)
     with st.sidebar:
         if os.path.exists("novo-logo-totale.png"):
-            st.image(Image.open("novo-logo-totale.png"), use_column_width=True)
+            st.image(Image.open("novo-logo-totale.png"), use_container_width=True)
         st.write(f"**Usuário:** {st.session_state['nome_iq']}")
         st.write(f"**Perfil:** {st.session_state['perfil']}")
         st.divider()
