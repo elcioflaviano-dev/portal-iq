@@ -2,10 +2,11 @@ import streamlit as st
 import pandas as pd
 
 # 1. Lendo o Banco de Dados Real (Excel)
-# O Streamlit vai ler as abas do arquivo que você subiu
-dados_iqs = pd.read_excel('PORTAL IQ.xlsx', sheet_name='Base_IQ')
-# Lendo os técnicos e garantindo que login e re sejam tratados como texto para não perder zeros
-dados_tecnicos = pd.read_excel('PORTAL IQ.xlsx', sheet_name='Base_Tecnicos', dtype={'login': str, 're_iq_responsavel': str})
+# Usando o novo nome do arquivo
+dados_iqs = pd.read_excel('PORTAL IQ.xlsx', sheet_name='Base_IQ', dtype={'re_iq': str})
+
+# Adicionada a leitura da coluna 'RE' como texto
+dados_tecnicos = pd.read_excel('PORTAL IQ.xlsx', sheet_name='Base_Tecnicos', dtype={'login': str, 'RE': str, 're_iq_responsavel': str})
 
 # 2. Configuração da Página
 st.set_page_config(page_title="Portal do IQ", layout="centered")
