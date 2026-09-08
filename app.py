@@ -46,24 +46,8 @@ else:
         st.rerun()
         
     st.subheader("Sua Equipe de Técnicos")
-    
-    # Filtrar apenas os técnicos do IQ logado
-    equipe = dados_tecnicos[dados_tecnicos['re_iq_responsavel'] == st.session_state['re_usuario']]
-    
-    # Organizar a ordem das colunas para exibir login e nome primeiro
-    equipe_exibicao = equipe[['login', 'nome', 'status_certificacao', 'regiao']]
-    
-    # Dividir as tabelas por status
-    certificados = equipe_exibicao[equipe_exibicao['status_certificacao'] == 'Certificado']
-    monitoramento = equipe_exibicao[equipe_exibicao['status_certificacao'] == 'Em Monitoramento']
-    
-    st.write("✅ **Técnicos Certificados**")
-    st.dataframe(certificados, hide_index=True, use_container_width=True)
-    
-    st.write("⚠️ **Técnicos em Monitoramento (Necessitam Matinal)**")
-    st.dataframe(monitoramento, hide_index=True, use_container_width=True)
 
-st.divider()
+    st.divider()
     st.subheader("📝 Registro de Matinal / Monitoria")
     
     # Seleção do Técnico
@@ -87,3 +71,20 @@ st.divider()
         else:
             st.success(f"✅ Matinal de {tecnico_selecionado} agendada para {dia_matinal} com sucesso!")
             # Aqui entrará a automação de e-mail e WhatsApp no próximo passo
+
+    
+    # Filtrar apenas os técnicos do IQ logado
+    equipe = dados_tecnicos[dados_tecnicos['re_iq_responsavel'] == st.session_state['re_usuario']]
+    
+    # Organizar a ordem das colunas para exibir login e nome primeiro
+    equipe_exibicao = equipe[['login', 'nome', 'status_certificacao', 'regiao']]
+    
+    # Dividir as tabelas por status
+    certificados = equipe_exibicao[equipe_exibicao['status_certificacao'] == 'Certificado']
+    monitoramento = equipe_exibicao[equipe_exibicao['status_certificacao'] == 'Em Monitoramento']
+    
+    st.write("✅ **Técnicos Certificados**")
+    st.dataframe(certificados, hide_index=True, use_container_width=True)
+    
+    st.write("⚠️ **Técnicos em Monitoramento (Necessitam Matinal)**")
+    st.dataframe(monitoramento, hide_index=True, use_container_width=True)
