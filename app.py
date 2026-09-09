@@ -13,11 +13,9 @@ st.set_page_config(page_title="Portal IQ - Totale", layout="wide", initial_sideb
 
 if 'logado' not in st.session_state: st.session_state['logado'] = False
 if 'pagina_atual' not in st.session_state: st.session_state['pagina_atual'] = "Dashboard"
-if 'agenda_matinal' not in st.session_state: st.session_state['agenda_matinal'] = {}
-if 'horas_por_iq' not in st.session_state: st.session_state['horas_por_iq'] = {} # Dicionário para guardar horas por RE
 if 'email_pronto' not in st.session_state: st.session_state['email_pronto'] = None
 
-# --- Estilização CSS para Cards Coloridos Inteiros ---
+# --- Estilização CSS para Cards Coloridos Inteiros (Estilo TV) ---
 st.markdown("""
     <style>
     .metric-card-blue, .metric-card-green, .metric-card-orange {
@@ -50,7 +48,7 @@ def conectar_planilha():
         st.error(f"Erro ao conectar com o Google Sheets. Detalhe: {e}")
         st.stop()
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=30)
 def carregar_dados():
     planilha = conectar_planilha()
     
@@ -82,7 +80,7 @@ def carregar_dados():
     dados_completos = dados_tecnicos.copy()
     
     todas_abas = [ws.title for ws in planilha.worksheets()]
-    abas_meses = [aba for aba in todas_abas if aba not in ['Base_IQ', 'Base_Tecnicos']]
+    abas_meses = [aba for aba in todas_abas if aba not in ['Base_IQ', 'Base_Tecnicos', 'Controle_IQ']]
     
     meses_info = []
 
@@ -134,6 +132,63 @@ def carregar_dados():
 
     return dados_iqs, dados_completos, meses_info
 
+# Funções de gravação no Sheets para Controle_IQ (Horas e Agendamentos)
+def carregar_controle_iq():
+    try:
+        ws = conectar_planilha().worksheet("Controle_IQ")
+        registros = ws.get_all_records()
+        return pd.DataFrame(registros) if registros else pd.DataFrame()
+    except:
+        return pd.DataFrame()
+
+def salvar_horas_no_sheets(re_iq, meta, realizado):
+    try:
+        planilha = conectar_planilha()
+        try:
+            ws = planilha.worksheet("Controle_IQ")
+        except:
+            ws = planilha.add_worksheet(title="Controle_IQ", rows=100, cols=10)
+            ws.append_row(["RE_IQ", "META_HORAS", "REALIZADO_HORAS", "AGENDA_TECNICO", "AGENDA_DATA", "AGENDA_IQ_NOME"])
+            
+        registros = ws.get_all_records()
+        encontrou = False
+        for idx, row in enumerate(registros):
+            if str(row.get('RE_IQ', '')).strip().replace('.0', '') == str(re_iq):
+                ws.update_cell(idx + 2, 2, meta)
+                ws.update_cell(idx + 2, 3, realizado)
+                encontrou = True
+                break
+        if not encontrou:
+            ws.append_row([str(re_iq), meta, realizado, "", "", ""])
+        st.cache_data.clear()
+    except Exception as e:
+        st.error(f"Erro ao salvar horas: {e}")
+
+def salvar_agenda_no_sheets(agenda_dict):
+    try:
+        planilha = conectar_planilha()
+        ws = planilha.worksheet("Controle_IQ")
+        
+        # Mantém as horas e sobrescreve a agenda nas linhas
+        registros = ws.get_all_records()
+        
+        # Limpa os dados antigos de agenda mantendo as horas
+        for idx, row in enumerate(registros):
+            ws.update_cell(idx + 2, 4, "")
+            ws.update_cell(idx + 2, 5, "")
+            ws.update_cell(idx + 2, 6, "")
+            
+        # Insere a nova agenda
+        linha_atual = 2
+        for tec, info in agenda_dict.items():
+            ws.update_cell(linha_atual, 4, tec)
+            ws.update_cell(linha_atual, 5, info['data'])
+            ws.update_cell(linha_atual, 6, info['iq_nome'])
+            linha_atual += 1
+        st.cache_data.clear()
+    except Exception as e:
+        print(f"Erro ao salvar agenda: {e}")
+
 def atualizar_planilha_mes(nome_aba, login_tecnico, coluna_busca, valor):
     ws = conectar_planilha().worksheet(nome_aba)
     cabecalhos = ws.row_values(1)
@@ -169,6 +224,18 @@ if meses_info:
 else:
     mes_vigente, aba_vigente = None, None
 
+# --- Carrega Agenda e Horas do Sheets para a Sessão ---
+df_ctrl = carregar_controle_iq()
+if 'agenda_matinal' not in st.session_state:
+    st.session_state['agenda_matinal'] = {}
+    if not df_ctrl.empty:
+        for _, row in df_ctrl.iterrows():
+            tec = str(row.get('AGENDA_TECNICO', '')).strip()
+            data = str(row.get('AGENDA_DATA', '')).strip()
+            iq_nome = str(row.get('AGENDA_IQ_NOME', '')).strip()
+            if tec and tec != '':
+                st.session_state['agenda_matinal'][tec] = {'data': data, 'iq_nome': iq_nome}
+
 # --- 3. Telas ---
 if not st.session_state['logado']:
     col_logo, _ = st.columns([1, 2])
@@ -198,9 +265,19 @@ else:
     re_logado_str = str(re_logado).strip().replace('.0', '')
     perfil_usuario = st.session_state.get('perfil', 'IQ')
 
-    # Inicializa horas específicas para este RE se não existirem
-    if re_logado_str not in st.session_state['horas_por_iq']:
-        st.session_state['horas_por_iq'][re_logado_str] = {'meta': 40, 'realizadas': 0}
+    # Busca horas do Sheets para este RE
+    meta_atual, realizado_atual = 40, 0
+    if not df_ctrl.empty:
+        filtro_h = df_ctrl[df_ctrl['RE_IQ'].astype(str).str.strip().str.replace('.0','') == re_logado_str]
+        if not filtro_h.empty:
+            try: meta_atual = int(filtro_h.iloc[0]['META_HORAS'])
+            except: pass
+            try: realizado_atual = int(filtro_h.iloc[0]['REALIZADO_HORAS'])
+            except: pass
+
+    if re_logado_str not in st.session_state.get('horas_por_iq', {}):
+        if 'horas_por_iq' not in st.session_state: st.session_state['horas_por_iq'] = {}
+        st.session_state['horas_por_iq'][re_logado_str] = {'meta': meta_atual, 'realizadas': realizado_atual}
 
     if perfil_usuario == 'GESTÃO':
         st.sidebar.divider()
@@ -251,10 +328,9 @@ else:
         st.title(titulo_painel)
         st.write("")
 
-        # RE alvejado para controle de horas individualizado
         re_alvo_horas = re_alvo_str if (perfil_usuario == 'GESTÃO' and re_alvo_str) else re_logado_str
         if re_alvo_horas not in st.session_state['horas_por_iq']:
-            st.session_state['horas_por_iq'][re_alvo_horas] = {'meta': 40, 'realizadas': 0}
+            st.session_state['horas_por_iq'][re_alvo_horas] = {'meta': meta_atual, 'realizadas': realizado_atual}
 
         col1, col2, col3 = st.columns(3)
         
@@ -301,13 +377,15 @@ else:
             
             if perfil_usuario == 'GESTÃO':
                 meta_input = st.number_input("Meta de Horas:", value=st.session_state['horas_por_iq'][re_alvo_horas]['meta'], step=1, key=f"meta_{re_alvo_horas}")
-                st.session_state['horas_por_iq'][re_alvo_horas]['meta'] = meta_input
-                
                 real_input = st.number_input("Horas Realizadas:", value=st.session_state['horas_por_iq'][re_alvo_horas]['realizadas'], step=1, key=f"real_{re_alvo_horas}")
-                st.session_state['horas_por_iq'][re_alvo_horas]['realizadas'] = real_input
+                
+                if meta_input != st.session_state['horas_por_iq'][re_alvo_horas]['meta'] or real_input != st.session_state['horas_por_iq'][re_alvo_horas]['realizadas']:
+                    st.session_state['horas_por_iq'][re_alvo_horas]['meta'] = meta_input
+                    st.session_state['horas_por_iq'][re_alvo_horas]['realizadas'] = real_input
+                    salvar_horas_no_sheets(re_alvo_horas, meta_input, real_input)
             else:
                 st.markdown(f'<div class="metric-value">Meta: {st.session_state["horas_por_iq"][re_alvo_horas]["meta"]}h</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="metric-value" style="font-size:22px; margin-top:5px;">Realizado: {st.session_state["horas_por_iq"][re_alvo_horas]["realizadas"]}h</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="metric-value" style="font-size:20px; margin-top:5px;">Realizado: {st.session_state["horas_por_iq"][re_alvo_horas]["realizadas"]}h</div>', unsafe_allow_html=True)
                 st.markdown(f'<div class="metric-sub">Controle individual de horas</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
@@ -352,16 +430,13 @@ else:
                     tec_nome = row['nome']
                     iq_resp = row['re_iq_responsavel']
                     
-                    # Nome do IQ responsável pelo técnico
                     nome_iq_resp = iq_resp
                     match_iq = dados_iqs[dados_iqs['re_iq'] == iq_resp]
                     if not match_iq.empty: nome_iq_resp = match_iq.iloc[0]['nome_iq']
 
-                    # Lê estado atual dos ticks da linha
                     m1_val = str(row.get(f'M1_{mes_vigente}', '')).upper() == 'SIM'
                     m2_val = str(row.get(f'M2_{mes_vigente}', '')).upper() == 'SIM'
                     m3_val = str(row.get(f'M3_{mes_vigente}', '')).upper() == 'SIM'
-                    
                     concluidas = sum([m1_val, m2_val, m3_val])
 
                     with st.container():
@@ -374,13 +449,11 @@ else:
                         
                         c_status.markdown(f"**{concluidas}/3**")
                         
-                        # Se mudou algum tick, salva no Sheets automaticamente
                         if novo_m1 != m1_val or novo_m2 != m2_val or novo_m3 != m3_val:
                             atualizar_planilha_mes(aba_vigente, tec_login, 'M1', 'SIM' if novo_m1 else 'NÃO')
                             atualizar_planilha_mes(aba_vigente, tec_login, 'M2', 'SIM' if novo_m2 else 'NÃO')
                             atualizar_planilha_mes(aba_vigente, tec_login, 'M3', 'SIM' if novo_m3 else 'NÃO')
                             
-                            # Se atingiu 3, dá baixa automática no Acompanhamento
                             if (novo_m1 and novo_m2 and novo_m3):
                                 atualizar_planilha_mes(aba_vigente, tec_login, 'ACOMPANHAMENTO', 'SIM')
                             st.rerun()
@@ -446,10 +519,12 @@ else:
                         'data': data_agendada.strftime("%d/%m/%Y"),
                         'iq_nome': st.session_state['nome_iq']
                     }
+                    salvar_agenda_no_sheets(st.session_state['agenda_matinal'])
                     st.success(f"Matinal agendada para {tec_agendar}!")
+                    st.rerun()
             
             st.write("---")
-            st.write("**Agenda Geral de Matinais:**")
+            st.write("**Agenda de Matinais Cadastradas:**")
             if not st.session_state['agenda_matinal']:
                 st.info("Nenhuma matinal agendada.")
             else:
@@ -458,6 +533,7 @@ else:
                     c1.write(f"📌 **Data:** {info['data']} | **Técnico:** {tec} | **IQ:** {info['iq_nome']}")
                     if c2.button("🗑️ Remover", key=f"rm_{tec}"):
                         del st.session_state['agenda_matinal'][tec]
+                        salvar_agenda_no_sheets(st.session_state['agenda_matinal'])
                         st.rerun()
 
         with tab_executar:
@@ -546,5 +622,6 @@ else:
                             if aba_vigente:
                                 atualizar_planilha_mes(aba_vigente, tec_login, 'ACOMPANHAMENTO', 'SIM')
                             del st.session_state['agenda_matinal'][tec_atual]
+                            salvar_agenda_no_sheets(st.session_state['agenda_matinal'])
                             st.session_state['email_pronto'] = url_email
                             st.rerun()
