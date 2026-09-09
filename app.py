@@ -62,7 +62,7 @@ def carregar_dados():
 
     dados_completos = dados_tecnicos.copy()
     
-    # LEITURA INTELIGENTE DAS ABAS DE MESES (Qualquer aba que não seja Base_IQ ou Base_Tecnicos)
+    # LEITURA INTELIGENTE DAS ABAS DE MESES
     todas_abas = [ws.title for ws in planilha.worksheets()]
     abas_meses = [aba for aba in todas_abas if aba not in ['Base_IQ', 'Base_Tecnicos']]
     
@@ -71,11 +71,9 @@ def carregar_dados():
     for aba in abas_meses:
         df_mes = ler_aba(aba)
         if not df_mes.empty:
-            # Extrai o nome do mês da aba (remove a palavra CERTIFICADO se houver)
             mes_nome = aba.upper().replace('CERTIFICADO', '').replace('_', ' ').strip()
             if not mes_nome: mes_nome = aba.upper()
             
-            # Renomeia colunas para o padrão do sistema
             colunas_novas = {}
             for c in df_mes.columns:
                 c_up = str(c).strip().upper()
@@ -86,7 +84,6 @@ def carregar_dados():
                 elif 'DATA' in c_up: colunas_novas[c] = f'DATA_MON_{mes_nome}'
                 elif 'OBS' in c_up: colunas_novas[c] = f'OBS_{mes_nome}'
                 else:
-                    # Se a coluna tiver o nome do mês (ex: AGOSTO), é a coluna de status (Sim/Não)
                     if mes_nome in c_up or c_up in mes_nome:
                         colunas_novas[c] = mes_nome
             
@@ -95,33 +92,34 @@ def carregar_dados():
             if 'LOGIN' in df_mes.columns:
                 df_mes['LOGIN'] = df_mes['LOGIN'].astype(str).str.strip().str.replace('.0', '', regex=False)
                 
-                # Garante que as colunas existam mesmo se vazias no Sheets
                 if mes_nome not in df_mes.columns: df_mes[mes_nome] = 'NÃO'
                 if f'ACOMPANHAMENTO_{mes_nome}' not in df_mes.columns: df_mes[f'ACOMPANHAMENTO_{mes_nome}'] = 'NÃO'
                 
-                # Formata os dados
                 df_mes[mes_nome] = df_mes[mes_nome].fillna('NÃO').astype(str).str.strip().str.upper()
                 df_mes[f'ACOMPANHAMENTO_{mes_nome}'] = df_mes[f'ACOMPANHAMENTO_{mes_nome}'].fillna('NÃO').astype(str).str.strip().str.upper()
                 
-                # Junta com a base principal
-                dados_completos = pd.merge(dados_completos, df_mes, on='LOGIN', how='left')
+                # CORREÇÃO DO CRUZAMENTO AQUI:
+                dados_completos = pd.merge(dados_completos, df_mes, left_on='login', right_on='LOGIN', how='left')
+                
+                # Apaga o LOGIN em maiúsculo após juntar para não causar erro no próximo mês
+                if 'LOGIN' in dados_completos.columns:
+                    dados_completos = dados_completos.drop(columns=['LOGIN'])
+                    
                 meses_info.append({'nome_aba': aba, 'mes_nome': mes_nome})
 
     return dados_iqs, dados_completos, meses_info
 
 def atualizar_planilha_mes(nome_aba, login_tecnico, coluna_busca, valor):
-    """Função inteligente para atualizar a aba exata do mês"""
     ws = conectar_planilha().worksheet(nome_aba)
     cabecalhos = ws.row_values(1)
     col_idx = -1
     
-    # Acha a coluna correta
     for i, c in enumerate(cabecalhos):
         if coluna_busca.upper() in str(c).upper():
             col_idx = i + 1
             break
             
-    if col_idx == -1: return # Se não achar a coluna, ignora
+    if col_idx == -1: return 
     
     registros = ws.get_all_records()
     for idx, row in enumerate(registros):
@@ -139,7 +137,6 @@ def colorir_sim_nao(val):
 
 dados_iqs, dados_completos, meses_info = carregar_dados()
 
-# Determina qual é o mês vigente (o último mês carregado)
 if meses_info:
     mes_vigente_info = meses_info[-1]
     mes_vigente = mes_vigente_info['mes_nome']
@@ -212,7 +209,6 @@ else:
             st.session_state['logado'] = False
             st.rerun()
 
-    # --- PÁGINA 1: DASHBOARD ---
     if st.session_state['pagina_atual'] == "Dashboard":
         st.title(f"Painel Operacional - {st.session_state['nome_iq']}")
         
@@ -241,7 +237,6 @@ else:
         
         with col3:
             if mes_vigente:
-                # Conta quem está NÃO no certificado do mês vigente E também NÃO tem acompanhamento feito
                 pendentes_hoje = len(equipe_vigente[(equipe_vigente[mes_vigente] == 'NÃO') & (equipe_vigente[f'ACOMPANHAMENTO_{mes_vigente}'] != 'SIM')])
                 st.metric(f"⚠️ Pendentes ({mes_vigente})", f"{pendentes_hoje} Técnicos", delta_color="inverse")
             else:
@@ -284,7 +279,6 @@ else:
         else:
             st.info("Crie as abas de certificados mensais no Sheets para visualizar pendências.")
 
-    # --- PÁGINA 2: HISTÓRICO DE CERTIFICADOS ---
     elif st.session_state['pagina_atual'] == "Historico":
         st.title(f"🏆 Histórico de Certificados - {st.session_state['nome_iq']}")
         
@@ -303,7 +297,6 @@ else:
             df_exibir = equipe_historico[[col for col in colunas_exibir if col in equipe_historico.columns]]
             st.dataframe(df_exibir.style.map(colorir_sim_nao), hide_index=True, use_container_width=True)
 
-    # --- PÁGINA 3: MATINAL ---
     elif st.session_state['pagina_atual'] == "Matinal":
         st.title("📋 Agendamento e Execução da Matinal")
         tab_agendar, tab_executar = st.tabs(["1. Agendar Téc", "2. Executar Vistoria (Checklist)"])
@@ -411,10 +404,8 @@ else:
                             st.warning("⚠️ O envio da foto é obrigatório para comprovação.")
                         else:
                             tec_login = equipe_vigente[equipe_vigente['nome'] == tec_atual]['login'].iloc[0]
-                            # Ao fazer a matinal, o acompanhamento no mês vigente recebe 'SIM'
                             if aba_vigente:
                                 atualizar_planilha_mes(aba_vigente, tec_login, 'ACOMPANHAMENTO', 'SIM')
-                            
                             del st.session_state['agenda_matinal'][tec_atual]
                             st.session_state['email_pronto'] = url_email
                             st.rerun()
