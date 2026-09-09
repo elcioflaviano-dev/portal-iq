@@ -48,7 +48,6 @@ def conectar_planilha():
         st.error(f"Erro ao conectar com o Google Sheets. Detalhe: {e}")
         st.stop()
 
-# Cache reativado com TTL de 300 segundos (5 minutos) para proteger contra o erro 429
 @st.cache_data(ttl=300)
 def carregar_dados():
     planilha = conectar_planilha()
@@ -215,7 +214,7 @@ def atualizar_celula_especifica(nome_aba, login_tecnico, coluna_alvo, valor):
             if str(val).strip().replace('.0', '') == str(login_tecnico).strip().replace('.0', ''):
                 ws.update_cell(row_idx + 1, col_idx, valor)
                 break
-        st.cache_data.clear() # Limpa o cache para forçar a nova leitura na próxima atualização
+        st.cache_data.clear()
     except Exception as e:
         st.error(f"Erro ao atualizar planilha: {e}")
 
@@ -436,7 +435,7 @@ else:
         
         # --- ACOMPANHAMENTO PENDENTE COM BOTÃO DE SALVAR ---
         st.subheader(f"⚠️ Acompanhamento Pendente (Referência: {mes_acompanhamento or 'N/A'})")
-        st.write(f"*Marque as monitorias realizadas e clique no botão 'Salvar Monitorias' para gravar no Sheets.*")
+        st.write(f"*Marque as monitorias realizadas e clique no botão 'Salvar' para gravar no Sheets.*")
         
         if mes_acompanhamento:
             tecnicos_nao_cert = equipe_vigente[(equipe_vigente[mes_acompanhamento] == 'NÃO') & (equipe_vigente[f'ACOMPANHAMENTO_{mes_acompanhamento}'] != 'SIM')]
@@ -494,7 +493,7 @@ else:
             st.warning("Nenhuma aba de certificação encontrada no Google Sheets.")
         else:
             lista_meses = [m['mes_nome'] for m in meses_info]
-            mes_historico = st.selectbox("📅 Escolha o Mês para visualizar:", lista_meses, index=len(lista_meses)-1)
+            mes_historico = st.selectbox("📅 Escolha o Mes para visualizar:", lista_meses, index=len(lista_meses)-1)
             
             col_re_hist = f"RE_IQ_{mes_historico}"
             
@@ -509,18 +508,45 @@ else:
             if base_historico.empty:
                 st.info(f"Você não possui técnicos vinculados ao seu RE no mês de {mes_historico}.")
             else:
+                # --- Cálculo da Porcentagem do Mês Selecionado ---
+                filtro_validos = (base_historico[mes_historico] != '')
+                base_mes_valida = base_historico[filtro_validos]
+                total_mes = len(base_mes_valida)
+                sim_mes = len(base_mes_valida[base_mes_valida[mes_historico].astype(str).str.upper() == 'SIM'])
+                pct_mes = round((sim_mes / total_mes * 100), 1) if total_mes > 0 else 0
+
+                st.metric(f"🏆 % Certificados ({mes_historico})", f"{pct_mes}% SIM", f"Base: {total_mes} Técnicos")
+                st.write("")
+
                 colunas_exibir = ['login', 'nome', mes_historico]
                 if f"RE_IQ_{mes_historico}" in base_historico.columns: colunas_exibir.append(f"RE_IQ_{mes_historico}")
-                if f"ACOMPANHAMENTO_{mes_historico}" in base_historico.columns: colunas_exibir.append(f"ACOMPANHAMENTO_{mes_historico}")
+                if f"MONIT_1_{mes_historico}" in base_historico.columns: colunas_exibir.append(f"MONIT_1_{mes_historico}")
+                if f"MONIT_2_{mes_historico}" in base_historico.columns: colunas_exibir.append(f"MONIT_2_{mes_historico}")
+                if f"MONIT_3_{mes_historico}" in base_historico.columns: colunas_exibir.append(f"MONIT_3_{mes_historico}")
 
                 df_exibir = base_historico[[c for c in colunas_exibir if c in base_historico.columns]].copy()
                 
+                # Cria a coluna de contagem de monitorias (ex: 2/3)
+                if all(col in df_exibir.columns for col in [f"MONIT_1_{mes_historico}", f"MONIT_2_{mes_historico}", f"MONIT_3_{mes_historico}"]):
+                    m1 = df_exibir[f"MONIT_1_{mes_historico}"].astype(str).str.upper() == 'SIM'
+                    m2 = df_exibir[f"MONIT_2_{mes_historico}"].astype(str).str.upper() == 'SIM'
+                    m3 = df_exibir[f"MONIT_3_{mes_historico}"].astype(str).str.upper() == 'SIM'
+                    df_exibir['Contagem_Monitorias'] = (m1.astype(int) + m2.astype(int) + m3.astype(int)).astype(str) + "/3"
+
+                # Ordena para deixar os NÃO certificados no topo
+                df_exibir['ordem_sort'] = df_exibir[mes_historico].astype(str).str.upper().apply(lambda x: 0 if x == 'NÃO' else 1)
+                df_exibir = df_exibir.sort_values(by='ordem_sort').drop(columns=['ordem_sort'])
+
+                # Remove colunas individuais de monit para exibir apenas a contagem limpa
+                drop_cols = [c for c in df_exibir.columns if 'MONIT_' in c]
+                df_exibir = df_exibir.drop(columns=drop_cols, errors='ignore')
+
                 renomear_cols = {
                     'login': 'Login', 
                     'nome': 'Nome do Técnico',
                     mes_historico: 'Status Certificação',
                     f"RE_IQ_{mes_historico}": 'RE do IQ (Mês)',
-                    f"ACOMPANHAMENTO_{mes_historico}": 'Monitoria Concluída?'
+                    'Contagem_Monitorias': 'Monitoria Concluída?'
                 }
                 df_exibir = df_exibir.rename(columns=renomear_cols)
 
@@ -626,7 +652,7 @@ else:
                         veiculo_1 = ['Limpeza do Veículo', 'Organização do Veículo', 'Avarias no Veículo']
                         veiculo_2 = ['PDA (Logado / Bat > 50%)', 'Book Fiscal', 'Flanela', 'Chip de Telefonia', 'Escova e Pá de Lixo']
                         
-                        for item in veiluo_1 if 'veiluo_1' in locals() else veiculo_1:
+                        for item in veiculo_1:
                             if cv1.checkbox(item): faltas.append(item)
                         for item in veiculo_2:
                             if cv2.checkbox(item): faltas.append(item)
