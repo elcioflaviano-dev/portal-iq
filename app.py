@@ -220,8 +220,10 @@ def atualizar_celula_especifica(nome_aba, login_tecnico, coluna_alvo, valor):
 
 def colorir_sim_nao(val):
     texto = str(val).strip().upper()
-    if texto == 'SIM': return 'background-color: #d4edda; color: #155724; font-weight: bold;'
-    elif texto == 'NÃO' or texto == 'NAO': return 'background-color: #f8d7da; color: #721c24; font-weight: bold;'
+    if texto == 'SIM' or '3/3 - SIM' in texto: 
+        return 'background-color: #d4edda; color: #155724; font-weight: bold;'
+    elif texto == 'NÃO' or texto == 'NAO' or '- NÃO' in texto: 
+        return 'background-color: #f8d7da; color: #721c24; font-weight: bold;'
     return ''
 
 dados_iqs, dados_completos, meses_info = carregar_dados()
@@ -493,7 +495,7 @@ else:
             st.warning("Nenhuma aba de certificação encontrada no Google Sheets.")
         else:
             lista_meses = [m['mes_nome'] for m in meses_info]
-            mes_historico = st.selectbox("📅 Escolha o Mes para visualizar:", lista_meses, index=len(lista_meses)-1)
+            mes_historico = st.selectbox("📅 Escolha o Mês para visualizar:", lista_meses, index=len(lista_meses)-1)
             
             col_re_hist = f"RE_IQ_{mes_historico}"
             
@@ -526,18 +528,19 @@ else:
 
                 df_exibir = base_historico[[c for c in colunas_exibir if c in base_historico.columns]].copy()
                 
-                # Cria a coluna de contagem de monitorias (ex: 2/3)
+                # Formata a coluna de contagem com " - SIM" ou " - NÃO" conforme solicitado
                 if all(col in df_exibir.columns for col in [f"MONIT_1_{mes_historico}", f"MONIT_2_{mes_historico}", f"MONIT_3_{mes_historico}"]):
                     m1 = df_exibir[f"MONIT_1_{mes_historico}"].astype(str).str.upper() == 'SIM'
                     m2 = df_exibir[f"MONIT_2_{mes_historico}"].astype(str).str.upper() == 'SIM'
                     m3 = df_exibir[f"MONIT_3_{mes_historico}"].astype(str).str.upper() == 'SIM'
-                    df_exibir['Contagem_Monitorias'] = (m1.astype(int) + m2.astype(int) + m3.astype(int)).astype(str) + "/3"
+                    soma = m1.astype(int) + m2.astype(int) + m3.astype(int)
+                    df_exibir['Contagem_Monitorias'] = soma.astype(str) + "/3 - " + soma.apply(lambda x: "SIM" if x == 3 else "NÃO")
 
                 # Ordena para deixar os NÃO certificados no topo
                 df_exibir['ordem_sort'] = df_exibir[mes_historico].astype(str).str.upper().apply(lambda x: 0 if x == 'NÃO' else 1)
                 df_exibir = df_exibir.sort_values(by='ordem_sort').drop(columns=['ordem_sort'])
 
-                # Remove colunas individuais de monit para exibir apenas a contagem limpa
+                # Remove colunas individuais de monit para exibir apenas a coluna formatada
                 drop_cols = [c for c in df_exibir.columns if 'MONIT_' in c]
                 df_exibir = df_exibir.drop(columns=drop_cols, errors='ignore')
 
