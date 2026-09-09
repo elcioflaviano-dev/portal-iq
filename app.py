@@ -48,7 +48,7 @@ def conectar_planilha():
         st.error(f"Erro ao conectar com o Google Sheets. Detalhe: {e}")
         st.stop()
 
-@st.cache_data(ttl=60)
+# Sem TTL estrito para garantir sincronia imediata com o Sheets
 def carregar_dados():
     planilha = conectar_planilha()
     
@@ -188,7 +188,6 @@ def salvar_agenda_no_sheets(agenda_dict):
         print(f"Erro ao salvar agenda: {e}")
 
 def atualizar_celula_especifica(nome_aba, login_tecnico, coluna_alvo, valor):
-    """Atualiza diretamente a célula no Google Sheets sem causar erro de cota"""
     try:
         ws = conectar_planilha().worksheet(nome_aba)
         cabecalhos = [str(c).strip().upper() for c in ws.row_values(1)]
@@ -214,7 +213,7 @@ def atualizar_celula_especifica(nome_aba, login_tecnico, coluna_alvo, valor):
             if str(val).strip().replace('.0', '') == str(login_tecnico).strip().replace('.0', ''):
                 ws.update_cell(row_idx + 1, col_idx, valor)
                 break
-        st.cache_data.clear()
+        st.cache_data.clear() # Limpa o cache para forçar a leitura nova do Sheets
     except Exception as e:
         st.error(f"Erro ao atualizar planilha: {e}")
 
@@ -450,6 +449,7 @@ else:
                     match_iq = dados_iqs[dados_iqs['re_iq'] == iq_resp]
                     if not match_iq.empty: nome_iq_resp = match_iq.iloc[0]['nome_iq']
 
+                    # Lê o estado atual direto da base lida do Sheets
                     m1_val = str(row.get(f'MONIT_1_{mes_acompanhamento}', '')).upper() == 'SIM'
                     m2_val = str(row.get(f'MONIT_2_{mes_acompanhamento}', '')).upper() == 'SIM'
                     m3_val = str(row.get(f'MONIT_3_{mes_acompanhamento}', '')).upper() == 'SIM'
