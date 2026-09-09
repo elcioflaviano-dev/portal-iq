@@ -48,6 +48,8 @@ def conectar_planilha():
         st.error(f"Erro ao conectar com o Google Sheets. Detalhe: {e}")
         st.stop()
 
+# Cache reativado com TTL de 300 segundos (5 minutos) para proteger contra o erro 429
+@st.cache_data(ttl=300)
 def carregar_dados():
     planilha = conectar_planilha()
     
@@ -162,6 +164,7 @@ def salvar_horas_no_sheets(re_iq, meta, realizado):
                 break
         if not encontrou:
             ws.append_row([str(re_iq), meta, realizado, "", "", ""])
+        st.cache_data.clear()
     except Exception as e:
         st.error(f"Erro ao salvar horas: {e}")
 
@@ -182,6 +185,7 @@ def salvar_agenda_no_sheets(agenda_dict):
             ws.update_cell(linha_atual, 5, info['data'])
             ws.update_cell(linha_atual, 6, info['iq_nome'])
             linha_atual += 1
+        st.cache_data.clear()
     except Exception as e:
         print(f"Erro ao salvar agenda: {e}")
 
@@ -211,6 +215,7 @@ def atualizar_celula_especifica(nome_aba, login_tecnico, coluna_alvo, valor):
             if str(val).strip().replace('.0', '') == str(login_tecnico).strip().replace('.0', ''):
                 ws.update_cell(row_idx + 1, col_idx, valor)
                 break
+        st.cache_data.clear() # Limpa o cache para forçar a nova leitura na próxima atualização
     except Exception as e:
         st.error(f"Erro ao atualizar planilha: {e}")
 
@@ -278,7 +283,6 @@ else:
     re_logado_str = str(re_logado).strip().replace('.0', '')
     perfil_usuario = st.session_state.get('perfil', 'IQ')
 
-    # Busca segura de horas no Sheets para o RE atual
     meta_atual, realizado_atual = 40, 0
     if not df_ctrl.empty and 'RE_IQ' in df_ctrl.columns:
         filtro_h = df_ctrl[df_ctrl['RE_IQ'].astype(str).str.strip().str.replace('.0','') == re_logado_str]
@@ -339,7 +343,6 @@ else:
 
         re_alvo_horas = re_alvo_str if (perfil_usuario == 'GESTÃO' and re_alvo_str) else re_logado_str
         
-        # Puxa valores específicos do RE alvo na hora de renderizar
         meta_alvo, realizado_alvo = meta_atual, realizado_atual
         if perfil_usuario == 'GESTÃO' and re_alvo_str and not df_ctrl.empty:
             f_alvo = df_ctrl[df_ctrl['RE_IQ'].astype(str).str.strip().str.replace('.0','') == str(re_alvo_str)]
@@ -431,9 +434,9 @@ else:
 
         st.divider()
         
-        # --- ACOMPANHAMENTO PENDENTE (MÍNIMO DE 3 MONITORIAS COM TICKETS) ---
+        # --- ACOMPANHAMENTO PENDENTE COM BOTÃO DE SALVAR ---
         st.subheader(f"⚠️ Acompanhamento Pendente (Referência: {mes_acompanhamento or 'N/A'})")
-        st.write(f"*Marque as caixas conforme realizar cada monitoria (1, 2 e 3). Ao completar as 3, o status mudará para SIM automaticamente.*")
+        st.write(f"*Marque as monitorias realizadas e clique no botão 'Salvar Monitorias' para gravar no Sheets.*")
         
         if mes_acompanhamento:
             tecnicos_nao_cert = equipe_vigente[(equipe_vigente[mes_acompanhamento] == 'NÃO') & (equipe_vigente[f'ACOMPANHAMENTO_{mes_acompanhamento}'] != 'SIM')]
@@ -453,35 +456,33 @@ else:
                     m1_val = str(row.get(f'MONIT_1_{mes_acompanhamento}', '')).upper() == 'SIM'
                     m2_val = str(row.get(f'MONIT_2_{mes_acompanhamento}', '')).upper() == 'SIM'
                     m3_val = str(row.get(f'MONIT_3_{mes_acompanhamento}', '')).upper() == 'SIM'
-                    concluidas = sum([m1_val, m2_val, m3_val])
 
-                    with st.container():
-                        c_info, c_m1, c_m2, c_m3, c_status = st.columns([3, 1, 1, 1, 1])
+                    with st.form(key=f"form_monit_{tec_login}"):
+                        c_info, c_m1, c_m2, c_m3, c_btn = st.columns([3, 1, 1, 1, 1])
                         c_info.write(f"👤 **{tec_nome}** (IQ: {nome_iq_resp})")
                         
-                        novo_m1 = c_m1.checkbox("Monit. 1", value=m1_val, key=f"m1_{tec_login}")
-                        novo_m2 = c_m2.checkbox("Monit. 2", value=m2_val, key=f"m2_{tec_login}")
-                        novo_m3 = c_m3.checkbox("Monit. 3", value=m3_val, key=f"m3_{tec_login}")
+                        f_m1 = c_m1.checkbox("Monit. 1", value=m1_val)
+                        f_m2 = c_m2.checkbox("Monit. 2", value=m2_val)
+                        f_m3 = c_m3.checkbox("Monit. 3", value=m3_val)
                         
-                        c_status.markdown(f"**{concluidas}/3**")
+                        btn_salvar_m = c_btn.form_submit_button("Salvar")
                         
-                        if novo_m1 != m1_val:
-                            atualizar_celula_especifica(aba_acompanhamento, tec_login, 'MONIT_1', 'SIM' if novo_m1 else 'NÃO')
-                            if novo_m1 and novo_m2 and novo_m3:
-                                atualizar_celula_especifica(aba_acompanhamento, tec_login, 'ACOMPANHAMENTO', 'SIM')
-                            st.rerun()
-                        if novo_m2 != m2_val:
-                            atualizar_celula_especifica(aba_acompanhamento, tec_login, 'MONIT_2', 'SIM' if novo_m2 else 'NÃO')
-                            if novo_m1 and novo_m2 and novo_m3:
-                                atualizar_celula_especifica(aba_acompanhamento, tec_login, 'ACOMPANHAMENTO', 'SIM')
-                            st.rerun()
-                        if novo_m3 != m3_val:
-                            atualizar_celula_especifica(aba_acompanhamento, tec_login, 'MONIT_3', 'SIM' if novo_m3 else 'NÃO')
-                            if novo_m1 and novo_m2 and novo_m3:
-                                atualizar_celula_especifica(aba_acompanhamento, tec_login, 'ACOMPANHAMENTO', 'SIM')
-                            st.rerun()
+                        if btn_salvar_m:
+                            val_m1 = 'SIM' if f_m1 else 'NÃO'
+                            val_m2 = 'SIM' if f_m2 else 'NÃO'
+                            val_m3 = 'SIM' if f_m3 else 'NÃO'
                             
-                        st.divider()
+                            atualizar_celula_especifica(aba_acompanhamento, tec_login, 'MONIT_1', val_m1)
+                            atualizar_celula_especifica(aba_acompanhamento, tec_login, 'MONIT_2', val_m2)
+                            atualizar_celula_especifica(aba_acompanhamento, tec_login, 'MONIT_3', val_m3)
+                            
+                            if f_m1 and f_m2 and f_m3:
+                                atualizar_celula_especifica(aba_acompanhamento, tec_login, 'ACOMPANHAMENTO', 'SIM')
+                            
+                            st.success(f"Monitorias de {tec_nome} salvas com sucesso!")
+                            st.rerun()
+                        
+                    st.divider()
         else:
             st.info("Crie abas de certificados mensais para habilitar o acompanhamento.")
 
@@ -625,7 +626,7 @@ else:
                         veiculo_1 = ['Limpeza do Veículo', 'Organização do Veículo', 'Avarias no Veículo']
                         veiculo_2 = ['PDA (Logado / Bat > 50%)', 'Book Fiscal', 'Flanela', 'Chip de Telefonia', 'Escova e Pá de Lixo']
                         
-                        for item in veiculo_1:
+                        for item in veiluo_1 if 'veiluo_1' in locals() else veiculo_1:
                             if cv1.checkbox(item): faltas.append(item)
                         for item in veiculo_2:
                             if cv2.checkbox(item): faltas.append(item)
