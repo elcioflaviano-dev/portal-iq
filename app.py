@@ -96,9 +96,9 @@ def carregar_dados():
                 if 'LOGIN' in c_up: colunas_novas[c] = 'LOGIN'
                 elif 'RE' in c_up and 'IQ' in c_up: colunas_novas[c] = f'RE_IQ_{mes_nome}'
                 elif 'ACOMPANHAMENTO' in c_up: colunas_novas[c] = f'ACOMPANHAMENTO_{mes_nome}'
-                elif c_up in ['M1', 'MONIT_1']: colunas_novas[c] = f'M1_{mes_nome}'
-                elif c_up in ['M2', 'MONIT_2']: colunas_novas[c] = f'M2_{mes_nome}'
-                elif c_up in ['M3', 'MONIT_3']: colunas_novas[c] = f'M3_{mes_nome}'
+                elif c_up in ['MONIT_1', 'M1']: colunas_novas[c] = f'MONIT_1_{mes_nome}'
+                elif c_up in ['MONIT_2', 'M2']: colunas_novas[c] = f'MONIT_2_{mes_nome}'
+                elif c_up in ['MONIT_3', 'M3']: colunas_novas[c] = f'MONIT_3_{mes_nome}'
                 else:
                     if mes_nome in c_up or c_up in mes_nome:
                         colunas_novas[c] = mes_nome
@@ -113,15 +113,15 @@ def carregar_dados():
                 
                 if mes_nome not in df_mes.columns: df_mes[mes_nome] = 'NÃO'
                 if f'ACOMPANHAMENTO_{mes_nome}' not in df_mes.columns: df_mes[f'ACOMPANHAMENTO_{mes_nome}'] = 'NÃO'
-                if f'M1_{mes_nome}' not in df_mes.columns: df_mes[f'M1_{mes_nome}'] = 'NÃO'
-                if f'M2_{mes_nome}' not in df_mes.columns: df_mes[f'M2_{mes_nome}'] = 'NÃO'
-                if f'M3_{mes_nome}' not in df_mes.columns: df_mes[f'M3_{mes_nome}'] = 'NÃO'
+                if f'MONIT_1_{mes_nome}' not in df_mes.columns: df_mes[f'MONIT_1_{mes_nome}'] = 'NÃO'
+                if f'MONIT_2_{mes_nome}' not in df_mes.columns: df_mes[f'MONIT_2_{mes_nome}'] = 'NÃO'
+                if f'MONIT_3_{mes_nome}' not in df_mes.columns: df_mes[f'MONIT_3_{mes_nome}'] = 'NÃO'
                 
                 df_mes[mes_nome] = df_mes[mes_nome].fillna('NÃO').astype(str).str.strip().str.upper()
                 df_mes[f'ACOMPANHAMENTO_{mes_nome}'] = df_mes[f'ACOMPANHAMENTO_{mes_nome}'].fillna('NÃO').astype(str).str.strip().str.upper()
-                df_mes[f'M1_{mes_nome}'] = df_mes[f'M1_{mes_nome}'].fillna('NÃO').astype(str).str.strip().str.upper()
-                df_mes[f'M2_{mes_nome}'] = df_mes[f'M2_{mes_nome}'].fillna('NÃO').astype(str).str.strip().str.upper()
-                df_mes[f'M3_{mes_nome}'] = df_mes[f'M3_{mes_nome}'].fillna('NÃO').astype(str).str.strip().str.upper()
+                df_mes[f'MONIT_1_{mes_nome}'] = df_mes[f'MONIT_1_{mes_nome}'].fillna('NÃO').astype(str).str.strip().str.upper()
+                df_mes[f'MONIT_2_{mes_nome}'] = df_mes[f'MONIT_2_{mes_nome}'].fillna('NÃO').astype(str).str.strip().str.upper()
+                df_mes[f'MONIT_3_{mes_nome}'] = df_mes[f'MONIT_3_{mes_nome}'].fillna('NÃO').astype(str).str.strip().str.upper()
                 
                 dados_completos = pd.merge(dados_completos, df_mes, left_on='login', right_on='LOGIN', how='left')
                 
@@ -201,7 +201,6 @@ def atualizar_celula_especifica(nome_aba, login_tecnico, coluna_alvo, valor):
                 
         if col_idx == -1: return 
         
-        # Procura a linha do técnico pela coluna de Login
         col_login_idx = -1
         for i, c in enumerate(cabecalhos):
             if 'LOGIN' in c:
@@ -451,9 +450,9 @@ else:
                     match_iq = dados_iqs[dados_iqs['re_iq'] == iq_resp]
                     if not match_iq.empty: nome_iq_resp = match_iq.iloc[0]['nome_iq']
 
-                    m1_val = str(row.get(f'M1_{mes_acompanhamento}', '')).upper() == 'SIM'
-                    m2_val = str(row.get(f'M2_{mes_acompanhamento}', '')).upper() == 'SIM'
-                    m3_val = str(row.get(f'M3_{mes_acompanhamento}', '')).upper() == 'SIM'
+                    m1_val = str(row.get(f'MONIT_1_{mes_acompanhamento}', '')).upper() == 'SIM'
+                    m2_val = str(row.get(f'MONIT_2_{mes_acompanhamento}', '')).upper() == 'SIM'
+                    m3_val = str(row.get(f'MONIT_3_{mes_acompanhamento}', '')).upper() == 'SIM'
                     concluidas = sum([m1_val, m2_val, m3_val])
 
                     with st.container():
@@ -466,19 +465,18 @@ else:
                         
                         c_status.markdown(f"**{concluidas}/3**")
                         
-                        # Atualiza individualmente no Sheets sem sobrecarregar a cota
                         if novo_m1 != m1_val:
-                            atualizar_celula_especifica(aba_acompanhamento, tec_login, 'M1', 'SIM' if novo_m1 else 'NÃO')
+                            atualizar_celula_especifica(aba_acompanhamento, tec_login, 'MONIT_1', 'SIM' if novo_m1 else 'NÃO')
                             if novo_m1 and novo_m2 and novo_m3:
                                 atualizar_celula_especifica(aba_acompanhamento, tec_login, 'ACOMPANHAMENTO', 'SIM')
                             st.rerun()
                         if novo_m2 != m2_val:
-                            atualizar_celula_especifica(aba_acompanhamento, tec_login, 'M2', 'SIM' if novo_m2 else 'NÃO')
+                            atualizar_celula_especifica(aba_acompanhamento, tec_login, 'MONIT_2', 'SIM' if novo_m2 else 'NÃO')
                             if novo_m1 and novo_m2 and novo_m3:
                                 atualizar_celula_especifica(aba_acompanhamento, tec_login, 'ACOMPANHAMENTO', 'SIM')
                             st.rerun()
                         if novo_m3 != m3_val:
-                            atualizar_celula_especifica(aba_acompanhamento, tec_login, 'M3', 'SIM' if novo_m3 else 'NÃO')
+                            atualizar_celula_especifica(aba_acompanhamento, tec_login, 'MONIT_3', 'SIM' if novo_m3 else 'NÃO')
                             if novo_m1 and novo_m2 and novo_m3:
                                 atualizar_celula_especifica(aba_acompanhamento, tec_login, 'ACOMPANHAMENTO', 'SIM')
                             st.rerun()
