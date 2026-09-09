@@ -18,16 +18,24 @@ if 'horas_meta_geral' not in st.session_state: st.session_state['horas_meta_gera
 if 'horas_realizadas_geral' not in st.session_state: st.session_state['horas_realizadas_geral'] = 0
 if 'email_pronto' not in st.session_state: st.session_state['email_pronto'] = None
 
-# --- Estilização CSS para Colorir os Cards do Topo ---
+# --- Estilização CSS para Cards Coloridos Estilo TV / Dashboard ---
 st.markdown("""
     <style>
-    .card-metric {
-        background-color: #f8f9fa;
-        border-left: 5px solid #0056b3;
-        padding: 15px;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    .metric-card {
+        padding: 20px;
+        border-radius: 12px;
+        color: white;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        margin-bottom: 10px;
     }
+    .card-blue { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); }
+    .card-green { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+    .card-orange { background: linear-gradient(135deg, #f2994a 0%, #f2c94c 100%); }
+    .card-purple { background: linear-gradient(135deg, #4e54c8 0%, #8f94fb 100%); }
+    
+    .metric-title { font-size: 14px; font-weight: 600; text-transform: uppercase; margin-bottom: 5px; opacity: 0.9; }
+    .metric-value { font-size: 26px; font-weight: 700; margin-bottom: 5px; }
+    .metric-sub { font-size: 12px; opacity: 0.8; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -186,16 +194,33 @@ if not st.session_state['logado']:
 else:
     re_logado = st.session_state['re_usuario']
     re_logado_str = str(re_logado).strip().replace('.0', '')
-    
-    if st.session_state.get('perfil') == 'GESTÃO':
-        equipe_vigente = dados_completos
+    perfil_usuario = st.session_state.get('perfil', 'IQ')
+
+    # Filtro de Gestão (Permite ver a visão geral ou selecionar um IQ específico)
+    if perfil_usuario == 'GESTÃO':
+        st.sidebar.divider()
+        st.sidebar.subheader("🎛️ Filtro de Gestão")
+        
+        # Cria lista de IQs disponíveis na base
+        lista_iqs = dados_iqs[dados_iqs['PERFIL'] != 'GESTÃO'][['re_iq', 'nome_iq']].drop_duplicates()
+        opcoes_iq = ["Visão Geral (Todos)"] + [f"{row['re_iq']} - {row['nome_iq']}" for _, row in lista_iqs.iterrows()]
+        
+        iq_selecionado = st.sidebar.selectbox("Visualizar painel do IQ:", opcoes_iq)
+        
+        if "Visão Geral" in iq_selecionado:
+            equipe_vigente = dados_completos
+            re_alvo_str = None
+        else:
+            re_alvo_str = iq_selecionado.split(" - ")[0].strip()
+            equipe_vigente = dados_completos[dados_completos['re_iq_responsavel'] == re_alvo_str]
     else:
         equipe_vigente = dados_completos[dados_completos['re_iq_responsavel'] == re_logado_str]
+        re_alvo_str = re_logado_str
 
     with st.sidebar:
         if os.path.exists("novo-logo-totale.png"): st.image(Image.open("novo-logo-totale.png"), use_container_width=True)
         st.write(f"**Usuário:** {st.session_state['nome_iq']}")
-        st.write(f"**Perfil:** {st.session_state['perfil']}")
+        st.write(f"**Perfil:** {perfil_usuario}")
         st.divider()
         
         if st.button("📊 Dashboard Inicial", use_container_width=True): 
@@ -215,23 +240,33 @@ else:
 
     # --- PÁGINA 1: DASHBOARD ---
     if st.session_state['pagina_atual'] == "Dashboard":
-        st.title(f"Painel Operacional - {st.session_state['nome_iq']}")
+        titulo_painel = f"Painel Operacional - {st.session_state['nome_iq']}"
+        if perfil_usuario == 'GESTÃO' and 're_alvo_str' in locals() and re_alvo_str:
+            nome_iq_filtro = dados_iqs[dados_iqs['re_iq'] == re_alvo_str]['nome_iq'].values
+            if nome_iq_filtro: titulo_painel = f"Painel Operacional (Visão: {nome_iq_filtro[0]})"
         
+        st.title(titulo_painel)
+        st.write("")
+
+        # --- CARDS COLORIDOS DO TOPO (ESTILO TV) ---
         col1, col2, col3 = st.columns(3)
         
         # CARD 1: % CERTIFICADOS
         with col1:
-            st.markdown('<div class="card-metric">', unsafe_allow_html=True)
+            st.markdown('<div class="metric-card card-blue">', unsafe_allow_html=True)
+            st.markdown('<div class="metric-title">🏆 % Certificados</div>', unsafe_allow_html=True)
+            
             if meses_info:
                 lista_meses = [m['mes_nome'] for m in meses_info]
-                mes_selecionado = st.selectbox("📅 Selecione o Mês (Para %):", lista_meses, index=len(lista_meses)-1)
+                mes_selecionado = st.selectbox("Selecione o Mês:", lista_meses, index=len(lista_meses)-1, key="sel_mes_card")
                 
                 col_re_mes = f"RE_IQ_{mes_selecionado}"
-                if st.session_state['perfil'] == 'GESTÃO':
+                if perfil_usuario == 'GESTÃO' and (not locals().get('re_alvo_str') or re_alvo_str is None):
                     base_calc_mes = dados_completos
                 else:
+                    target_re = re_alvo_str if perfil_usuario == 'GESTÃO' else re_logado_str
                     if col_re_mes in dados_completos.columns:
-                        base_calc_mes = dados_completos[dados_completos[col_re_mes].astype(str) == re_logado_str]
+                        base_calc_mes = dados_completos[dados_completos[col_re_mes].astype(str) == target_re]
                     else:
                         base_calc_mes = pd.DataFrame()
                 
@@ -242,35 +277,45 @@ else:
                     sim_mes = len(base_mes_valida[base_mes_valida[mes_selecionado].astype(str).str.upper() == 'SIM'])
                     pct_mes = round((sim_mes / total_mes * 100), 1) if total_mes > 0 else 0
                     
-                    st.metric(f"🏆 % Certificados ({mes_selecionado})", f"{pct_mes}% SIM", f"Base: {total_mes} Téc", delta_color="off")
+                    st.markdown(f'<div class="metric-value">{pct_mes}% SIM</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="metric-sub">Base: {total_mes} Técnicos ({mes_selecionado})</div>', unsafe_allow_html=True)
                 else:
-                    st.metric(f"🏆 % Certificados ({mes_selecionado})", "0% SIM", "Sem técnicos vinculados.")
+                    st.markdown('<div class="metric-value">0% SIM</div>', unsafe_allow_html=True)
+                    st.markdown('<div class="metric-sub">Sem técnicos vinculados</div>', unsafe_allow_html=True)
             else:
-                st.metric("🏆 Certificados", "N/A", "Nenhuma aba encontrada.")
+                st.markdown('<div class="metric-value">N/A</div>', unsafe_allow_html=True)
+                st.markdown('<div class="metric-sub">Sem abas mensais</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
         # CARD 2: HORAS DE MONITORIA (Meta vs Realizado)
         with col2:
-            st.markdown('<div class="card-metric">', unsafe_allow_html=True)
-            if st.session_state['perfil'] == 'GESTÃO':
-                meta_input = st.number_input("⏱️ Definir Meta de Horas:", value=st.session_state['horas_meta_geral'], step=1)
+            st.markdown('<div class="metric-card card-green">', unsafe_allow_html=True)
+            st.markdown('<div class="metric-title">⏱️ Horas de Monitoria</div>', unsafe_allow_html=True)
+            
+            if perfil_usuario == 'GESTÃO':
+                meta_input = st.number_input("Meta de Horas:", value=st.session_state['horas_meta_geral'], step=1, key="meta_h")
                 st.session_state['horas_meta_geral'] = meta_input
                 
-                real_input = st.number_input("⏱️ Definir Horas Realizadas:", value=st.session_state['horas_realizadas_geral'], step=1)
+                real_input = st.number_input("Horas Realizadas:", value=st.session_state['horas_realizadas_geral'], step=1, key="real_h")
                 st.session_state['horas_realizadas_geral'] = real_input
             else:
-                st.metric("⏱️ Meta de Horas (Monitoria)", f"{st.session_state['horas_meta_geral']}h")
-                st.metric("⏱️ Horas Realizadas", f"{st.session_state['horas_realizadas_geral']}h")
+                st.markdown(f'<div class="metric-value">Meta: {st.session_state["horas_meta_geral"]}h</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="metric-value" style="font-size:20px; margin-top:5px;">Realizado: {st.session_state["horas_realizadas_geral"]}h</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="metric-sub">Acompanhamento de campo</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
         # CARD 3: PENDENTES DE MONITORAMENTO
         with col3:
-            st.markdown('<div class="card-metric">', unsafe_allow_html=True)
+            st.markdown('<div class="metric-card card-orange">', unsafe_allow_html=True)
+            st.markdown('<div class="metric-title">⚠️ Monitoramento Pendente</div>', unsafe_allow_html=True)
+            
             if mes_vigente:
                 pendentes_hoje = len(equipe_vigente[(equipe_vigente[mes_vigente] == 'NÃO') & (equipe_vigente[f'ACOMPANHAMENTO_{mes_vigente}'] != 'SIM')])
-                st.metric(f"⚠️ Pendentes ({mes_vigente})", f"{pendentes_hoje} Técnicos", delta_color="inverse")
+                st.markdown(f'<div class="metric-value">{pendentes_hoje} Técnicos</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="metric-sub">Referência: {mes_vigente}</div>', unsafe_allow_html=True)
             else:
-                st.metric("⚠️ Monitoramento", "N/A", "Sem base mensal")
+                st.markdown('<div class="metric-value">N/A</div>', unsafe_allow_html=True)
+                st.markdown('<div class="metric-sub">Sem base mensal</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
         st.divider()
@@ -283,7 +328,7 @@ else:
 
         st.divider()
         st.subheader("⚠️ Acompanhamento Pendente")
-        st.write(f"*Abaixo os técnicos da sua equipe que estão como 'NÃO' no certificado de **{mes_vigente or 'N/A'}** e precisam de tratativa:*")
+        st.write(f"*Abaixo os técnicos que estão como 'NÃO' no certificado de **{mes_vigente or 'N/A'}** e precisam de tratativa:*")
         
         if mes_vigente:
             tecnicos_nao_cert = equipe_vigente[(equipe_vigente[mes_vigente] == 'NÃO') & (equipe_vigente[f'ACOMPANHAMENTO_{mes_vigente}'] != 'SIM')]
@@ -292,7 +337,7 @@ else:
                 st.success(f"Todos os técnicos pendentes de {mes_vigente} já possuem acompanhamento registrado.")
             else:
                 for index, row in tecnicos_nao_cert.iterrows():
-                    with st.expander(f"👤 {row['nome']} (Login: {row['login']})"):
+                    with st.expander(f"👤 {row['nome']} (Login: {row['login']} - IQ Responsável RE: {row['re_iq_responsavel']})"):
                         col_f1, col_f2 = st.columns(2)
                         with col_f1:
                             v_contrato = row.get(f'CONTRATO_{mes_vigente}', '')
@@ -324,11 +369,9 @@ else:
             lista_meses = [m['mes_nome'] for m in meses_info]
             mes_historico = st.selectbox("📅 Escolha o Mês para visualizar:", lista_meses, index=len(lista_meses)-1)
             
-            st.write(f"Visão detalhada dos técnicos vinculados a você em **{mes_historico}**.")
-            
             col_re_hist = f"RE_IQ_{mes_historico}"
             
-            if st.session_state['perfil'] == 'GESTÃO':
+            if perfil_usuario == 'GESTÃO':
                 base_historico = dados_completos
             else:
                 if col_re_hist in dados_completos.columns:
@@ -340,19 +383,21 @@ else:
                 st.info(f"Você não possui técnicos vinculados ao seu RE no mês de {mes_historico}.")
             else:
                 colunas_exibir = ['login', 'nome', mes_historico]
-                
+                if f"RE_IQ_{mes_historico}" in base_historico.columns: colunas_exibir.append(f"RE_IQ_{mes_historico}")
                 if f"ACOMPANHAMENTO_{mes_historico}" in base_historico.columns: colunas_exibir.append(f"ACOMPANHAMENTO_{mes_historico}")
                 if f"DATA_MON_{mes_historico}" in base_historico.columns: colunas_exibir.append(f"DATA_MON_{mes_historico}")
 
                 df_exibir = base_historico[[c for c in colunas_exibir if c in base_historico.columns]].copy()
                 
-                df_exibir = df_exibir.rename(columns={
+                renomear_cols = {
                     'login': 'Login', 
                     'nome': 'Nome do Técnico',
                     mes_historico: 'Status Certificação',
+                    f"RE_IQ_{mes_historico}": 'RE do IQ (Mês)',
                     f"ACOMPANHAMENTO_{mes_historico}": 'Monitoria Feita?',
                     f"DATA_MON_{mes_historico}": 'Data da Monitoria'
-                })
+                }
+                df_exibir = df_exibir.rename(columns=renomear_cols)
 
                 st.dataframe(df_exibir.style.map(colorir_sim_nao), hide_index=True, use_container_width=True)
 
