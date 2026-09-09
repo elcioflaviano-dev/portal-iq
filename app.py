@@ -132,7 +132,6 @@ def carregar_dados():
 
     return dados_iqs, dados_completos, meses_info
 
-# Funções de gravação no Sheets para Controle_IQ (Horas e Agendamentos)
 def carregar_controle_iq():
     try:
         ws = conectar_planilha().worksheet("Controle_IQ")
@@ -168,17 +167,13 @@ def salvar_agenda_no_sheets(agenda_dict):
     try:
         planilha = conectar_planilha()
         ws = planilha.worksheet("Controle_IQ")
-        
-        # Mantém as horas e sobrescreve a agenda nas linhas
         registros = ws.get_all_records()
         
-        # Limpa os dados antigos de agenda mantendo as horas
         for idx, row in enumerate(registros):
             ws.update_cell(idx + 2, 4, "")
             ws.update_cell(idx + 2, 5, "")
             ws.update_cell(idx + 2, 6, "")
             
-        # Insere a nova agenda
         linha_atual = 2
         for tec, info in agenda_dict.items():
             ws.update_cell(linha_atual, 4, tec)
@@ -217,12 +212,22 @@ def colorir_sim_nao(val):
 
 dados_iqs, dados_completos, meses_info = carregar_dados()
 
+# --- Definição dos Meses Vigente e Anterior para Monitoramento ---
 if meses_info:
     mes_vigente_info = meses_info[-1]
     mes_vigente = mes_vigente_info['mes_nome']
-    aba_vigente = mes_vigente_info['nome_aba']
+    
+    # Define o mês de acompanhamento como o anterior ao mais recente (se houver mais de um)
+    if len(meses_info) >= 2:
+        mes_acompanhamento_info = meses_info[-2]
+        mes_acompanhamento = mes_acompanhamento_info['mes_nome']
+        aba_acompanhamento = mes_acompanhamento_info['nome_aba']
+    else:
+        # Fallback se houver apenas 1 mês cadastrado
+        mes_acompanhamento = mes_vigente
+        aba_acompanhamento = mes_vigente_info['nome_aba']
 else:
-    mes_vigente, aba_vigente = None, None
+    mes_vigente, aba_acompanhamento, mes_acompanhamento = None, None, None
 
 # --- Carrega Agenda e Horas do Sheets para a Sessão ---
 df_ctrl = carregar_controle_iq()
@@ -265,7 +270,6 @@ else:
     re_logado_str = str(re_logado).strip().replace('.0', '')
     perfil_usuario = st.session_state.get('perfil', 'IQ')
 
-    # Busca horas do Sheets para este RE
     meta_atual, realizado_atual = 40, 0
     if not df_ctrl.empty:
         filtro_h = df_ctrl[df_ctrl['RE_IQ'].astype(str).str.strip().str.replace('.0','') == re_logado_str]
@@ -389,15 +393,15 @@ else:
                 st.markdown(f'<div class="metric-sub">Controle individual de horas</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
-        # CARD 3: PENDENTES DE MONITORAMENTO (Laranja)
+        # CARD 3: PENDENTES DE MONITORAMENTO (Laranja) - Baseado no mês anterior ao vigente
         with col3:
             st.markdown('<div class="metric-card-orange">', unsafe_allow_html=True)
             st.markdown('<div class="metric-title">⚠️ Monitoramento Pendente</div>', unsafe_allow_html=True)
             
-            if mes_vigente:
-                pendentes_hoje = len(equipe_vigente[(equipe_vigente[mes_vigente] == 'NÃO') & (equipe_vigente[f'ACOMPANHAMENTO_{mes_vigente}'] != 'SIM')])
+            if mes_acompanhamento:
+                pendentes_hoje = len(equipe_vigente[(equipe_vigente[mes_acompanhamento] == 'NÃO') & (equipe_vigente[f'ACOMPANHAMENTO_{mes_acompanhamento}'] != 'SIM')])
                 st.markdown(f'<div class="metric-value">{pendentes_hoje} Técnicos</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="metric-sub">Referência: {mes_vigente}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="metric-sub">Referência: {mes_acompanhamento}</div>', unsafe_allow_html=True)
             else:
                 st.markdown('<div class="metric-value">N/A</div>', unsafe_allow_html=True)
                 st.markdown('<div class="metric-sub">Sem base mensal</div>', unsafe_allow_html=True)
@@ -416,14 +420,14 @@ else:
         st.divider()
         
         # --- ACOMPANHAMENTO PENDENTE (MÍNIMO DE 3 MONITORIAS COM TICKETS) ---
-        st.subheader("⚠️ Acompanhamento Pendente (Mínimo de 3 Monitorias)")
+        st.subheader(f"⚠️ Acompanhamento Pendente (Referência: {mes_acompanhamento or 'N/A'})")
         st.write(f"*Marque as caixas conforme realizar cada monitoria (1, 2 e 3). Ao completar as 3, o status mudará para SIM automaticamente.*")
         
-        if mes_vigente:
-            tecnicos_nao_cert = equipe_vigente[(equipe_vigente[mes_vigente] == 'NÃO') & (equipe_vigente[f'ACOMPANHAMENTO_{mes_vigente}'] != 'SIM')]
+        if mes_acompanhamento:
+            tecnicos_nao_cert = equipe_vigente[(equipe_vigente[mes_acompanhamento] == 'NÃO') & (equipe_vigente[f'ACOMPANHAMENTO_{mes_acompanhamento}'] != 'SIM')]
             
             if tecnicos_nao_cert.empty:
-                st.success(f"Todos os técnicos pendentes de {mes_vigente} já concluíram as monitorias.")
+                st.success(f"Todos os técnicos pendentes de {mes_acompanhamento} já concluíram as monitorias.")
             else:
                 for index, row in tecnicos_nao_cert.iterrows():
                     tec_login = row['login']
@@ -434,9 +438,9 @@ else:
                     match_iq = dados_iqs[dados_iqs['re_iq'] == iq_resp]
                     if not match_iq.empty: nome_iq_resp = match_iq.iloc[0]['nome_iq']
 
-                    m1_val = str(row.get(f'M1_{mes_vigente}', '')).upper() == 'SIM'
-                    m2_val = str(row.get(f'M2_{mes_vigente}', '')).upper() == 'SIM'
-                    m3_val = str(row.get(f'M3_{mes_vigente}', '')).upper() == 'SIM'
+                    m1_val = str(row.get(f'M1_{mes_acompanhamento}', '')).upper() == 'SIM'
+                    m2_val = str(row.get(f'M2_{mes_acompanhamento}', '')).upper() == 'SIM'
+                    m3_val = str(row.get(f'M3_{mes_acompanhamento}', '')).upper() == 'SIM'
                     concluidas = sum([m1_val, m2_val, m3_val])
 
                     with st.container():
@@ -450,12 +454,12 @@ else:
                         c_status.markdown(f"**{concluidas}/3**")
                         
                         if novo_m1 != m1_val or novo_m2 != m2_val or novo_m3 != m3_val:
-                            atualizar_planilha_mes(aba_vigente, tec_login, 'M1', 'SIM' if novo_m1 else 'NÃO')
-                            atualizar_planilha_mes(aba_vigente, tec_login, 'M2', 'SIM' if novo_m2 else 'NÃO')
-                            atualizar_planilha_mes(aba_vigente, tec_login, 'M3', 'SIM' if novo_m3 else 'NÃO')
+                            atualizar_planilha_mes(aba_acompanhamento, tec_login, 'M1', 'SIM' if novo_m1 else 'NÃO')
+                            atualizar_planilha_mes(aba_acompanhamento, tec_login, 'M2', 'SIM' if novo_m2 else 'NÃO')
+                            atualizar_planilha_mes(aba_acompanhamento, tec_login, 'M3', 'SIM' if novo_m3 else 'NÃO')
                             
                             if (novo_m1 and novo_m2 and novo_m3):
-                                atualizar_planilha_mes(aba_vigente, tec_login, 'ACOMPANHAMENTO', 'SIM')
+                                atualizar_planilha_mes(aba_acompanhamento, tec_login, 'ACOMPANHAMENTO', 'SIM')
                             st.rerun()
                         st.divider()
         else:
@@ -619,8 +623,8 @@ else:
                             st.warning("⚠️ O envio da foto é obrigatório para comprovação.")
                         else:
                             tec_login = equipe_vigente[equipe_vigente['nome'] == tec_atual]['login'].iloc[0]
-                            if aba_vigente:
-                                atualizar_planilha_mes(aba_vigente, tec_login, 'ACOMPANHAMENTO', 'SIM')
+                            if aba_acompanhamento:
+                                atualizar_planilha_mes(aba_acompanhamento, tec_login, 'ACOMPANHAMENTO', 'SIM')
                             del st.session_state['agenda_matinal'][tec_atual]
                             salvar_agenda_no_sheets(st.session_state['agenda_matinal'])
                             st.session_state['email_pronto'] = url_email
