@@ -15,7 +15,21 @@ if 'logado' not in st.session_state: st.session_state['logado'] = False
 if 'pagina_atual' not in st.session_state: st.session_state['pagina_atual'] = "Dashboard"
 if 'agenda_matinal' not in st.session_state: st.session_state['agenda_matinal'] = {}
 if 'horas_meta_geral' not in st.session_state: st.session_state['horas_meta_geral'] = 40
+if 'horas_realizadas_geral' not in st.session_state: st.session_state['horas_realizadas_geral'] = 0
 if 'email_pronto' not in st.session_state: st.session_state['email_pronto'] = None
+
+# --- Estilização CSS para Colorir os Cards do Topo ---
+st.markdown("""
+    <style>
+    .card-metric {
+        background-color: #f8f9fa;
+        border-left: 5px solid #0056b3;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 # --- 2. Conexão com Google Sheets ---
 def conectar_planilha():
@@ -48,7 +62,6 @@ def carregar_dados():
         st.error("Planilha do Google está vazia ou faltando as abas Base_IQ / Base_Tecnicos.")
         st.stop()
     
-    # Padronização Base e Limpeza de ".0"
     dados_iqs['re_iq'] = dados_iqs['re_iq'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
     dados_iqs['senha'] = dados_iqs.get('senha', '').astype(str).str.strip()
     dados_iqs['PERFIL'] = dados_iqs.get('PERFIL', 'IQ').astype(str).str.strip().str.upper()
@@ -61,7 +74,6 @@ def carregar_dados():
 
     dados_completos = dados_tecnicos.copy()
     
-    # LEITURA INTELIGENTE DAS ABAS DE MESES
     todas_abas = [ws.title for ws in planilha.worksheets()]
     abas_meses = [aba for aba in todas_abas if aba not in ['Base_IQ', 'Base_Tecnicos']]
     
@@ -107,7 +119,6 @@ def carregar_dados():
                     
                 meses_info.append({'nome_aba': aba, 'mes_nome': mes_nome})
 
-    # Limpeza visual geral (tira os "nan" feios)
     dados_completos = dados_completos.fillna('')
     dados_completos = dados_completos.replace(['nan', 'None', 'NaN'], '')
 
@@ -176,7 +187,6 @@ else:
     re_logado = st.session_state['re_usuario']
     re_logado_str = str(re_logado).strip().replace('.0', '')
     
-    # Equipe vigente para matinais diárias (baseada na Base_Tecnicos)
     if st.session_state.get('perfil') == 'GESTÃO':
         equipe_vigente = dados_completos
     else:
@@ -208,21 +218,15 @@ else:
         st.title(f"Painel Operacional - {st.session_state['nome_iq']}")
         
         col1, col2, col3 = st.columns(3)
-        with col2:
-            if st.session_state['perfil'] == 'GESTÃO':
-                nova_meta = st.number_input("⏱️ Definir Meta de Horas (Monitoria):", value=st.session_state['horas_meta_geral'], step=1)
-                st.session_state['horas_meta_geral'] = nova_meta
-            else:
-                st.metric("⏱️ Meta de Horas (Monitoria)", f"{st.session_state['horas_meta_geral']}h")
-                
+        
+        # CARD 1: % CERTIFICADOS
         with col1:
+            st.markdown('<div class="card-metric">', unsafe_allow_html=True)
             if meses_info:
                 lista_meses = [m['mes_nome'] for m in meses_info]
                 mes_selecionado = st.selectbox("📅 Selecione o Mês (Para %):", lista_meses, index=len(lista_meses)-1)
                 
                 col_re_mes = f"RE_IQ_{mes_selecionado}"
-                
-                # Filtra exatamente a equipe do mês selecionado
                 if st.session_state['perfil'] == 'GESTÃO':
                     base_calc_mes = dados_completos
                 else:
@@ -234,7 +238,6 @@ else:
                 if not base_calc_mes.empty and mes_selecionado in base_calc_mes.columns:
                     filtro_validos = (base_calc_mes[mes_selecionado] != '')
                     base_mes_valida = base_calc_mes[filtro_validos]
-                    
                     total_mes = len(base_mes_valida)
                     sim_mes = len(base_mes_valida[base_mes_valida[mes_selecionado].astype(str).str.upper() == 'SIM'])
                     pct_mes = round((sim_mes / total_mes * 100), 1) if total_mes > 0 else 0
@@ -243,14 +246,32 @@ else:
                 else:
                     st.metric(f"🏆 % Certificados ({mes_selecionado})", "0% SIM", "Sem técnicos vinculados.")
             else:
-                st.metric("🏆 Certificados", "N/A", "Nenhuma aba de mês encontrada.")
-        
+                st.metric("🏆 Certificados", "N/A", "Nenhuma aba encontrada.")
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        # CARD 2: HORAS DE MONITORIA (Meta vs Realizado)
+        with col2:
+            st.markdown('<div class="card-metric">', unsafe_allow_html=True)
+            if st.session_state['perfil'] == 'GESTÃO':
+                meta_input = st.number_input("⏱️ Definir Meta de Horas:", value=st.session_state['horas_meta_geral'], step=1)
+                st.session_state['horas_meta_geral'] = meta_input
+                
+                real_input = st.number_input("⏱️ Definir Horas Realizadas:", value=st.session_state['horas_realizadas_geral'], step=1)
+                st.session_state['horas_realizadas_geral'] = real_input
+            else:
+                st.metric("⏱️ Meta de Horas (Monitoria)", f"{st.session_state['horas_meta_geral']}h")
+                st.metric("⏱️ Horas Realizadas", f"{st.session_state['horas_realizadas_geral']}h")
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        # CARD 3: PENDENTES DE MONITORAMENTO
         with col3:
+            st.markdown('<div class="card-metric">', unsafe_allow_html=True)
             if mes_vigente:
                 pendentes_hoje = len(equipe_vigente[(equipe_vigente[mes_vigente] == 'NÃO') & (equipe_vigente[f'ACOMPANHAMENTO_{mes_vigente}'] != 'SIM')])
                 st.metric(f"⚠️ Pendentes ({mes_vigente})", f"{pendentes_hoje} Técnicos", delta_color="inverse")
             else:
                 st.metric("⚠️ Monitoramento", "N/A", "Sem base mensal")
+            st.markdown('</div>', unsafe_allow_html=True)
 
         st.divider()
         st.subheader("📅 Sua Agenda de Matinais (Hoje)")
@@ -274,10 +295,14 @@ else:
                     with st.expander(f"👤 {row['nome']} (Login: {row['login']})"):
                         col_f1, col_f2 = st.columns(2)
                         with col_f1:
-                            novo_contrato = st.text_input("Contrato do Técnico:", value=row.get(f'CONTRATO_{mes_vigente}', ''), key=f"c_{row['login']}")
+                            v_contrato = row.get(f'CONTRATO_{mes_vigente}', '')
+                            if str(v_contrato).lower() == 'nan': v_contrato = ''
+                            novo_contrato = st.text_input("Contrato do Técnico:", value=v_contrato, key=f"c_{row['login']}")
                             data_mon = st.date_input("Data do Monitoramento:", value=None, format="DD/MM/YYYY", key=f"d_{row['login']}")
                         with col_f2:
-                            obs = st.text_area("Observações / Motivo:", value=row.get(f'OBS_{mes_vigente}', ''), key=f"o_{row['login']}")
+                            v_obs = row.get(f'OBS_{mes_vigente}', '')
+                            if str(v_obs).lower() == 'nan': v_obs = ''
+                            obs = st.text_area("Observações / Motivo:", value=v_obs, key=f"o_{row['login']}")
                         
                         if st.button("Salvar Evolução", key=f"b_{row['login']}", type="primary"):
                             if data_mon: atualizar_planilha_mes(aba_vigente, row['login'], 'DATA', data_mon.strftime("%d/%m/%Y"))
@@ -289,7 +314,7 @@ else:
         else:
             st.info("Crie as abas de certificados mensais no Sheets para visualizar pendências.")
 
-    # --- PÁGINA 2: HISTÓRICO DE CERTIFICADOS (REFORMULADA) ---
+    # --- PÁGINA 2: HISTÓRICO DE CERTIFICADOS ---
     elif st.session_state['pagina_atual'] == "Historico":
         st.title(f"🏆 Histórico de Certificados")
         
@@ -314,7 +339,6 @@ else:
             if base_historico.empty:
                 st.info(f"Você não possui técnicos vinculados ao seu RE no mês de {mes_historico}.")
             else:
-                # Seleciona apenas as colunas relevantes para o mês escolhido
                 colunas_exibir = ['login', 'nome', mes_historico]
                 
                 if f"ACOMPANHAMENTO_{mes_historico}" in base_historico.columns: colunas_exibir.append(f"ACOMPANHAMENTO_{mes_historico}")
@@ -322,7 +346,6 @@ else:
 
                 df_exibir = base_historico[[c for c in colunas_exibir if c in base_historico.columns]].copy()
                 
-                # Renomeia os cabeçalhos para ficar profissional
                 df_exibir = df_exibir.rename(columns={
                     'login': 'Login', 
                     'nome': 'Nome do Técnico',
