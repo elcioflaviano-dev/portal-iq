@@ -48,7 +48,7 @@ def conectar_planilha():
         st.error(f"Erro ao conectar com o Google Sheets. Detalhe: {e}")
         st.stop()
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=60)
 def carregar_dados():
     planilha = conectar_planilha()
     
@@ -96,9 +96,9 @@ def carregar_dados():
                 if 'LOGIN' in c_up: colunas_novas[c] = 'LOGIN'
                 elif 'RE' in c_up and 'IQ' in c_up: colunas_novas[c] = f'RE_IQ_{mes_nome}'
                 elif 'ACOMPANHAMENTO' in c_up: colunas_novas[c] = f'ACOMPANHAMENTO_{mes_nome}'
-                elif 'M1' in c_up or 'MONIT_1' in c_up: colunas_novas[c] = f'M1_{mes_nome}'
-                elif 'M2' in c_up or 'MONIT_2' in c_up: colunas_novas[c] = f'M2_{mes_nome}'
-                elif 'M3' in c_up or 'MONIT_3' in c_up: colunas_novas[c] = f'M3_{mes_nome}'
+                elif c_up in ['M1', 'MONIT_1']: colunas_novas[c] = f'M1_{mes_nome}'
+                elif c_up in ['M2', 'MONIT_2']: colunas_novas[c] = f'M2_{mes_nome}'
+                elif c_up in ['M3', 'MONIT_3']: colunas_novas[c] = f'M3_{mes_nome}'
                 else:
                     if mes_nome in c_up or c_up in mes_nome:
                         colunas_novas[c] = mes_nome
@@ -119,6 +119,9 @@ def carregar_dados():
                 
                 df_mes[mes_nome] = df_mes[mes_nome].fillna('NÃO').astype(str).str.strip().str.upper()
                 df_mes[f'ACOMPANHAMENTO_{mes_nome}'] = df_mes[f'ACOMPANHAMENTO_{mes_nome}'].fillna('NÃO').astype(str).str.strip().str.upper()
+                df_mes[f'M1_{mes_nome}'] = df_mes[f'M1_{mes_nome}'].fillna('NÃO').astype(str).str.strip().str.upper()
+                df_mes[f'M2_{mes_nome}'] = df_mes[f'M2_{mes_nome}'].fillna('NÃO').astype(str).str.strip().str.upper()
+                df_mes[f'M3_{mes_nome}'] = df_mes[f'M3_{mes_nome}'].fillna('NÃO').astype(str).str.strip().str.upper()
                 
                 dados_completos = pd.merge(dados_completos, df_mes, left_on='login', right_on='LOGIN', how='left')
                 
@@ -184,25 +187,37 @@ def salvar_agenda_no_sheets(agenda_dict):
     except Exception as e:
         print(f"Erro ao salvar agenda: {e}")
 
-def atualizar_planilha_mes(nome_aba, login_tecnico, coluna_busca, valor):
-    ws = conectar_planilha().worksheet(nome_aba)
-    cabecalhos = ws.row_values(1)
-    col_idx = -1
-    
-    for i, c in enumerate(cabecalhos):
-        if coluna_busca.upper() in str(c).upper():
-            col_idx = i + 1
-            break
-            
-    if col_idx == -1: return 
-    
-    registros = ws.get_all_records()
-    for idx, row in enumerate(registros):
-        login_key = next((k for k in row.keys() if 'LOGIN' in str(k).upper()), None)
-        if login_key and str(row.get(login_key, '')).strip().replace('.0','') == str(login_tecnico):
-            ws.update_cell(idx + 2, col_idx, valor)
-            break
-    st.cache_data.clear()
+def atualizar_celula_especifica(nome_aba, login_tecnico, coluna_alvo, valor):
+    """Atualiza diretamente a célula no Google Sheets sem causar erro de cota"""
+    try:
+        ws = conectar_planilha().worksheet(nome_aba)
+        cabecalhos = [str(c).strip().upper() for c in ws.row_values(1)]
+        col_idx = -1
+        
+        for i, c in enumerate(cabecalhos):
+            if coluna_alvo.upper() in c:
+                col_idx = i + 1
+                break
+                
+        if col_idx == -1: return 
+        
+        # Procura a linha do técnico pela coluna de Login
+        col_login_idx = -1
+        for i, c in enumerate(cabecalhos):
+            if 'LOGIN' in c:
+                col_login_idx = i + 1
+                break
+                
+        if col_login_idx == -1: return
+        
+        coluna_logins = ws.col_values(col_login_idx)
+        for row_idx, val in enumerate(coluna_logins):
+            if str(val).strip().replace('.0', '') == str(login_tecnico).strip().replace('.0', ''):
+                ws.update_cell(row_idx + 1, col_idx, valor)
+                break
+        st.cache_data.clear()
+    except Exception as e:
+        st.error(f"Erro ao atualizar planilha: {e}")
 
 def colorir_sim_nao(val):
     texto = str(val).strip().upper()
@@ -212,18 +227,16 @@ def colorir_sim_nao(val):
 
 dados_iqs, dados_completos, meses_info = carregar_dados()
 
-# --- Definição dos Meses Vigente e Anterior para Monitoramento ---
+# --- Definição dos Meses Vigente e de Acompanhamento ---
 if meses_info:
     mes_vigente_info = meses_info[-1]
     mes_vigente = mes_vigente_info['mes_nome']
     
-    # Define o mês de acompanhamento como o anterior ao mais recente (se houver mais de um)
     if len(meses_info) >= 2:
         mes_acompanhamento_info = meses_info[-2]
         mes_acompanhamento = mes_acompanhamento_info['mes_nome']
         aba_acompanhamento = mes_acompanhamento_info['nome_aba']
     else:
-        # Fallback se houver apenas 1 mês cadastrado
         mes_acompanhamento = mes_vigente
         aba_acompanhamento = mes_vigente_info['nome_aba']
 else:
@@ -393,7 +406,7 @@ else:
                 st.markdown(f'<div class="metric-sub">Controle individual de horas</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
-        # CARD 3: PENDENTES DE MONITORAMENTO (Laranja) - Baseado no mês anterior ao vigente
+        # CARD 3: PENDENTES DE MONITORAMENTO (Laranja)
         with col3:
             st.markdown('<div class="metric-card-orange">', unsafe_allow_html=True)
             st.markdown('<div class="metric-title">⚠️ Monitoramento Pendente</div>', unsafe_allow_html=True)
@@ -453,14 +466,23 @@ else:
                         
                         c_status.markdown(f"**{concluidas}/3**")
                         
-                        if novo_m1 != m1_val or novo_m2 != m2_val or novo_m3 != m3_val:
-                            atualizar_planilha_mes(aba_acompanhamento, tec_login, 'M1', 'SIM' if novo_m1 else 'NÃO')
-                            atualizar_planilha_mes(aba_acompanhamento, tec_login, 'M2', 'SIM' if novo_m2 else 'NÃO')
-                            atualizar_planilha_mes(aba_acompanhamento, tec_login, 'M3', 'SIM' if novo_m3 else 'NÃO')
-                            
-                            if (novo_m1 and novo_m2 and novo_m3):
-                                atualizar_planilha_mes(aba_acompanhamento, tec_login, 'ACOMPANHAMENTO', 'SIM')
+                        # Atualiza individualmente no Sheets sem sobrecarregar a cota
+                        if novo_m1 != m1_val:
+                            atualizar_celula_especifica(aba_acompanhamento, tec_login, 'M1', 'SIM' if novo_m1 else 'NÃO')
+                            if novo_m1 and novo_m2 and novo_m3:
+                                atualizar_celula_especifica(aba_acompanhamento, tec_login, 'ACOMPANHAMENTO', 'SIM')
                             st.rerun()
+                        if novo_m2 != m2_val:
+                            atualizar_celula_especifica(aba_acompanhamento, tec_login, 'M2', 'SIM' if novo_m2 else 'NÃO')
+                            if novo_m1 and novo_m2 and novo_m3:
+                                atualizar_celula_especifica(aba_acompanhamento, tec_login, 'ACOMPANHAMENTO', 'SIM')
+                            st.rerun()
+                        if novo_m3 != m3_val:
+                            atualizar_celula_especifica(aba_acompanhamento, tec_login, 'M3', 'SIM' if novo_m3 else 'NÃO')
+                            if novo_m1 and novo_m2 and novo_m3:
+                                atualizar_celula_especifica(aba_acompanhamento, tec_login, 'ACOMPANHAMENTO', 'SIM')
+                            st.rerun()
+                            
                         st.divider()
         else:
             st.info("Crie abas de certificados mensais para habilitar o acompanhamento.")
@@ -624,7 +646,7 @@ else:
                         else:
                             tec_login = equipe_vigente[equipe_vigente['nome'] == tec_atual]['login'].iloc[0]
                             if aba_acompanhamento:
-                                atualizar_planilha_mes(aba_acompanhamento, tec_login, 'ACOMPANHAMENTO', 'SIM')
+                                atualizar_celula_especifica(aba_acompanhamento, tec_login, 'ACOMPANHAMENTO', 'SIM')
                             del st.session_state['agenda_matinal'][tec_atual]
                             salvar_agenda_no_sheets(st.session_state['agenda_matinal'])
                             st.session_state['email_pronto'] = url_email
