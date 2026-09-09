@@ -55,62 +55,79 @@ def carregar_dados():
     
     dados_tecnicos['login'] = dados_tecnicos.get('login', '').astype(str).str.strip().str.replace('.0', '', regex=False)
     dados_tecnicos['re_iq_responsavel'] = dados_tecnicos.get('re_iq_responsavel', '').astype(str).str.strip().str.replace('.0', '', regex=False)
-    dados_tecnicos['Acompanhamento'] = dados_tecnicos.get('Acompanhamento', 'NÃO').astype(str).str.strip().str.upper()
-
-    # Ignora e remove a coluna status_certificacao caso ela ainda exista na planilha
-    if 'status_certificacao' in dados_tecnicos.columns:
-        dados_tecnicos = dados_tecnicos.drop(columns=['status_certificacao'])
+    
+    # Remove as colunas antigas da Base_Tecnicos, pois agora vivem nas abas de meses
+    colunas_remover = ['status_certificacao', 'Acompanhamento', 'Contrato', 'Data_Monitoramento', 'Observacao']
+    dados_tecnicos = dados_tecnicos.drop(columns=[c for c in colunas_remover if c in dados_tecnicos.columns], errors='ignore')
 
     dados_completos = dados_tecnicos.copy()
     
-    # LEITURA MAIS FLEXÍVEL DAS ABAS DE MESES
+    # LEITURA INTELIGENTE DAS ABAS DE MESES (Qualquer aba que não seja Base_IQ ou Base_Tecnicos)
     todas_abas = [ws.title for ws in planilha.worksheets()]
-    # Pega qualquer aba que contenha a palavra CERTIFICADO
-    abas_certificados = [aba for aba in todas_abas if 'CERTIFICADO' in aba.upper()]
-    meses_disponiveis = []
+    abas_meses = [aba for aba in todas_abas if aba not in ['Base_IQ', 'Base_Tecnicos']]
+    
+    meses_info = []
 
-    for aba in abas_certificados:
+    for aba in abas_meses:
         df_mes = ler_aba(aba)
         if not df_mes.empty:
-            df_mes.columns = [str(c).strip().upper() for c in df_mes.columns]
+            # Extrai o nome do mês da aba (remove a palavra CERTIFICADO se houver)
+            mes_nome = aba.upper().replace('CERTIFICADO', '').replace('_', ' ').strip()
+            if not mes_nome: mes_nome = aba.upper()
+            
+            # Renomeia colunas para o padrão do sistema
+            colunas_novas = {}
+            for c in df_mes.columns:
+                c_up = str(c).strip().upper()
+                if 'LOGIN' in c_up: colunas_novas[c] = 'LOGIN'
+                elif 'RE' in c_up and 'IQ' in c_up: colunas_novas[c] = f'RE_IQ_{mes_nome}'
+                elif 'ACOMPANHAMENTO' in c_up: colunas_novas[c] = f'ACOMPANHAMENTO_{mes_nome}'
+                elif 'CONTRATO' in c_up: colunas_novas[c] = f'CONTRATO_{mes_nome}'
+                elif 'DATA' in c_up: colunas_novas[c] = f'DATA_MON_{mes_nome}'
+                elif 'OBS' in c_up: colunas_novas[c] = f'OBS_{mes_nome}'
+                else:
+                    # Se a coluna tiver o nome do mês (ex: AGOSTO), é a coluna de status (Sim/Não)
+                    if mes_nome in c_up or c_up in mes_nome:
+                        colunas_novas[c] = mes_nome
+            
+            df_mes = df_mes.rename(columns=colunas_novas)
             
             if 'LOGIN' in df_mes.columns:
-                mes_nome = aba.upper().replace('CERTIFICADO', '').strip()
-                if not mes_nome: mes_nome = aba.upper()
-                meses_disponiveis.append(mes_nome)
-                
                 df_mes['LOGIN'] = df_mes['LOGIN'].astype(str).str.strip().str.replace('.0', '', regex=False)
                 
-                col_re = next((c for c in df_mes.columns if 'RE_IQ' in c or c == 'RE'), None)
-                if col_re:
-                    df_mes = df_mes.rename(columns={col_re: f'RE_IQ_{mes_nome}'})
-                    df_mes[f'RE_IQ_{mes_nome}'] = df_mes[f'RE_IQ_{mes_nome}'].astype(str).str.strip().str.replace('.0', '', regex=False)
+                # Garante que as colunas existam mesmo se vazias no Sheets
+                if mes_nome not in df_mes.columns: df_mes[mes_nome] = 'NÃO'
+                if f'ACOMPANHAMENTO_{mes_nome}' not in df_mes.columns: df_mes[f'ACOMPANHAMENTO_{mes_nome}'] = 'NÃO'
                 
-                colunas_ignoradas = ['LOGIN', f'RE_IQ_{mes_nome}']
-                colunas_status = [c for c in df_mes.columns if c not in colunas_ignoradas]
+                # Formata os dados
+                df_mes[mes_nome] = df_mes[mes_nome].fillna('NÃO').astype(str).str.strip().str.upper()
+                df_mes[f'ACOMPANHAMENTO_{mes_nome}'] = df_mes[f'ACOMPANHAMENTO_{mes_nome}'].fillna('NÃO').astype(str).str.strip().str.upper()
                 
-                if colunas_status:
-                    col_status = colunas_status[0]
-                    df_mes = df_mes.rename(columns={col_status: mes_nome})
-                    
-                    colunas_juntar = ['LOGIN', mes_nome]
-                    if f'RE_IQ_{mes_nome}' in df_mes.columns: colunas_juntar.append(f'RE_IQ_{mes_nome}')
-                    
-                    df_mes = df_mes[colunas_juntar]
-                    dados_completos = pd.merge(dados_completos, df_mes, on='LOGIN', how='left')
-                    
-                    # Preenche os vazios com NÃO
-                    dados_completos[mes_nome] = dados_completos[mes_nome].fillna('NÃO').astype(str).str.strip().str.upper()
+                # Junta com a base principal
+                dados_completos = pd.merge(dados_completos, df_mes, on='LOGIN', how='left')
+                meses_info.append({'nome_aba': aba, 'mes_nome': mes_nome})
 
-    return dados_iqs, dados_completos, meses_disponiveis
+    return dados_iqs, dados_completos, meses_info
 
-def atualizar_planilha_tecnicos(login_tecnico, coluna, valor):
-    ws = conectar_planilha().worksheet("Base_Tecnicos")
+def atualizar_planilha_mes(nome_aba, login_tecnico, coluna_busca, valor):
+    """Função inteligente para atualizar a aba exata do mês"""
+    ws = conectar_planilha().worksheet(nome_aba)
+    cabecalhos = ws.row_values(1)
+    col_idx = -1
+    
+    # Acha a coluna correta
+    for i, c in enumerate(cabecalhos):
+        if coluna_busca.upper() in str(c).upper():
+            col_idx = i + 1
+            break
+            
+    if col_idx == -1: return # Se não achar a coluna, ignora
+    
     registros = ws.get_all_records()
     for idx, row in enumerate(registros):
-        if str(row.get('login', '')).strip().replace('.0','') == str(login_tecnico):
-            if coluna in row:
-                ws.update_cell(idx + 2, list(row.keys()).index(coluna) + 1, valor)
+        login_key = next((k for k in row.keys() if 'LOGIN' in str(k).upper()), None)
+        if login_key and str(row.get(login_key, '')).strip().replace('.0','') == str(login_tecnico):
+            ws.update_cell(idx + 2, col_idx, valor)
             break
     st.cache_data.clear()
 
@@ -120,10 +137,15 @@ def colorir_sim_nao(val):
     elif texto == 'NÃO' or texto == 'NAO': return 'background-color: #f8d7da; color: #721c24; font-weight: bold;'
     return ''
 
-dados_iqs, dados_completos, meses_certificacao = carregar_dados()
+dados_iqs, dados_completos, meses_info = carregar_dados()
 
-# Define o mês vigente (o último mês adicionado nas abas)
-mes_vigente = meses_certificacao[-1] if meses_certificacao else None
+# Determina qual é o mês vigente (o último mês carregado)
+if meses_info:
+    mes_vigente_info = meses_info[-1]
+    mes_vigente = mes_vigente_info['mes_nome']
+    aba_vigente = mes_vigente_info['nome_aba']
+else:
+    mes_vigente, aba_vigente = None, None
 
 # --- 3. Telas ---
 if not st.session_state['logado']:
@@ -133,7 +155,6 @@ if not st.session_state['logado']:
             
     st.title("Acesso Operacional - Totale")
     
-    # Formulário para habilitar o "Enter"
     with st.form("form_login"):
         re_input = st.text_input("RE (Login)")
         senha_input = st.text_input("Senha", type="password")
@@ -162,8 +183,8 @@ else:
         tecnicos_hist = []
         for index, row in dados_completos.iterrows():
             pertence = False
-            for mes in meses_certificacao:
-                col_re = f"RE_IQ_{mes}"
+            for info in meses_info:
+                col_re = f"RE_IQ_{info['mes_nome']}"
                 if col_re in row and str(row[col_re]).strip() == str(re_logado):
                     pertence = True
             if pertence:
@@ -204,8 +225,10 @@ else:
                 st.metric("⏱️ Meta de Horas (Monitoria)", f"{st.session_state['horas_meta_geral']}h")
                 
         with col1:
-            if meses_certificacao:
-                mes_selecionado = st.selectbox("📅 Selecione o Mês (Para %):", meses_certificacao, index=len(meses_certificacao)-1)
+            if meses_info:
+                lista_meses = [m['mes_nome'] for m in meses_info]
+                mes_selecionado = st.selectbox("📅 Selecione o Mês (Para %):", lista_meses, index=len(lista_meses)-1)
+                
                 if not equipe_historico.empty and mes_selecionado in equipe_historico.columns:
                     total_mes = len(equipe_historico[equipe_historico[mes_selecionado].notna() & (equipe_historico[mes_selecionado] != '')])
                     sim_mes = len(equipe_historico[equipe_historico[mes_selecionado].astype(str).str.upper() == 'SIM'])
@@ -218,8 +241,9 @@ else:
         
         with col3:
             if mes_vigente:
-                pendentes_hoje = len(equipe_vigente[(equipe_vigente[mes_vigente] == 'NÃO') & (equipe_vigente['Acompanhamento'] == 'NÃO')])
-                st.metric(f"⚠️ Pendentes (Ref: {mes_vigente})", f"{pendentes_hoje} Técnicos", delta_color="inverse")
+                # Conta quem está NÃO no certificado do mês vigente E também NÃO tem acompanhamento feito
+                pendentes_hoje = len(equipe_vigente[(equipe_vigente[mes_vigente] == 'NÃO') & (equipe_vigente[f'ACOMPANHAMENTO_{mes_vigente}'] != 'SIM')])
+                st.metric(f"⚠️ Pendentes ({mes_vigente})", f"{pendentes_hoje} Técnicos", delta_color="inverse")
             else:
                 st.metric("⚠️ Monitoramento", "N/A", "Sem base mensal")
 
@@ -233,29 +257,29 @@ else:
 
         st.divider()
         st.subheader("⚠️ Acompanhamento Pendente")
-        st.write(f"*Abaixo os técnicos da sua equipe não certificados no Mês Vigente ({mes_vigente or 'N/A'}) que necessitam de tratativa:*")
+        st.write(f"*Abaixo os técnicos da sua equipe que estão como 'NÃO' no certificado de **{mes_vigente or 'N/A'}** e precisam de tratativa:*")
         
         if mes_vigente:
-            tecnicos_nao_cert = equipe_vigente[(equipe_vigente[mes_vigente] == 'NÃO') & (equipe_vigente['Acompanhamento'] == 'NÃO')]
+            tecnicos_nao_cert = equipe_vigente[(equipe_vigente[mes_vigente] == 'NÃO') & (equipe_vigente[f'ACOMPANHAMENTO_{mes_vigente}'] != 'SIM')]
             
             if tecnicos_nao_cert.empty:
-                st.success("Todos os técnicos pendentes já possuem acompanhamento registrado.")
+                st.success(f"Todos os técnicos pendentes de {mes_vigente} já possuem acompanhamento registrado.")
             else:
                 for index, row in tecnicos_nao_cert.iterrows():
                     with st.expander(f"👤 {row['nome']} (Login: {row['login']})"):
                         col_f1, col_f2 = st.columns(2)
                         with col_f1:
-                            novo_contrato = st.text_input("Contrato do Técnico:", value=row.get('Contrato', ''), key=f"c_{row['login']}")
+                            novo_contrato = st.text_input("Contrato do Técnico:", value=row.get(f'CONTRATO_{mes_vigente}', ''), key=f"c_{row['login']}")
                             data_mon = st.date_input("Data do Monitoramento:", value=None, format="DD/MM/YYYY", key=f"d_{row['login']}")
                         with col_f2:
-                            obs = st.text_area("Observações / Motivo:", value=row.get('Observacao', ''), key=f"o_{row['login']}")
+                            obs = st.text_area("Observações / Motivo:", value=row.get(f'OBS_{mes_vigente}', ''), key=f"o_{row['login']}")
                         
                         if st.button("Salvar Evolução", key=f"b_{row['login']}", type="primary"):
-                            if data_mon: atualizar_planilha_tecnicos(row['login'], 'Data_Monitoramento', data_mon.strftime("%d/%m/%Y"))
-                            atualizar_planilha_tecnicos(row['login'], 'Contrato', novo_contrato)
-                            atualizar_planilha_tecnicos(row['login'], 'Observacao', obs)
-                            atualizar_planilha_tecnicos(row['login'], 'Acompanhamento', 'SIM')
-                            st.success("Salvo! Status alterado para 'SIM'.")
+                            if data_mon: atualizar_planilha_mes(aba_vigente, row['login'], 'DATA', data_mon.strftime("%d/%m/%Y"))
+                            atualizar_planilha_mes(aba_vigente, row['login'], 'CONTRATO', novo_contrato)
+                            atualizar_planilha_mes(aba_vigente, row['login'], 'OBS', obs)
+                            atualizar_planilha_mes(aba_vigente, row['login'], 'ACOMPANHAMENTO', 'SIM')
+                            st.success(f"Salvo na aba {aba_vigente}! Status de acompanhamento alterado para SIM.")
                             st.rerun()
         else:
             st.info("Crie as abas de certificados mensais no Sheets para visualizar pendências.")
@@ -264,14 +288,15 @@ else:
     elif st.session_state['pagina_atual'] == "Historico":
         st.title(f"🏆 Histórico de Certificados - {st.session_state['nome_iq']}")
         
-        if not meses_certificacao:
-            st.warning("Nenhuma aba de certificação encontrada. Crie abas com nomes como 'CERTIFICADO JULHO'.")
+        if not meses_info:
+            st.warning("Nenhuma aba de certificação encontrada no Google Sheets.")
         elif equipe_historico.empty:
             st.info("Você não possui técnicos vinculados ao seu RE no histórico de certificações.")
         else:
             colunas_exibir = ['login', 'nome']
             
-            for mes in meses_certificacao:
+            for info in meses_info:
+                mes = info['mes_nome']
                 if mes in equipe_historico.columns: colunas_exibir.append(mes)
                 if f'RE_IQ_{mes}' in equipe_historico.columns: colunas_exibir.append(f'RE_IQ_{mes}')
             
@@ -386,7 +411,10 @@ else:
                             st.warning("⚠️ O envio da foto é obrigatório para comprovação.")
                         else:
                             tec_login = equipe_vigente[equipe_vigente['nome'] == tec_atual]['login'].iloc[0]
-                            atualizar_planilha_tecnicos(tec_login, 'Acompanhamento', 'SIM')
+                            # Ao fazer a matinal, o acompanhamento no mês vigente recebe 'SIM'
+                            if aba_vigente:
+                                atualizar_planilha_mes(aba_vigente, tec_login, 'ACOMPANHAMENTO', 'SIM')
+                            
                             del st.session_state['agenda_matinal'][tec_atual]
                             st.session_state['email_pronto'] = url_email
                             st.rerun()
