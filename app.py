@@ -48,7 +48,6 @@ def conectar_planilha():
         st.error(f"Erro ao conectar com o Google Sheets. Detalhe: {e}")
         st.stop()
 
-# Sem TTL estrito para garantir sincronia imediata com o Sheets
 def carregar_dados():
     planilha = conectar_planilha()
     
@@ -137,7 +136,12 @@ def carregar_dados():
 
 def carregar_controle_iq():
     try:
-        ws = conectar_planilha().worksheet("Controle_IQ")
+        planilha = conectar_planilha()
+        try:
+            ws = planilha.worksheet("Controle_IQ")
+        except:
+            ws = planilha.add_worksheet(title="Controle_IQ", rows=100, cols=10)
+            ws.append_row(["RE_IQ", "META_HORAS", "REALIZADO_HORAS", "AGENDA_TECNICO", "AGENDA_DATA", "AGENDA_IQ_NOME"])
         registros = ws.get_all_records()
         return pd.DataFrame(registros) if registros else pd.DataFrame()
     except:
@@ -146,14 +150,10 @@ def carregar_controle_iq():
 def salvar_horas_no_sheets(re_iq, meta, realizado):
     try:
         planilha = conectar_planilha()
-        try:
-            ws = planilha.worksheet("Controle_IQ")
-        except:
-            ws = planilha.add_worksheet(title="Controle_IQ", rows=100, cols=10)
-            ws.append_row(["RE_IQ", "META_HORAS", "REALIZADO_HORAS", "AGENDA_TECNICO", "AGENDA_DATA", "AGENDA_IQ_NOME"])
-            
+        ws = planilha.worksheet("Controle_IQ")
         registros = ws.get_all_records()
         encontrou = False
+        
         for idx, row in enumerate(registros):
             if str(row.get('RE_IQ', '')).strip().replace('.0', '') == str(re_iq):
                 ws.update_cell(idx + 2, 2, meta)
@@ -162,7 +162,6 @@ def salvar_horas_no_sheets(re_iq, meta, realizado):
                 break
         if not encontrou:
             ws.append_row([str(re_iq), meta, realizado, "", "", ""])
-        st.cache_data.clear()
     except Exception as e:
         st.error(f"Erro ao salvar horas: {e}")
 
@@ -183,7 +182,6 @@ def salvar_agenda_no_sheets(agenda_dict):
             ws.update_cell(linha_atual, 5, info['data'])
             ws.update_cell(linha_atual, 6, info['iq_nome'])
             linha_atual += 1
-        st.cache_data.clear()
     except Exception as e:
         print(f"Erro ao salvar agenda: {e}")
 
@@ -213,7 +211,6 @@ def atualizar_celula_especifica(nome_aba, login_tecnico, coluna_alvo, valor):
             if str(val).strip().replace('.0', '') == str(login_tecnico).strip().replace('.0', ''):
                 ws.update_cell(row_idx + 1, col_idx, valor)
                 break
-        st.cache_data.clear() # Limpa o cache para forçar a leitura nova do Sheets
     except Exception as e:
         st.error(f"Erro ao atualizar planilha: {e}")
 
@@ -240,7 +237,7 @@ if meses_info:
 else:
     mes_vigente, aba_acompanhamento, mes_acompanhamento = None, None, None
 
-# --- Carrega Agenda e Horas do Sheets para a Sessão ---
+# --- Carrega Agenda do Sheets para a Sessão ---
 df_ctrl = carregar_controle_iq()
 if 'agenda_matinal' not in st.session_state:
     st.session_state['agenda_matinal'] = {}
@@ -281,18 +278,15 @@ else:
     re_logado_str = str(re_logado).strip().replace('.0', '')
     perfil_usuario = st.session_state.get('perfil', 'IQ')
 
+    # Busca segura de horas no Sheets para o RE atual
     meta_atual, realizado_atual = 40, 0
-    if not df_ctrl.empty:
+    if not df_ctrl.empty and 'RE_IQ' in df_ctrl.columns:
         filtro_h = df_ctrl[df_ctrl['RE_IQ'].astype(str).str.strip().str.replace('.0','') == re_logado_str]
         if not filtro_h.empty:
-            try: meta_atual = int(filtro_h.iloc[0]['META_HORAS'])
+            try: meta_atual = int(filtro_h.iloc[0]['META_HORAS']) if filtro_h.iloc[0]['META_HORAS'] != '' else 40
             except: pass
-            try: realizado_atual = int(filtro_h.iloc[0]['REALIZADO_HORAS'])
+            try: realizado_atual = int(filtro_h.iloc[0]['REALIZADO_HORAS']) if filtro_h.iloc[0]['REALIZADO_HORAS'] != '' else 0
             except: pass
-
-    if re_logado_str not in st.session_state.get('horas_por_iq', {}):
-        if 'horas_por_iq' not in st.session_state: st.session_state['horas_por_iq'] = {}
-        st.session_state['horas_por_iq'][re_logado_str] = {'meta': meta_atual, 'realizadas': realizado_atual}
 
     if perfil_usuario == 'GESTÃO':
         st.sidebar.divider()
@@ -344,8 +338,16 @@ else:
         st.write("")
 
         re_alvo_horas = re_alvo_str if (perfil_usuario == 'GESTÃO' and re_alvo_str) else re_logado_str
-        if re_alvo_horas not in st.session_state['horas_por_iq']:
-            st.session_state['horas_por_iq'][re_alvo_horas] = {'meta': meta_atual, 'realizadas': realizado_atual}
+        
+        # Puxa valores específicos do RE alvo na hora de renderizar
+        meta_alvo, realizado_alvo = meta_atual, realizado_atual
+        if perfil_usuario == 'GESTÃO' and re_alvo_str and not df_ctrl.empty:
+            f_alvo = df_ctrl[df_ctrl['RE_IQ'].astype(str).str.strip().str.replace('.0','') == str(re_alvo_str)]
+            if not f_alvo.empty:
+                try: meta_alvo = int(f_alvo.iloc[0]['META_HORAS']) if f_alvo.iloc[0]['META_HORAS'] != '' else 40
+                except: pass
+                try: realizado_alvo = int(f_alvo.iloc[0]['REALIZADO_HORAS']) if f_alvo.iloc[0]['REALIZADO_HORAS'] != '' else 0
+                except: pass
 
         col1, col2, col3 = st.columns(3)
         
@@ -391,16 +393,15 @@ else:
             st.markdown('<div class="metric-title">⏱️ Horas de Monitoria</div>', unsafe_allow_html=True)
             
             if perfil_usuario == 'GESTÃO':
-                meta_input = st.number_input("Meta de Horas:", value=st.session_state['horas_por_iq'][re_alvo_horas]['meta'], step=1, key=f"meta_{re_alvo_horas}")
-                real_input = st.number_input("Horas Realizadas:", value=st.session_state['horas_por_iq'][re_alvo_horas]['realizadas'], step=1, key=f"real_{re_alvo_horas}")
+                meta_input = st.number_input("Meta de Horas:", value=meta_alvo, step=1, key=f"meta_{re_alvo_horas}")
+                real_input = st.number_input("Horas Realizadas:", value=realizado_alvo, step=1, key=f"real_{re_alvo_horas}")
                 
-                if meta_input != st.session_state['horas_por_iq'][re_alvo_horas]['meta'] or real_input != st.session_state['horas_por_iq'][re_alvo_horas]['realizadas']:
-                    st.session_state['horas_por_iq'][re_alvo_horas]['meta'] = meta_input
-                    st.session_state['horas_por_iq'][re_alvo_horas]['realizadas'] = real_input
+                if meta_input != meta_alvo or real_input != realizado_alvo:
                     salvar_horas_no_sheets(re_alvo_horas, meta_input, real_input)
+                    st.rerun()
             else:
-                st.markdown(f'<div class="metric-value">Meta: {st.session_state["horas_por_iq"][re_alvo_horas]["meta"]}h</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="metric-value" style="font-size:20px; margin-top:5px;">Realizado: {st.session_state["horas_por_iq"][re_alvo_horas]["realizadas"]}h</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="metric-value">Meta: {meta_alvo}h</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="metric-value" style="font-size:20px; margin-top:5px;">Realizado: {realizado_alvo}h</div>', unsafe_allow_html=True)
                 st.markdown(f'<div class="metric-sub">Controle individual de horas</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
@@ -449,7 +450,6 @@ else:
                     match_iq = dados_iqs[dados_iqs['re_iq'] == iq_resp]
                     if not match_iq.empty: nome_iq_resp = match_iq.iloc[0]['nome_iq']
 
-                    # Lê o estado atual direto da base lida do Sheets
                     m1_val = str(row.get(f'MONIT_1_{mes_acompanhamento}', '')).upper() == 'SIM'
                     m2_val = str(row.get(f'MONIT_2_{mes_acompanhamento}', '')).upper() == 'SIM'
                     m3_val = str(row.get(f'MONIT_3_{mes_acompanhamento}', '')).upper() == 'SIM'
