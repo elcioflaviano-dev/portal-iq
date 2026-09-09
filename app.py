@@ -48,15 +48,15 @@ def carregar_dados():
         st.error("Planilha do Google está vazia ou faltando as abas Base_IQ / Base_Tecnicos.")
         st.stop()
     
-    # Padronização Base
-    dados_iqs['re_iq'] = dados_iqs['re_iq'].astype(str).str.strip().str.replace('.0', '', regex=False)
+    # Padronização Base e Limpeza de ".0"
+    dados_iqs['re_iq'] = dados_iqs['re_iq'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
     dados_iqs['senha'] = dados_iqs.get('senha', '').astype(str).str.strip()
     dados_iqs['PERFIL'] = dados_iqs.get('PERFIL', 'IQ').astype(str).str.strip().str.upper()
     
-    dados_tecnicos['login'] = dados_tecnicos.get('login', '').astype(str).str.strip().str.replace('.0', '', regex=False)
-    dados_tecnicos['re_iq_responsavel'] = dados_tecnicos.get('re_iq_responsavel', '').astype(str).str.strip().str.replace('.0', '', regex=False)
+    dados_tecnicos['login'] = dados_tecnicos.get('login', '').astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+    dados_tecnicos['re_iq_responsavel'] = dados_tecnicos.get('re_iq_responsavel', '').astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
     
-    # Remove as colunas antigas da Base_Tecnicos, pois agora vivem nas abas de meses
+    # Remove as colunas antigas da Base_Tecnicos
     colunas_remover = ['status_certificacao', 'Acompanhamento', 'Contrato', 'Data_Monitoramento', 'Observacao']
     dados_tecnicos = dados_tecnicos.drop(columns=[c for c in colunas_remover if c in dados_tecnicos.columns], errors='ignore')
 
@@ -90,7 +90,11 @@ def carregar_dados():
             df_mes = df_mes.rename(columns=colunas_novas)
             
             if 'LOGIN' in df_mes.columns:
-                df_mes['LOGIN'] = df_mes['LOGIN'].astype(str).str.strip().str.replace('.0', '', regex=False)
+                # Blindagem 1: Limpeza forte de IDs e LOGINS
+                df_mes['LOGIN'] = df_mes['LOGIN'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+                
+                if f'RE_IQ_{mes_nome}' in df_mes.columns:
+                    df_mes[f'RE_IQ_{mes_nome}'] = df_mes[f'RE_IQ_{mes_nome}'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
                 
                 if mes_nome not in df_mes.columns: df_mes[mes_nome] = 'NÃO'
                 if f'ACOMPANHAMENTO_{mes_nome}' not in df_mes.columns: df_mes[f'ACOMPANHAMENTO_{mes_nome}'] = 'NÃO'
@@ -98,10 +102,8 @@ def carregar_dados():
                 df_mes[mes_nome] = df_mes[mes_nome].fillna('NÃO').astype(str).str.strip().str.upper()
                 df_mes[f'ACOMPANHAMENTO_{mes_nome}'] = df_mes[f'ACOMPANHAMENTO_{mes_nome}'].fillna('NÃO').astype(str).str.strip().str.upper()
                 
-                # CORREÇÃO DO CRUZAMENTO AQUI:
                 dados_completos = pd.merge(dados_completos, df_mes, left_on='login', right_on='LOGIN', how='left')
                 
-                # Apaga o LOGIN em maiúsculo após juntar para não causar erro no próximo mês
                 if 'LOGIN' in dados_completos.columns:
                     dados_completos = dados_completos.drop(columns=['LOGIN'])
                     
@@ -152,6 +154,7 @@ if not st.session_state['logado']:
             
     st.title("Acesso Operacional - Totale")
     
+    # Formulário habilita o "Enter" do teclado para enviar
     with st.form("form_login"):
         re_input = st.text_input("RE (Login)")
         senha_input = st.text_input("Senha", type="password")
@@ -170,20 +173,25 @@ if not st.session_state['logado']:
 
 else:
     re_logado = st.session_state['re_usuario']
+    re_logado_str = str(re_logado).strip().replace('.0', '')
     
     if st.session_state.get('perfil') == 'GESTÃO':
         equipe_vigente = dados_completos
         equipe_historico = dados_completos
     else:
-        equipe_vigente = dados_completos[dados_completos['re_iq_responsavel'] == re_logado]
+        equipe_vigente = dados_completos[dados_completos['re_iq_responsavel'] == re_logado_str]
         
+        # Blindagem 2: Verifica histórico limpando os 'nan' e decimais
         tecnicos_hist = []
         for index, row in dados_completos.iterrows():
             pertence = False
             for info in meses_info:
                 col_re = f"RE_IQ_{info['mes_nome']}"
-                if col_re in row and str(row[col_re]).strip() == str(re_logado):
-                    pertence = True
+                if col_re in row and pd.notna(row[col_re]):
+                    val_re = str(row[col_re]).strip().replace('.0', '')
+                    if val_re == re_logado_str and val_re != 'nan' and val_re != '':
+                        pertence = True
+                        break
             if pertence:
                 tecnicos_hist.append(row)
         equipe_historico = pd.DataFrame(tecnicos_hist) if tecnicos_hist else pd.DataFrame(columns=dados_completos.columns)
@@ -209,6 +217,7 @@ else:
             st.session_state['logado'] = False
             st.rerun()
 
+    # --- PÁGINA 1: DASHBOARD ---
     if st.session_state['pagina_atual'] == "Dashboard":
         st.title(f"Painel Operacional - {st.session_state['nome_iq']}")
         
@@ -226,9 +235,14 @@ else:
                 mes_selecionado = st.selectbox("📅 Selecione o Mês (Para %):", lista_meses, index=len(lista_meses)-1)
                 
                 if not equipe_historico.empty and mes_selecionado in equipe_historico.columns:
-                    total_mes = len(equipe_historico[equipe_historico[mes_selecionado].notna() & (equipe_historico[mes_selecionado] != '')])
-                    sim_mes = len(equipe_historico[equipe_historico[mes_selecionado].astype(str).str.upper() == 'SIM'])
+                    # Filtra ignorando 'nan' do left_join
+                    filtro_validos = equipe_historico[mes_selecionado].notna() & (equipe_historico[mes_selecionado].astype(str).str.lower() != 'nan')
+                    base_mes = equipe_historico[filtro_validos]
+                    
+                    total_mes = len(base_mes)
+                    sim_mes = len(base_mes[base_mes[mes_selecionado].astype(str).str.upper() == 'SIM'])
                     pct_mes = round((sim_mes / total_mes * 100), 1) if total_mes > 0 else 0
+                    
                     st.metric(f"🏆 % Certificados ({mes_selecionado})", f"{pct_mes}% SIM", f"Base: {total_mes} Téc", delta_color="off")
                 else:
                     st.metric(f"🏆 % Certificados ({mes_selecionado})", "0% SIM", "Sem técnicos vinculados.")
@@ -252,7 +266,7 @@ else:
 
         st.divider()
         st.subheader("⚠️ Acompanhamento Pendente")
-        st.write(f"*Abaixo os técnicos da sua equipe que estão como 'NÃO' no certificado de **{mes_vigente or 'N/A'}** e precisam de tratativa:*")
+        st.write(f"*Abaixo os técnicos da sua equipe não certificados no Mês Vigente ({mes_vigente or 'N/A'}) que necessitam de tratativa:*")
         
         if mes_vigente:
             tecnicos_nao_cert = equipe_vigente[(equipe_vigente[mes_vigente] == 'NÃO') & (equipe_vigente[f'ACOMPANHAMENTO_{mes_vigente}'] != 'SIM')]
@@ -264,10 +278,15 @@ else:
                     with st.expander(f"👤 {row['nome']} (Login: {row['login']})"):
                         col_f1, col_f2 = st.columns(2)
                         with col_f1:
-                            novo_contrato = st.text_input("Contrato do Técnico:", value=row.get(f'CONTRATO_{mes_vigente}', ''), key=f"c_{row['login']}")
+                            # Preenche vazio se for 'nan'
+                            v_contrato = row.get(f'CONTRATO_{mes_vigente}', '')
+                            if str(v_contrato).lower() == 'nan': v_contrato = ''
+                            novo_contrato = st.text_input("Contrato do Técnico:", value=v_contrato, key=f"c_{row['login']}")
                             data_mon = st.date_input("Data do Monitoramento:", value=None, format="DD/MM/YYYY", key=f"d_{row['login']}")
                         with col_f2:
-                            obs = st.text_area("Observações / Motivo:", value=row.get(f'OBS_{mes_vigente}', ''), key=f"o_{row['login']}")
+                            v_obs = row.get(f'OBS_{mes_vigente}', '')
+                            if str(v_obs).lower() == 'nan': v_obs = ''
+                            obs = st.text_area("Observações / Motivo:", value=v_obs, key=f"o_{row['login']}")
                         
                         if st.button("Salvar Evolução", key=f"b_{row['login']}", type="primary"):
                             if data_mon: atualizar_planilha_mes(aba_vigente, row['login'], 'DATA', data_mon.strftime("%d/%m/%Y"))
@@ -279,6 +298,7 @@ else:
         else:
             st.info("Crie as abas de certificados mensais no Sheets para visualizar pendências.")
 
+    # --- PÁGINA 2: HISTÓRICO DE CERTIFICADOS ---
     elif st.session_state['pagina_atual'] == "Historico":
         st.title(f"🏆 Histórico de Certificados - {st.session_state['nome_iq']}")
         
@@ -297,6 +317,7 @@ else:
             df_exibir = equipe_historico[[col for col in colunas_exibir if col in equipe_historico.columns]]
             st.dataframe(df_exibir.style.map(colorir_sim_nao), hide_index=True, use_container_width=True)
 
+    # --- PÁGINA 3: MATINAL ---
     elif st.session_state['pagina_atual'] == "Matinal":
         st.title("📋 Agendamento e Execução da Matinal")
         tab_agendar, tab_executar = st.tabs(["1. Agendar Téc", "2. Executar Vistoria (Checklist)"])
