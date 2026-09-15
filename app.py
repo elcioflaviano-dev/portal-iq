@@ -8,6 +8,11 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 import uuid
+import io
+
+# Importações necessárias para o Google Drive API
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
 
 # --- 1. Configuração Inicial ---
 st.set_page_config(page_title="Portal IQ - Totale", layout="wide", initial_sidebar_state="expanded")
@@ -44,31 +49,64 @@ def conectar_planilha():
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         client = gspread.authorize(creds)
-        return client.open("PORTAL IQ"), client
+        # Retornamos o client do gspread E as credenciais puras para usar na API do Drive
+        return client.open("PORTAL IQ"), creds
     except Exception as e:
         st.error(f"Erro ao conectar com o Google Sheets/Drive. Detalhe: {e}")
         st.stop()
 
-def salvar_foto_no_drive(client, uploaded_file, nome_tecnico):
-    """Salva o arquivo enviado no Google Drive com nome formatado por data/hora e retorna o link público"""
+def salvar_foto_no_drive(creds, uploaded_file, nome_tecnico):
+    """Salva a foto no Google Drive na pasta Evidencias_Matinal e retorna o link"""
     try:
+        # Cria o serviço da API do Drive
+        drive_service = build('drive', 'v3', credentials=creds)
+        
+        # 1. Procura se a pasta 'Evidencias_Matinal' já existe
+        folder_name = "Evidencias_Matinal"
+        query = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+        results = drive_service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
+        items = results.get('files', [])
+        
+        # 2. Se a pasta não existir, cria na mesma hora
+        if not items:
+            folder_metadata = {
+                'name': folder_name,
+                'mimeType': 'application/vnd.google-apps.folder'
+            }
+            folder = drive_service.files().create(body=folder_metadata, fields='id').execute()
+            folder_id = folder.get('id')
+        else:
+            folder_id = items[0].get('id')
+            
+        # 3. Prepara a foto para upload
         data_hora_str = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         nome_limpo = "".join([c for c in nome_tecnico if c.isalnum() or c in (' ', '_')]).strip().replace(' ', '_')
         nome_arquivo = f"Vistoria_{nome_limpo}_{data_hora_str}.jpg"
         
-        file_metadata = {'title': nome_arquivo}
+        file_metadata = {
+            'name': nome_arquivo,
+            'parents': [folder_id]
+        }
         
-        temp_path = f"temp_{uploaded_file.name}"
-        with open(temp_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-            
-        file_drive = client.create_file(temp_path, folder_id=None)
-        file_drive.share('', perm_type='anyone', role='reader')
+        # Converte o arquivo do Streamlit para o formato do Google Drive
+        media = MediaIoBaseUpload(io.BytesIO(uploaded_file.getvalue()), mimetype='image/jpeg', resumable=True)
         
-        if os.path.exists(temp_path): os.remove(temp_path)
-        return file_drive['alternateLink']
+        # 4. Faz o upload e pega o ID e Link
+        file = drive_service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
+        file_id = file.get('id')
+        link_gerado = file.get('webViewLink')
+        
+        # 5. Dá permissão de visualização pública para qualquer um com o link
+        permission = {
+            'type': 'anyone',
+            'role': 'reader'
+        }
+        drive_service.permissions().create(fileId=file_id, body=permission).execute()
+        
+        return link_gerado
     except Exception as e:
-        return "Foto registrada (Pendente de link de Drive)"
+        print(f"Erro detalhado no Drive: {e}")
+        return "Erro ao armazenar imagem no Drive"
 
 @st.cache_data(ttl=300)
 def carregar_dados():
@@ -532,7 +570,7 @@ else:
         else:
             st.info("Crie abas de certificados mensais para habilitar o acompanhamento.")
 
-    # --- PÁGINA 2: HISTÓRICO DE CERTIFICADOS ---
+    # --- PÁGINA 2: HISTÓRICO DE CERTIFICADOS (COM FILTRO CORRIGIDO PARA GESTÃO) ---
     elif st.session_state['pagina_atual'] == "Historico":
         st.title(f"🏆 Histórico de Certificados")
         
@@ -544,6 +582,7 @@ else:
             
             col_re_hist = f"RE_IQ_{mes_historico}"
             
+            # Respeita o filtro de gestão escolhido na barra lateral
             if perfil_usuario == 'GESTÃO':
                 if 're_alvo_str' in locals() and re_alvo_str:
                     base_historico = dados_completos[dados_completos[col_re_hist].astype(str) == str(re_alvo_str)]
@@ -599,7 +638,7 @@ else:
 
                 st.dataframe(df_exibir.style.map(colorir_sim_nao), hide_index=True, use_container_width=True)
 
-    # --- PÁGINA 3: MATINAL ---
+    # --- PÁGINA 3: MATINAL (COM ARMAZENAMENTO REAL DA FOTO NO DRIVE) ---
     elif st.session_state['pagina_atual'] == "Matinal":
         st.title("📋 Agendamento e Execução da Matinal")
         tab_agendar, tab_executar = st.tabs(["1. Agendar Téc", "2. Executar Vistoria (Checklist)"])
@@ -719,8 +758,8 @@ else:
                         if not foto_upload:
                             st.warning("⚠️ O envio da foto é obrigatório para comprovação.")
                         else:
-                            _, client_drive = conectar_planilha()
-                            link_foto = salvar_foto_no_drive(client_drive, foto_upload, tec_atual)
+                            _, creds = conectar_planilha()
+                            link_foto = salvar_foto_no_drive(creds, foto_upload, tec_atual)
                             
                             tec_row = equipe_vigente[equipe_vigente['nome'] == tec_atual]
                             tec_login = tec_row['login'].iloc[0] if not tec_row.empty else "N/A"
