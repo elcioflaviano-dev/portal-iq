@@ -18,26 +18,49 @@ import cloudinary.uploader
 DESTINATARIOS_EMAIL = "helifa.silva@totaletecnologia.com.br,alexandre.sousa@totaletecnologia.com.br,genilson.almeida@totaletecnologia.com.br,vania.ssousa@totaletecnologia.com.br,paulo.correia@totaletecnologia.com.br,richard.silva@totaletecnologia.com.br,ariel.dias@totaletecnologia.com.br,alexandre.gianechini@totaletecnologia.com.br"
 WHATSAPP_GRUPO_ID = "5511993259361-1587731165@g.us"
 
-# --- TABELA DE PONTUAÇÃO DE ERROS DE INSTALAÇÃO ---
-ITENS_PONTUACAO_INSTALACAO = {
-    # Categoria: Roteamento e Fibra
-    "Fibra com curva acentuada (Macrocurva)": 10,
-    "Cabo Drop sem esticar / solto na fachada": 10,
-    "Reserva técnica de fibra inadequada / mal acomodada": 5,
-    "Conector Óptico com alto atenuação / mal conectorizado": 15,
-    "Falta de identificação (Etiqueta) no cabo/DIO/ONU": 5,
-    
-    # Categoria: Roteador e Equipamentos
-    "Roteador Wi-Fi instalado em local inadequado (atrás de TV/espelho)": 10,
-    "Fonte de alimentação mal posicionada / sem organização": 5,
-    "Cabo de rede (UTM) mal crimpado / sem conector padrão RJ45": 10,
-    "Falta de teste de velocidade e sinal no app do cliente": 15,
-    
-    # Categoria: Padrão e Organização
-    "Perfuração de parede sem vedação adequada (Passagem de cabo)": 10,
-    "Uso de material fora do padrão Totale": 15,
-    "Limpeza do local de instalação insatisfatória (Sujeira gerada)": 5,
-    "EPI / Uniforme incompleto do técnico em campo": 10
+# --- LISTA DE FALHAS DE INSTALAÇÃO (POR CATEGORIA) ---
+FALHAS_INSTALACAO = {
+    "Tap/Isolador/Emenda": [
+        "001G-Identificação do cabo", "002G-Torque correto na conexão do TAP", "003G-Anel de vedação no TAP",
+        "004G-Preparação dos conectores no TAP", "005M-Abraçadeiras", "006G-Ponto da Âncora no poste Elétrica",
+        "007G-Ponto da Âncora no poste Assinante", "008G-Afastamento da rede elétrica",
+        "009G-Altura do drop (trav 5,15m) (c/gar 4,5m) (s/gar 3,5m)", "010G-Parafuso olhal reto (pitão)",
+        "011G-Integridade do cabo", "012G-Instalação do isolator", "013G-Pingadeira do cabo Isolador/Emenda",
+        "014G-Anel de vedação/ fita fusão Isolator/Emenda", "015G-Preparação dos conectores do Isolator/Emenda",
+        "016G-Conexão em poste correto", "067G-Divisor na Rede"
+    ],
+    "DG/Apto": [
+        "017G-Identificação do cabo", "018G-Torque correto na conexão do DG", "019G-Preparação dos conectores no DG",
+        "020M-Disposição do cabo (dentro do DG)", "021M-Roteamento do Cabo", "022M-Fixação do cabo"
+    ],
+    "PAQ": [
+        "023G-Identificação do funcionário (uniformizado e crahá em local visivel)", "024G-Educação do técnico (instalador atencioso)",
+        "025G-Confirmação do produto antes da instalação", "026M-Uso do Pro-pé", "027G-Limpeza (deixau o local limpo e organizado)",
+        "028M-Entrega da Guia da OS/Orientação sobre envio da documentação", "029G-Explicação do sistema (funcionalidades e interatividas do produto)",
+        "030G-Explicação sobre o Now", "031M-Preencimento da OS (verificar na guia do cliente)", "032M-Assinatura da OS",
+        "033G-Técnico não chegou no horário combinado", "034G-Satisfação Geral < 7", "088G-Uso do Santinho"
+    ],
+    "Cabeamento Interior": [
+        "035M-Ponto de entrada em local adequado", "036M-Pingadeira Ponto de Entrada", "037M-Bucha de acabamento",
+        "038M-Excesso/falta de cabo", "039M-Organização do cabo", "040G-Integridade do cabo",
+        "041M-Local de fixação do cabo", "042M-Fixação correta do cabo", "043M-Local de fixação do passivo",
+        "044M-Fixação correta do passivo", "045G-Torque correto nas conexões", "046G-Conexão correta nos passivos",
+        "047G-Instalação de extensões do Net Fone", "048G-Serviço executado sem aut NET", "049G-Configuração/habilitação correta",
+        "050G-Sintonia da TV/AV/HDMI", "051G-Qualidade do sinal (Imagem)", "052G-Qualidade do sinal (Internet)",
+        "053G-Qualidade do sinal (Voz)", "055G-Danos causados na instalação", "095G-Instalação de Mini Isolator com Sleev",
+        "096G-Preenchimento da Etiqueta WIFI ou O.S", "097G-Rede WIFI configurada/instalada"
+    ],
+    "Medição de Sinal": [
+        "056M-Nivel correto do canal baixo", "057M-Nivel correto do canal alto", "058G-Nivel correto do TX",
+        "059G-Nivel correto do RX", "060G-Qualidade do sinal - PS/QS/BER", "098G-WIFI - Técnico garantiu a cobertura em 80% dos cômodos",
+        "099G-WIFI - Técnico orientou cliente sobre a cobertura do Wi-Fi (Obs. na OS)"
+    ],
+    "Divergência de Materiais": [
+        "061G-Cabos", "062G-Conectores", "063G-Passivos", "064G-Terminais"
+    ],
+    "Outros": [
+        "087G-Instalação ocorreu no endereço do contrato"
+    ]
 }
 
 # --- 1. Configuração Inicial ---
@@ -275,19 +298,19 @@ def registrar_vistoria_completa(re_iq, nome_iq, login_tec, nome_tec, tipo, irreg
     except Exception as e:
         st.error(f"Erro ao gravar histórico de vistoria: {e}")
 
-def registrar_vistoria_instalacao_sheets(re_iq, nome_iq, login_tec, nome_tec, irregulares, pontos_perdidos, obs, link_foto):
+def registrar_vistoria_instalacao_sheets(re_iq, nome_iq, login_tec, nome_tec, irregulares, obs, link_foto):
     try:
         planilha = conectar_planilha()
         try:
             ws = planilha.worksheet("Vistoria_Instalacao")
         except:
-            ws = planilha.add_worksheet(title="Vistoria_Instalacao", rows=100, cols=15)
-            ws.append_row(["ID_Vistoria", "Data_Hora", "RE_IQ", "Nome_IQ", "Login_Tecnico", "Nome_Tecnico", "Erros_Instalacao", "Pontos_Perdidos", "Observacao", "Link_Foto", "Status"])
+            ws = planilha.add_worksheet(title="Vistoria_Instalacao", rows=100, cols=10)
+            ws.append_row(["ID_Vistoria", "Data_Hora", "RE_IQ", "Nome_IQ", "Login_Tecnico", "Nome_Tecnico", "Erros_Instalacao", "Observacao", "Link_Foto", "Status"])
             
         vistoria_id = str(uuid.uuid4())[:8].upper()
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         
-        ws.append_row([vistoria_id, data_hora, str(re_iq), nome_iq, str(login_tec), nome_tec, irregulares, pontos_perdidos, obs, link_foto, "Registrada"])
+        ws.append_row([vistoria_id, data_hora, str(re_iq), nome_iq, str(login_tec), nome_tec, irregulares, obs, link_foto, "Registrada"])
         st.cache_data.clear()
     except Exception as e:
         st.error(f"Erro ao gravar vistoria de instalação: {e}")
@@ -537,7 +560,7 @@ else:
 
         st.divider()
         
-        # --- AGENDA DE MATINAIS ---
+        # --- AGENDA DE MATINAIS (FILTRADA POR RE DO RESPONSÁVEL) ---
         st.subheader("📅 Sua Agenda de Matinais")
         agenda_do_usuario = {tec: info for tec, info in st.session_state['agenda_matinal'].items() if str(info.get('re_iq')) == str(re_logado_str) or perfil_usuario == 'GESTÃO'}
         
@@ -549,7 +572,7 @@ else:
 
         st.divider()
         
-        # --- ACOMPANHAMENTO PENDENTE ---
+        # --- ACOMPANHAMENTO PENDENTE COM BOTÃO DE SALVAR ---
         st.subheader(f"⚠️ Acompanhamento Pendente (Referência: {mes_acompanhamento or 'N/A'})")
         st.write(f"*Marque as monitorias realizadas e clique no botão 'Salvar' para gravar no Sheets.*")
         
@@ -775,7 +798,8 @@ else:
                         
                         for item in veiculo_1:
                             if cv1.checkbox(item, key=f"v1_{item}"): faltas.append(item)
-                        for item in cv2.checkbox(item, key=f"v2_{item}"): faltas.append(item)
+                        for item in veiculo_2:
+                            if cv2.checkbox(item, key=f"v2_{item}"): faltas.append(item)
 
                     st.divider()
                     foto_upload = st.file_uploader("📸 Anexar Foto da Vistoria (Obrigatório)", type=['png', 'jpg'])
@@ -816,10 +840,10 @@ else:
                             st.session_state['email_pronto'] = url_email
                             st.rerun()
 
-    # --- PÁGINA 4: VISTORIA DE INSTALAÇÃO (COM PONTUAÇÃO E WHATSAPP) ---
+    # --- PÁGINA 4: VISTORIA DE INSTALAÇÃO (WHATSAPP E CÓDIGOS REAIS) ---
     elif st.session_state['pagina_atual'] == "Instalacao":
         st.title("🛠️ Vistoria e Auditoria de Instalação em Campo")
-        st.write("Auditoria de erros em campo com pontuação automática, registro de evidência e disparo para o WhatsApp/E-mail.")
+        st.write("Auditoria baseada nos códigos oficiais da Totale. Registro de evidência e disparo para o WhatsApp (Grupo IQ).")
         
         if st.session_state['zap_pronto']:
             st.success("✅ Vistoria de Instalação gravada com sucesso!")
@@ -840,23 +864,37 @@ else:
             tec_inst = st.selectbox("Selecione o Técnico Auditado:", ["Selecione..."] + dados_completos['nome'].tolist())
             
             if tec_inst != "Selecione...":
-                st.info("⚠️ Marque abaixo os erros encontrados na instalação. Os pontos perdidos serão somados automaticamente.")
+                st.info("⚠️ Marque abaixo as falhas encontradas na instalação, divididas por tópicos.")
                 
                 erros_encontrados = []
-                pontos_totais_perdidos = 0
                 
-                for erro, pontos in ITENS_PONTUACAO_INSTALACAO.items():
-                    if st.checkbox(f"{erro} (-{pontos} pts)", key=f"err_{erro}"):
-                        erros_encontrados.append(f"{erro} (-{pontos} pts)")
-                        pontos_totais_perdidos += pontos
+                # Divisão do checklist de instalação em Abas
+                tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+                    "🔌 Tap/Isolador", "🏠 DG/Apto", "👨‍🔧 PAQ", "🧵 Cabeamento", "📡 Medição", "📦 Materiais", "Outros"
+                ])
                 
-                st.markdown(f"### 🛑 Pontuação Total Perdida: `{pontos_totais_perdidos} pontos`")
+                def renderizar_colunas_checklist(lista_itens, aba):
+                    with aba:
+                        cols = st.columns(2)
+                        for i, item in enumerate(lista_itens):
+                            col_atual = cols[i % 2]
+                            if col_atual.checkbox(item, key=f"inst_{item[:4]}"):
+                                erros_encontrados.append(item)
+
+                renderizar_colunas_checklist(FALHAS_INSTALACAO["Tap/Isolador/Emenda"], tab1)
+                renderizar_colunas_checklist(FALHAS_INSTALACAO["DG/Apto"], tab2)
+                renderizar_colunas_checklist(FALHAS_INSTALACAO["PAQ"], tab3)
+                renderizar_colunas_checklist(FALHAS_INSTALACAO["Cabeamento Interior"], tab4)
+                renderizar_colunas_checklist(FALHAS_INSTALACAO["Medição de Sinal"], tab5)
+                renderizar_colunas_checklist(FALHAS_INSTALACAO["Divergência de Materiais"], tab6)
+                renderizar_colunas_checklist(FALHAS_INSTALACAO["Outros"], tab7)
+                
                 st.divider()
                 
                 foto_inst = st.file_uploader("📸 Anexar Foto da Instalação / Erro (Obrigatório)", type=['png', 'jpg'], key="foto_inst")
                 obs_inst = st.text_area("Observações da Auditoria / Tratativa:", key="obs_inst")
                 
-                resumo_erros = " / ".join(erros_encontrados) if erros_encontrados else "Instalação 100% conforme o padrão."
+                resumo_erros = " / ".join(erros_encontrados) if erros_encontrados else "Instalação sem falhas registradas."
                 
                 if st.button("Gravar Auditoria e Gerar Disparos", type="primary"):
                     if not foto_inst:
@@ -876,19 +914,19 @@ else:
                             login_tec=tec_login,
                             nome_tec=tec_inst,
                             irregulares=resumo_erros,
-                            pontos_perdidos=pontos_totais_perdidos,
                             obs=obs_inst,
                             link_foto=link_foto
                         )
                         
-                        # Monta mensagem para o WhatsApp (Group ID ou chat)
-                        msg_whatsapp = f"*AUDITORIA DE INSTALAÇÃO - TOTALE*\n\n*RE do Técnico:* {tec_re}\n*Técnico:* {tec_inst}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Erros Encontrados:*\n- {resumo_erros}\n*Total de Pontos Perdidos:* {pontos_totais_perdidos} pts\n\n*Observações:* {obs_inst}\n\n*Evidência (Foto):*\n{link_foto}"
+                        # Monta mensagem para o WhatsApp
+                        msg_whatsapp = f"*AUDITORIA DE INSTALAÇÃO - TOTALE*\n\n*RE do Técnico:* {tec_re}\n*Técnico:* {tec_inst}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Falhas Encontradas:*\n- {resumo_erros}\n\n*Observações:* {obs_inst}\n\n*Evidência (Foto):*\n{link_foto}"
                         
-                        # Link universal para API do WhatsApp (funciona web e app mobile)
-                        url_whatsapp = f"https://api.whatsapp.com/send?phone=&text={urllib.parse.quote(msg_whatsapp)}"
+                        # Link universal para API do WhatsApp focado no ID do grupo fornecido
+                        # A API wa.me aceita o ID do grupo diretamente, ou redireciona via web
+                        url_whatsapp = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_whatsapp)}"
                         
-                        # Monta link para o E-mail
-                        corpo_email = f"RELATÓRIO DE AUDITORIA DE INSTALAÇÃO\nRE: {tec_re}\nTécnico: {tec_inst}\nIQ: {st.session_state['nome_iq']}\n\nERROS ENCONTRADOS:\n- {resumo_erros}\nPONTOS PERDIDOS: {pontos_totais_perdidos} pts\n\nOBSERVAÇÕES:\n{obs_inst}\n\nEVIDÊNCIA FOTO:\n{link_foto}"
+                        # Monta link para o E-mail de backup
+                        corpo_email = f"RELATÓRIO DE AUDITORIA DE INSTALAÇÃO\nRE: {tec_re}\nTécnico: {tec_inst}\nIQ: {st.session_state['nome_iq']}\n\nFALHAS ENCONTRADAS:\n- {resumo_erros}\n\nOBSERVAÇÕES:\n{obs_inst}\n\nEVIDÊNCIA FOTO:\n{link_foto}"
                         url_email = f"mailto:{DESTINATARIOS_EMAIL}?subject=Auditoria de Instalacao - RE {tec_re} - {tec_inst}&body={urllib.parse.quote(corpo_email)}"
                         
                         st.session_state['zap_pronto'] = url_whatsapp
