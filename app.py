@@ -10,15 +10,12 @@ from datetime import datetime
 import uuid
 import io
 
-# Importações necessárias para o Google Drive API
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
+# Importação do Cloudinary
+import cloudinary
+import cloudinary.uploader
 
 # --- LISTA AUTOMÁTICA DE DESTINATÁRIOS ---
 DESTINATARIOS_EMAIL = "helifa.silva@totaletecnologia.com.br,alexandre.sousa@totaletecnologia.com.br,genilson.almeida@totaletecnologia.com.br,vania.ssousa@totaletecnologia.com.br,paulo.correia@totaletecnologia.com.br,richard.silva@totaletecnologia.com.br,ariel.dias@totaletecnologia.com.br,alexandre.gianechini@totaletecnologia.com.br"
-
-# --- ID DA PASTA COMPARTILHADA DO DRIVE ---
-PASTA_DRIVE_ID = "1AfcKFzB3SF-Qza2uC1XjvVVZw7qwFiwC" 
 
 # --- 1. Configuração Inicial ---
 st.set_page_config(page_title="Portal IQ - Totale", layout="wide", initial_sidebar_state="expanded")
@@ -48,68 +45,54 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. Conexão com Google Sheets e Google Drive ---
+# --- 2. Conexão com Google Sheets e Configuração Cloudinary ---
 def conectar_planilha():
     try:
         creds_dict = json.loads(st.secrets["gcp_service_account"])
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         client = gspread.authorize(creds)
-        return client.open("PORTAL IQ"), creds
+        return client.open("PORTAL IQ")
     except Exception as e:
-        st.error(f"Erro ao conectar com o Google Sheets/Drive. Detalhe: {e}")
+        st.error(f"Erro ao conectar com o Google Sheets. Detalhe: {e}")
         st.stop()
 
-def salvar_foto_no_drive(creds, uploaded_file, nome_tecnico):
-    """Salva a foto no Google Drive e retorna o link público"""
+def configurar_cloudinary():
     try:
-        drive_service = build('drive', 'v3', credentials=creds)
-        folder_id = None
+        cloudinary.config(
+            cloud_name = st.secrets["cloudinary"]["cloud_name"],
+            api_key = st.secrets["cloudinary"]["api_key"],
+            api_secret = st.secrets["cloudinary"]["api_secret"],
+            secure = True
+        )
+    except Exception as e:
+        st.error(f"Erro nas configurações do Cloudinary nos segredos: {e}")
+
+def salvar_foto_no_cloudinary(uploaded_file, nome_tecnico):
+    """Faz o upload da foto para o Cloudinary e retorna o link público direto"""
+    try:
+        configurar_cloudinary()
         
-        # Usa a pasta hardcoded se fornecida, se não, pesquisa/cria
-        if PASTA_DRIVE_ID != "":
-            folder_id = PASTA_DRIVE_ID
-        else:
-            folder_name = "Evidencias_Matinal"
-            query = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
-            results = drive_service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
-            items = results.get('files', [])
-            
-            if not items:
-                folder_metadata = {
-                    'name': folder_name,
-                    'mimeType': 'application/vnd.google-apps.folder'
-                }
-                folder = drive_service.files().create(body=folder_metadata, fields='id').execute()
-                folder_id = folder.get('id')
-            else:
-                folder_id = items[0].get('id')
-                
-        # Formatação do nome do arquivo
         data_hora_str = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         nome_limpo = "".join([c for c in nome_tecnico if c.isalnum() or c in (' ', '_')]).strip().replace(' ', '_')
-        nome_arquivo = f"Vistoria_{nome_limpo}_{data_hora_str}.jpg"
+        public_id = f"vistorias/Vistoria_{nome_limpo}_{data_hora_str}"
         
-        file_metadata = {'name': nome_arquivo}
-        if folder_id:
-            file_metadata['parents'] = [folder_id]
-            
-        media = MediaIoBaseUpload(io.BytesIO(uploaded_file.getvalue()), mimetype='image/jpeg', resumable=True)
-        file = drive_service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
-        file_id = file.get('id')
-        link_gerado = file.get('webViewLink')
+        # Faz o upload direto do arquivo enviado no Streamlit
+        resultado = cloudinary.uploader.upload(
+            uploaded_file,
+            public_id=public_id,
+            folder="Evidencias_Matinal",
+            overwrite=True,
+            resource_type="image"
+        )
         
-        # Torna o link visível
-        permission = {'type': 'anyone', 'role': 'reader'}
-        drive_service.permissions().create(fileId=file_id, body=permission).execute()
-        
-        return link_gerado
+        return resultado.get("secure_url")
     except Exception as e:
-        return f"(ERRO AO SALVAR NO DRIVE: Verifique as permissões de Editor na pasta. Detalhe: {e})"
+        return f"(ERRO CLOUDINARY: {e})"
 
 @st.cache_data(ttl=300)
 def carregar_dados():
-    planilha, _ = conectar_planilha()
+    planilha = conectar_planilha()
     
     def ler_aba(nome_aba):
         try:
@@ -199,7 +182,7 @@ def carregar_dados():
 
 def carregar_controle_iq():
     try:
-        planilha, _ = conectar_planilha()
+        planilha = conectar_planilha()
         try:
             ws = planilha.worksheet("Controle_IQ")
         except:
@@ -212,7 +195,7 @@ def carregar_controle_iq():
 
 def salvar_horas_no_sheets(re_iq, meta, realizado):
     try:
-        planilha, _ = conectar_planilha()
+        planilha = conectar_planilha()
         ws = planilha.worksheet("Controle_IQ")
         registros = ws.get_all_records()
         encontrou = False
@@ -231,7 +214,7 @@ def salvar_horas_no_sheets(re_iq, meta, realizado):
 
 def salvar_agenda_no_sheets(re_iq_responsavel, agenda_dict):
     try:
-        planilha, _ = conectar_planilha()
+        planilha = conectar_planilha()
         ws = planilha.worksheet("Controle_IQ")
         registros = ws.get_all_records()
         
@@ -254,7 +237,7 @@ def salvar_agenda_no_sheets(re_iq_responsavel, agenda_dict):
 
 def registrar_vistoria_completa(re_iq, nome_iq, login_tec, nome_tec, tipo, irregulares, obs, link_foto):
     try:
-        planilha, _ = conectar_planilha()
+        planilha = conectar_planilha()
         try:
             ws = planilha.worksheet("Vistorias")
         except:
@@ -271,7 +254,7 @@ def registrar_vistoria_completa(re_iq, nome_iq, login_tec, nome_tec, tipo, irreg
 
 def atualizar_celula_especifica(nome_aba, login_tecnico, coluna_alvo, valor):
     try:
-        planilha, _ = conectar_planilha()
+        planilha = conectar_planilha()
         ws = planilha.worksheet(nome_aba)
         cabecalhos = [str(c).strip().upper() for c in ws.row_values(1)]
         col_idx = -1
@@ -683,7 +666,7 @@ else:
             agenda_do_usuario = {tec: info for tec, info in st.session_state['agenda_matinal'].items() if str(info.get('re_iq')) == str(re_logado_str) or perfil_usuario == 'GESTÃO'}
             
             if st.session_state['email_pronto']:
-                st.success("✅ Vistoria gravada no Google Sheets e evidência armazenada no Drive!")
+                st.success("✅ Vistoria gravada no Google Sheets e evidência armazenada no Cloudinary!")
                 st.markdown(f'<a href="{st.session_state["email_pronto"]}" target="_blank" style="display: inline-block; padding: 0.8em 1.5em; color: white; background-color: #007BFF; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">📩 ABRIR E-MAIL COM O RELATÓRIO</a>', unsafe_allow_html=True)
                 st.write("")
                 if st.button("🧹 Limpar Tela e Voltar para Agenda"):
@@ -761,8 +744,8 @@ else:
                         if not foto_upload:
                             st.warning("⚠️ O envio da foto é obrigatório para comprovação.")
                         else:
-                            _, creds = conectar_planilha()
-                            link_foto = salvar_foto_no_drive(creds, foto_upload, tec_atual)
+                            # Faz o upload via Cloudinary
+                            link_foto = salvar_foto_no_cloudinary(foto_upload, tec_atual)
                             
                             tec_row = equipe_vigente[equipe_vigente['nome'] == tec_atual]
                             tec_login = tec_row['login'].iloc[0] if not tec_row.empty else "N/A"
@@ -784,7 +767,7 @@ else:
                             del st.session_state['agenda_matinal'][tec_atual]
                             salvar_agenda_no_sheets(re_logado_str, st.session_state['agenda_matinal'])
                             
-                            corpo_email = f"RELATÓRIO DE MATINAL (IVM 2026)\nTécnico: {tec_atual}\nIQ: {st.session_state['nome_iq']}\n\nITENS FALTANTES/IRREGULARES:\n- {resumo_faltas}\n\nOBSERVAÇÕES:\n{obs_final}\n\nEVIDÊNCIA FOTO (DRIVE):\n{link_foto}"
+                            corpo_email = f"RELATÓRIO DE MATINAL (IVM 2026)\nTécnico: {tec_atual}\nIQ: {st.session_state['nome_iq']}\n\nITENS FALTANTES/IRREGULARES:\n- {resumo_faltas}\n\nOBSERVAÇÕES:\n{obs_final}\n\nEVIDÊNCIA FOTO:\n{link_foto}"
                             url_email = f"mailto:{DESTINATARIOS_EMAIL}?subject=Relatorio Matinal - {tec_atual}&body={urllib.parse.quote(corpo_email)}"
                             
                             st.session_state['email_pronto'] = url_email
