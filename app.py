@@ -752,7 +752,7 @@ else:
                     foto_upload = st.file_uploader("📸 Anexar Foto da Vistoria (Obrigatório)", type=['png', 'jpg'])
                     obs_final = st.text_area("Observações da Tratativa:")
 
-                    resumo_faltas = ", ".join(faltas) if faltas else "Todas as ferramentas e condições em conformidade."
+                    resumo_faltas = " / ".join(faltas) if faltas else "Todas as ferramentas e condições em conformidade."
                     
                     if st.button("Gravar Vistoria e Gerar E-mail", type="primary"):
                         if not foto_upload:
