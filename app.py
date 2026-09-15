@@ -341,6 +341,7 @@ else:
             try: realizado_atual = int(filtro_h.iloc[0]['REALIZADO_HORAS']) if filtro_h.iloc[0]['REALIZADO_HORAS'] != '' else 0
             except: pass
 
+    # Gestão vs IQ
     if perfil_usuario == 'GESTÃO':
         st.sidebar.divider()
         st.sidebar.subheader("🎛️ Filtro de Gestão")
@@ -473,7 +474,7 @@ else:
 
         st.divider()
         
-        # --- AGENDA DE MATINAIS ---
+        # --- AGENDA DE MATINAIS (FILTRADA POR RE DO RESPONSÁVEL) ---
         st.subheader("📅 Sua Agenda de Matinais")
         agenda_do_usuario = {tec: info for tec, info in st.session_state['agenda_matinal'].items() if str(info.get('re_iq')) == str(re_logado_str) or perfil_usuario == 'GESTÃO'}
         
@@ -661,41 +662,52 @@ else:
                         ferramentas_2 = ['Estilete 18mm', 'Organizador de Ferramentas', 'Striper RG59/58', 'Fita Guia de Nylon 20m', 'Martelo Unha', 'Fuzimec (Cintadeira)', 'Furadeira de Impacto', 'Extensão Elétrica 10a20m']
                         ferramentas_3 = ['Broca de Wídea 8" e 10"', 'Mala de Ferramentas', 'Balde de Lona (Bornal)', 'Telefone Gôndola', 'Lanterna', 'Escada Fibra 6m', 'Escada 4/5 Degraus', 'Câmera Sonda Endoscópica', 'Chaveiro Mini Isolator']
                         
-                        for item in ferramentas_1: if c1.checkbox(item, key=f"f1_{item}"): faltas.append(item)
-                        for item in ferramentas_2: if c2.checkbox(item, key=f"f2_{item}"): faltas.append(item)
-                        for item in ferramentas_3: if c3.checkbox(item, key=f"f3_{item}"): faltas.append(item)
+                        for item in ferramentas_1:
+                            if c1.checkbox(item, key=f"f1_{item}"): faltas.append(item)
+                        for item in ferramentas_2:
+                            if c2.checkbox(item, key=f"f2_{item}"): faltas.append(item)
+                        for item in ferramentas_3:
+                            if c3.checkbox(item, key=f"f3_{item}"): faltas.append(item)
 
                     with t2:
                         cg1, cg2 = st.columns(2)
                         gpon_1 = ['Clivador c/ Gabarito Profiber', 'Gabarito de Conectorização', 'Alicate Decapador Fibra', 'Alicate Decapador Drop', 'Suporte de Escada p/ Clivador', 'Suporte p/ Bobina', 'Testador Cabo de Rede', 'Kit LVM']
                         gpon_2 = ['Caneta de Limpeza Óptica', 'Caneta Óptica (Laser)', 'Kit Lenços p/ Limpeza AGC', 'Álcool Isopropílico', 'Dispenser p/ Líquidos', 'DBAM / Trilithic', 'Power Meter']
                         
-                        for item in gpon_1: if cg1.checkbox(item, key=f"g1_{item}"): faltas.append(item)
-                        for item in gpon_2: if cg2.checkbox(item, key=f"g2_{item}"): faltas.append(item)
+                        for item in gpon_1:
+                            if cg1.checkbox(item, key=f"g1_{item}"): faltas.append(item)
+                        for item in gpon_2:
+                            if cg2.checkbox(item, key=f"g2_{item}"): faltas.append(item)
 
                     with t3:
                         ce1, ce2 = st.columns(2)
                         epi_1 = ['Capacete c/ Aba e Jugular', 'Capa de Chuva', 'Cinto de Segurança', 'Talabarte de Segurança', 'Manta de Proteção', 'Luvas Pigmentada', 'Luvas Vaqueta', 'Óculos de Proteção']
                         epi_2 = ['3 Cones', 'Bandeirola p/ Escada', 'Nivelador de Escada', 'Multímetro / Chave Teste', 'Máscara Semifacial', 'Rolo Fita Zebrada', 'Protetor Solar', 'Pro-Pé']
                         
-                        for item in epi_1: if ce1.checkbox(item, key=f"e1_{item}"): faltas.append(item)
-                        for item in epi_2: if ce2.checkbox(item, key=f"e2_{item}"): faltas.append(item)
+                        for item in epi_1:
+                            if ce1.checkbox(item, key=f"e1_{item}"): faltas.append(item)
+                        for item in epi_2:
+                            if ce2.checkbox(item, key=f"e2_{item}"): faltas.append(item)
                             
                     with t4:
                         ca1, ca2 = st.columns(2)
                         asseio_1 = ['Barba Feita', 'Higiene Pessoal', 'Corte de Cabelo Padrão', 'Uso de Adornos (Irregular)']
                         asseio_2 = ['Camiseta', 'Calça', 'Bota', 'Cinto Pessoal', 'Jaqueta', 'Crachá']
                         
-                        for item in asseio_1: if ca1.checkbox(item, key=f"as1_{item}"): faltas.append(item)
-                        for item in asseio_2: if ca2.checkbox(item, key=f"as2_{item}"): faltas.append(item)
+                        for item in asseio_1:
+                            if ca1.checkbox(item, key=f"as1_{item}"): faltas.append(item)
+                        for item in asseio_2:
+                            if ca2.checkbox(item, key=f"as2_{item}"): faltas.append(item)
 
                     with t5:
                         cv1, cv2 = st.columns(2)
                         veiculo_1 = ['Limpeza do Veículo', 'Organização do Veículo', 'Avarias no Veículo']
                         veiculo_2 = ['PDA (Logado / Bat > 50%)', 'Book Fiscal', 'Flanela', 'Chip de Telefonia', 'Escova e Pá de Lixo']
                         
-                        for item in veiculo_1: if cv1.checkbox(item, key=f"v1_{item}"): faltas.append(item)
-                        for item in veiculo_2: if cv2.checkbox(item, key=f"v2_{item}"): faltas.append(item)
+                        for item in veiculo_1:
+                            if cv1.checkbox(item, key=f"v1_{item}"): faltas.append(item)
+                        for item in veiculo_2:
+                            if cv2.checkbox(item, key=f"v2_{item}"): faltas.append(item)
 
                     st.divider()
                     foto_upload = st.file_uploader("📸 Anexar Foto da Vistoria (Obrigatório)", type=['png', 'jpg'])
