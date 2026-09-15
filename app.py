@@ -7,6 +7,7 @@ import json
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
+import uuid
 
 # --- 1. Configuração Inicial ---
 st.set_page_config(page_title="Portal IQ - Totale", layout="wide", initial_sidebar_state="expanded")
@@ -15,7 +16,7 @@ if 'logado' not in st.session_state: st.session_state['logado'] = False
 if 'pagina_atual' not in st.session_state: st.session_state['pagina_atual'] = "Dashboard"
 if 'email_pronto' not in st.session_state: st.session_state['email_pronto'] = None
 
-# --- Estilização CSS para Cards Coloridos Inteiros (Estilo TV) ---
+# --- Estilização CSS (Responsiva para Celular e TV) ---
 st.markdown("""
     <style>
     .metric-card-blue, .metric-card-green, .metric-card-orange {
@@ -36,21 +37,42 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. Conexão com Google Sheets ---
+# --- 2. Conexão com Google Sheets e Google Drive ---
 def conectar_planilha():
     try:
         creds_dict = json.loads(st.secrets["gcp_service_account"])
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         client = gspread.authorize(creds)
-        return client.open("PORTAL IQ")
+        return client.open("PORTAL IQ"), client
     except Exception as e:
-        st.error(f"Erro ao conectar com o Google Sheets. Detalhe: {e}")
+        st.error(f"Erro ao conectar com o Google Sheets/Drive. Detalhe: {e}")
         st.stop()
+
+def salvar_foto_no_drive(client, uploaded_file, nome_tecnico):
+    """Salva o arquivo enviado no Google Drive com nome formatado por data/hora e retorna o link público"""
+    try:
+        data_hora_str = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        nome_limpo = "".join([c for c in nome_tecnico if c.isalnum() or c in (' ', '_')]).strip().replace(' ', '_')
+        nome_arquivo = f"Vistoria_{nome_limpo}_{data_hora_str}.jpg"
+        
+        file_metadata = {'title': nome_arquivo}
+        
+        temp_path = f"temp_{uploaded_file.name}"
+        with open(temp_path, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+            
+        file_drive = client.create_file(temp_path, folder_id=None)
+        file_drive.share('', perm_type='anyone', role='reader')
+        
+        if os.path.exists(temp_path): os.remove(temp_path)
+        return file_drive['alternateLink']
+    except Exception as e:
+        return "Foto registrada (Pendente de link de Drive)"
 
 @st.cache_data(ttl=300)
 def carregar_dados():
-    planilha = conectar_planilha()
+    planilha, _ = conectar_planilha()
     
     def ler_aba(nome_aba):
         try:
@@ -80,55 +102,58 @@ def carregar_dados():
     dados_completos = dados_tecnicos.copy()
     
     todas_abas = [ws.title for ws in planilha.worksheets()]
-    abas_meses = [aba for aba in todas_abas if aba not in ['Base_IQ', 'Base_Tecnicos', 'Controle_IQ']]
     
-    meses_info = []
+    if "Certificados" in todas_abas:
+        df_cert = ler_aba("Certificados")
+        if not df_cert.empty:
+            df_cert.columns = [str(c).strip().upper() for c in df_cert.columns]
+            if 'LOGIN' in df_cert.columns:
+                df_cert['LOGIN'] = df_cert['LOGIN'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+                dados_completos = pd.merge(dados_completos, df_cert, left_on='login', right_on='LOGIN', how='left')
+                if 'LOGIN' in dados_completos.columns: dados_completos = dados_completos.drop(columns=['LOGIN'])
+        meses_info = [{'nome_aba': 'Certificados', 'mes_nome': 'JULHO'}, {'nome_aba': 'Certificados', 'mes_nome': 'AGOSTO'}, {'nome_aba': 'Certificados', 'mes_nome': 'SETEMBRO'}]
+    else:
+        abas_meses = [aba for aba in todas_abas if aba not in ['Base_IQ', 'Base_Tecnicos', 'Controle_IQ', 'Vistorias']]
+        meses_info = []
 
-    for aba in abas_meses:
-        df_mes = ler_aba(aba)
-        if not df_mes.empty:
-            mes_nome = aba.upper().replace('CERTIFICADO', '').replace('_', ' ').strip()
-            if not mes_nome: mes_nome = aba.upper()
-            
-            colunas_novas = {}
-            for c in df_mes.columns:
-                c_up = str(c).strip().upper()
-                if 'LOGIN' in c_up: colunas_novas[c] = 'LOGIN'
-                elif 'RE' in c_up and 'IQ' in c_up: colunas_novas[c] = f'RE_IQ_{mes_nome}'
-                elif 'ACOMPANHAMENTO' in c_up: colunas_novas[c] = f'ACOMPANHAMENTO_{mes_nome}'
-                elif c_up in ['MONIT_1', 'M1']: colunas_novas[c] = f'MONIT_1_{mes_nome}'
-                elif c_up in ['MONIT_2', 'M2']: colunas_novas[c] = f'MONIT_2_{mes_nome}'
-                elif c_up in ['MONIT_3', 'M3']: colunas_novas[c] = f'MONIT_3_{mes_nome}'
-                else:
-                    if mes_nome in c_up or c_up in mes_nome:
-                        colunas_novas[c] = mes_nome
-            
-            df_mes = df_mes.rename(columns=colunas_novas)
-            
-            if 'LOGIN' in df_mes.columns:
-                df_mes['LOGIN'] = df_mes['LOGIN'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+        for aba in abas_meses:
+            df_mes = ler_aba(aba)
+            if not df_mes.empty:
+                mes_nome = aba.upper().replace('CERTIFICADO', '').replace('_', ' ').strip()
+                if not mes_nome: mes_nome = aba.upper()
                 
-                if f'RE_IQ_{mes_nome}' in df_mes.columns:
-                    df_mes[f'RE_IQ_{mes_nome}'] = df_mes[f'RE_IQ_{mes_nome}'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+                colunas_novas = {}
+                for c in df_mes.columns:
+                    c_up = str(c).strip().upper()
+                    if 'LOGIN' in c_up: colunas_novas[c] = 'LOGIN'
+                    elif 'RE' in c_up and 'IQ' in c_up: colunas_novas[c] = f'RE_IQ_{mes_nome}'
+                    elif 'ACOMPANHAMENTO' in c_up: colunas_novas[c] = f'ACOMPANHAMENTO_{mes_nome}'
+                    elif c_up in ['MONIT_1', 'M1']: colunas_novas[c] = f'MONIT_1_{mes_nome}'
+                    elif c_up in ['MONIT_2', 'M2']: colunas_novas[c] = f'MONIT_2_{mes_nome}'
+                    elif c_up in ['MONIT_3', 'M3']: colunas_novas[c] = f'MONIT_3_{mes_nome}'
+                    else:
+                        if mes_nome in c_up or c_up in mes_nome:
+                            colunas_novas[c] = mes_nome
                 
-                if mes_nome not in df_mes.columns: df_mes[mes_nome] = 'NÃO'
-                if f'ACOMPANHAMENTO_{mes_nome}' not in df_mes.columns: df_mes[f'ACOMPANHAMENTO_{mes_nome}'] = 'NÃO'
-                if f'MONIT_1_{mes_nome}' not in df_mes.columns: df_mes[f'MONIT_1_{mes_nome}'] = 'NÃO'
-                if f'MONIT_2_{mes_nome}' not in df_mes.columns: df_mes[f'MONIT_2_{mes_nome}'] = 'NÃO'
-                if f'MONIT_3_{mes_nome}' not in df_mes.columns: df_mes[f'MONIT_3_{mes_nome}'] = 'NÃO'
+                df_mes = df_mes.rename(columns=colunas_novas)
                 
-                df_mes[mes_nome] = df_mes[mes_nome].fillna('NÃO').astype(str).str.strip().str.upper()
-                df_mes[f'ACOMPANHAMENTO_{mes_nome}'] = df_mes[f'ACOMPANHAMENTO_{mes_nome}'].fillna('NÃO').astype(str).str.strip().str.upper()
-                df_mes[f'MONIT_1_{mes_nome}'] = df_mes[f'MONIT_1_{mes_nome}'].fillna('NÃO').astype(str).str.strip().str.upper()
-                df_mes[f'MONIT_2_{mes_nome}'] = df_mes[f'MONIT_2_{mes_nome}'].fillna('NÃO').astype(str).str.strip().str.upper()
-                df_mes[f'MONIT_3_{mes_nome}'] = df_mes[f'MONIT_3_{mes_nome}'].fillna('NÃO').astype(str).str.strip().str.upper()
-                
-                dados_completos = pd.merge(dados_completos, df_mes, left_on='login', right_on='LOGIN', how='left')
-                
-                if 'LOGIN' in dados_completos.columns:
-                    dados_completos = dados_completos.drop(columns=['LOGIN'])
+                if 'LOGIN' in df_mes.columns:
+                    df_mes['LOGIN'] = df_mes['LOGIN'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+                    if f'RE_IQ_{mes_nome}' in df_mes.columns:
+                        df_mes[f'RE_IQ_{mes_nome}'] = df_mes[f'RE_IQ_{mes_nome}'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
                     
-                meses_info.append({'nome_aba': aba, 'mes_nome': mes_nome})
+                    if mes_nome not in df_mes.columns: df_mes[mes_nome] = 'NÃO'
+                    if f'ACOMPANHAMENTO_{mes_nome}' not in df_mes.columns: df_mes[f'ACOMPANHAMENTO_{mes_nome}'] = 'NÃO'
+                    if f'MONIT_1_{mes_nome}' not in df_mes.columns: df_mes[f'MONIT_1_{mes_nome}'] = 'NÃO'
+                    if f'MONIT_2_{mes_nome}' not in df_mes.columns: df_mes[f'MONIT_2_{mes_nome}'] = 'NÃO'
+                    if f'MONIT_3_{mes_nome}' not in df_mes.columns: df_mes[f'MONIT_3_{mes_nome}'] = 'NÃO'
+                    
+                    df_mes[mes_nome] = df_mes[mes_nome].fillna('NÃO').astype(str).str.strip().str.upper()
+                    df_mes[f'ACOMPANHAMENTO_{mes_nome}'] = df_mes[f'ACOMPANHAMENTO_{mes_nome}'].fillna('NÃO').astype(str).str.strip().str.upper()
+                    
+                    dados_completos = pd.merge(dados_completos, df_mes, left_on='login', right_on='LOGIN', how='left')
+                    if 'LOGIN' in dados_completos.columns: dados_completos = dados_completos.drop(columns=['LOGIN'])
+                    meses_info.append({'nome_aba': aba, 'mes_nome': mes_nome})
 
     dados_completos = dados_completos.fillna('')
     dados_completos = dados_completos.replace(['nan', 'None', 'NaN'], '')
@@ -137,7 +162,7 @@ def carregar_dados():
 
 def carregar_controle_iq():
     try:
-        planilha = conectar_planilha()
+        planilha, _ = conectar_planilha()
         try:
             ws = planilha.worksheet("Controle_IQ")
         except:
@@ -150,7 +175,7 @@ def carregar_controle_iq():
 
 def salvar_horas_no_sheets(re_iq, meta, realizado):
     try:
-        planilha = conectar_planilha()
+        planilha, _ = conectar_planilha()
         ws = planilha.worksheet("Controle_IQ")
         registros = ws.get_all_records()
         encontrou = False
@@ -167,30 +192,50 @@ def salvar_horas_no_sheets(re_iq, meta, realizado):
     except Exception as e:
         st.error(f"Erro ao salvar horas: {e}")
 
-def salvar_agenda_no_sheets(agenda_dict):
+def salvar_agenda_no_sheets(re_iq_responsavel, agenda_dict):
     try:
-        planilha = conectar_planilha()
+        planilha, _ = conectar_planilha()
         ws = planilha.worksheet("Controle_IQ")
         registros = ws.get_all_records()
         
-        for idx, row in enumerate(registros):
-            ws.update_cell(idx + 2, 4, "")
-            ws.update_cell(idx + 2, 5, "")
-            ws.update_cell(idx + 2, 6, "")
-            
-        linha_atual = 2
+        novas_linhas = []
+        for row in registros:
+            if str(row.get('RE_IQ', '')).strip().replace('.0', '') != str(re_iq_responsavel):
+                novas_linhas.append([str(row.get('RE_IQ','')), row.get('META_HORAS',40), row.get('REALIZADO_HORAS',0), row.get('AGENDA_TECNICO',''), row.get('AGENDA_DATA',''), row.get('AGENDA_IQ_NOME','')])
+                
         for tec, info in agenda_dict.items():
-            ws.update_cell(linha_atual, 4, tec)
-            ws.update_cell(linha_atual, 5, info['data'])
-            ws.update_cell(linha_atual, 6, info['iq_nome'])
-            linha_atual += 1
+            if str(info.get('re_iq')) == str(re_iq_responsavel):
+                novas_linhas.append([str(re_iq_responsavel), 40, 0, tec, info['data'], info['iq_nome']])
+                
+        ws.clear()
+        ws.append_row(["RE_IQ", "META_HORAS", "REALIZADO_HORAS", "AGENDA_TECNICO", "AGENDA_DATA", "AGENDA_IQ_NOME"])
+        if novas_linhas:
+            ws.append_rows(novas_linhas)
         st.cache_data.clear()
     except Exception as e:
         print(f"Erro ao salvar agenda: {e}")
 
+def registrar_vistoria_completa(re_iq, nome_iq, login_tec, nome_tec, tipo, irregulares, obs, link_foto):
+    try:
+        planilha, _ = conectar_planilha()
+        try:
+            ws = planilha.worksheet("Vistorias")
+        except:
+            ws = planilha.add_worksheet(title="Vistorias", rows=100, cols=15)
+            ws.append_row(["ID_Vistoria", "Data_Hora", "RE_IQ", "Nome_IQ", "Login_Tecnico", "Nome_Tecnico", "Tipo_Vistoria", "Itens_Irregulares", "Observacao", "Link_Foto", "Status"])
+            
+        vistoria_id = str(uuid.uuid4())[:8].upper()
+        data_hora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        
+        ws.append_row([vistoria_id, data_hora, str(re_iq), nome_iq, str(login_tec), nome_tec, tipo, irregulares, obs, link_foto, "Concluída"])
+        st.cache_data.clear()
+    except Exception as e:
+        st.error(f"Erro ao gravar histórico de vistoria: {e}")
+
 def atualizar_celula_especifica(nome_aba, login_tecnico, coluna_alvo, valor):
     try:
-        ws = conectar_planilha().worksheet(nome_aba)
+        planilha, _ = conectar_planilha()
+        ws = planilha.worksheet(nome_aba)
         cabecalhos = [str(c).strip().upper() for c in ws.row_values(1)]
         col_idx = -1
         
@@ -228,7 +273,7 @@ def colorir_sim_nao(val):
 
 dados_iqs, dados_completos, meses_info = carregar_dados()
 
-# --- Definição dos Meses Vigente e de Acompanhamento ---
+# --- Meses Vigente e de Acompanhamento ---
 if meses_info:
     mes_vigente_info = meses_info[-1]
     mes_vigente = mes_vigente_info['mes_nome']
@@ -243,19 +288,10 @@ if meses_info:
 else:
     mes_vigente, aba_acompanhamento, mes_acompanhamento = None, None, None
 
-# --- Carrega Agenda do Sheets para a Sessão ---
+# --- Carrega Agenda Filtrada por RE ---
 df_ctrl = carregar_controle_iq()
-if 'agenda_matinal' not in st.session_state:
-    st.session_state['agenda_matinal'] = {}
-    if not df_ctrl.empty:
-        for _, row in df_ctrl.iterrows():
-            tec = str(row.get('AGENDA_TECNICO', '')).strip()
-            data = str(row.get('AGENDA_DATA', '')).strip()
-            iq_nome = str(row.get('AGENDA_IQ_NOME', '')).strip()
-            if tec and tec != '':
-                st.session_state['agenda_matinal'][tec] = {'data': data, 'iq_nome': iq_nome}
 
-# --- 3. Telas ---
+# --- 3. Telas de Acesso ---
 if not st.session_state['logado']:
     col_logo, _ = st.columns([1, 2])
     with col_logo:
@@ -283,6 +319,18 @@ else:
     re_logado = st.session_state['re_usuario']
     re_logado_str = str(re_logado).strip().replace('.0', '')
     perfil_usuario = st.session_state.get('perfil', 'IQ')
+
+    if 'agenda_matinal' not in st.session_state:
+        st.session_state['agenda_matinal'] = {}
+        if not df_ctrl.empty and 'AGENDA_TECNICO' in df_ctrl.columns:
+            for _, row in df_ctrl.iterrows():
+                tec = str(row.get('AGENDA_TECNICO', '')).strip()
+                if tec and tec != '':
+                    st.session_state['agenda_matinal'][tec] = {
+                        'data': str(row.get('AGENDA_DATA', '')),
+                        'iq_nome': str(row.get('AGENDA_IQ_NOME', '')),
+                        're_iq': str(row.get('RE_IQ', ''))
+                    }
 
     meta_atual, realizado_atual = 40, 0
     if not df_ctrl.empty and 'RE_IQ' in df_ctrl.columns:
@@ -355,7 +403,7 @@ else:
 
         col1, col2, col3 = st.columns(3)
         
-        # CARD 1: % CERTIFICADOS (Azul)
+        # CARD 1: % CERTIFICADOS
         with col1:
             st.markdown('<div class="metric-card-blue">', unsafe_allow_html=True)
             st.markdown('<div class="metric-title">🏆 % Certificados</div>', unsafe_allow_html=True)
@@ -391,7 +439,7 @@ else:
                 st.markdown('<div class="metric-sub">Sem abas mensais</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
-        # CARD 2: HORAS DE MONITORIA (Verde)
+        # CARD 2: HORAS DE MONITORIA
         with col2:
             st.markdown('<div class="metric-card-green">', unsafe_allow_html=True)
             st.markdown('<div class="metric-title">⏱️ Horas de Monitoria</div>', unsafe_allow_html=True)
@@ -409,7 +457,7 @@ else:
                 st.markdown(f'<div class="metric-sub">Controle individual de horas</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
-        # CARD 3: PENDENTES DE MONITORAMENTO (Laranja)
+        # CARD 3: PENDENTES
         with col3:
             st.markdown('<div class="metric-card-orange">', unsafe_allow_html=True)
             st.markdown('<div class="metric-title">⚠️ Monitoramento Pendente</div>', unsafe_allow_html=True)
@@ -426,18 +474,19 @@ else:
         st.divider()
         
         # --- AGENDA DE MATINAIS ---
-        st.subheader("📅 Agendamento de Matinais")
-        if not st.session_state['agenda_matinal']:
-            st.info("Nenhuma matinal agendada.")
+        st.subheader("📅 Sua Agenda de Matinais")
+        agenda_do_usuario = {tec: info for tec, info in st.session_state['agenda_matinal'].items() if str(info.get('re_iq')) == str(re_logado_str) or perfil_usuario == 'GESTÃO'}
+        
+        if not agenda_do_usuario:
+            st.info("Sua agenda está vazia. Vá na aba 'Agendamento de Matinal' para adicionar.")
         else:
-            for tec, info in list(st.session_state['agenda_matinal'].items()):
+            for tec, info in list(agenda_do_usuario.items()):
                 st.write(f"📌 **Data:** {info['data']} | **Técnico:** {tec} | **IQ Responsável:** {info['iq_nome']}")
 
         st.divider()
         
-        # --- ACOMPANHAMENTO PENDENTE COM BOTÃO DE SALVAR ---
+        # --- ACOMPANHAMENTO PENDENTE ---
         st.subheader(f"⚠️ Acompanhamento Pendente (Referência: {mes_acompanhamento or 'N/A'})")
-        st.write(f"*Marque as monitorias realizadas e clique no botão 'Salvar' para gravar no Sheets.*")
         
         if mes_acompanhamento:
             tecnicos_nao_cert = equipe_vigente[(equipe_vigente[mes_acompanhamento] == 'NÃO') & (equipe_vigente[f'ACOMPANHAMENTO_{mes_acompanhamento}'] != 'SIM')]
@@ -458,17 +507,15 @@ else:
                     m2_val = str(row.get(f'MONIT_2_{mes_acompanhamento}', '')).upper() == 'SIM'
                     m3_val = str(row.get(f'MONIT_3_{mes_acompanhamento}', '')).upper() == 'SIM'
 
-                    with st.form(key=f"form_monit_{tec_login}"):
-                        c_info, c_m1, c_m2, c_m3, c_btn = st.columns([3, 1, 1, 1, 1])
+                    with st.container():
+                        c_info, c_m1, c_m2, c_m3 = st.columns([3, 1, 1, 1])
                         c_info.write(f"👤 **{tec_nome}** (IQ: {nome_iq_resp})")
                         
-                        f_m1 = c_m1.checkbox("Monit. 1", value=m1_val)
-                        f_m2 = c_m2.checkbox("Monit. 2", value=m2_val)
-                        f_m3 = c_m3.checkbox("Monit. 3", value=m3_val)
+                        f_m1 = c_m1.checkbox("Monit. 1", value=m1_val, key=f"m1_{tec_login}")
+                        f_m2 = c_m2.checkbox("Monit. 2", value=m2_val, key=f"m2_{tec_login}")
+                        f_m3 = c_m3.checkbox("Monit. 3", value=m3_val, key=f"m3_{tec_login}")
                         
-                        btn_salvar_m = c_btn.form_submit_button("Salvar")
-                        
-                        if btn_salvar_m:
+                        if f_m1 != m1_val or f_m2 != m2_val or f_m3 != m3_val:
                             val_m1 = 'SIM' if f_m1 else 'NÃO'
                             val_m2 = 'SIM' if f_m2 else 'NÃO'
                             val_m3 = 'SIM' if f_m3 else 'NÃO'
@@ -479,11 +526,8 @@ else:
                             
                             if f_m1 and f_m2 and f_m3:
                                 atualizar_celula_especifica(aba_acompanhamento, tec_login, 'ACOMPANHAMENTO', 'SIM')
-                            
-                            st.success(f"Monitorias de {tec_nome} salvas com sucesso!")
                             st.rerun()
-                        
-                    st.divider()
+                        st.divider()
         else:
             st.info("Crie abas de certificados mensais para habilitar o acompanhamento.")
 
@@ -500,7 +544,10 @@ else:
             col_re_hist = f"RE_IQ_{mes_historico}"
             
             if perfil_usuario == 'GESTÃO':
-                base_historico = dados_completos
+                if 're_alvo_str' in locals() and re_alvo_str:
+                    base_historico = dados_completos[dados_completos[col_re_hist].astype(str) == str(re_alvo_str)]
+                else:
+                    base_historico = dados_completos
             else:
                 if col_re_hist in dados_completos.columns:
                     base_historico = dados_completos[dados_completos[col_re_hist].astype(str) == re_logado_str]
@@ -508,9 +555,8 @@ else:
                     base_historico = pd.DataFrame()
 
             if base_historico.empty:
-                st.info(f"Você não possui técnicos vinculados ao seu RE no mês de {mes_historico}.")
+                st.info(f"Nenhum técnico encontrado para o filtro selecionado no mês de {mes_historico}.")
             else:
-                # --- Cálculo da Porcentagem do Mês Selecionado ---
                 filtro_validos = (base_historico[mes_historico] != '')
                 base_mes_valida = base_historico[filtro_validos]
                 total_mes = len(base_mes_valida)
@@ -528,7 +574,6 @@ else:
 
                 df_exibir = base_historico[[c for c in colunas_exibir if c in base_historico.columns]].copy()
                 
-                # Formata a coluna de contagem com " - SIM" ou " - NÃO" conforme solicitado
                 if all(col in df_exibir.columns for col in [f"MONIT_1_{mes_historico}", f"MONIT_2_{mes_historico}", f"MONIT_3_{mes_historico}"]):
                     m1 = df_exibir[f"MONIT_1_{mes_historico}"].astype(str).str.upper() == 'SIM'
                     m2 = df_exibir[f"MONIT_2_{mes_historico}"].astype(str).str.upper() == 'SIM'
@@ -536,11 +581,9 @@ else:
                     soma = m1.astype(int) + m2.astype(int) + m3.astype(int)
                     df_exibir['Contagem_Monitorias'] = soma.astype(str) + "/3 - " + soma.apply(lambda x: "SIM" if x == 3 else "NÃO")
 
-                # Ordena para deixar os NÃO certificados no topo
                 df_exibir['ordem_sort'] = df_exibir[mes_historico].astype(str).str.upper().apply(lambda x: 0 if x == 'NÃO' else 1)
                 df_exibir = df_exibir.sort_values(by='ordem_sort').drop(columns=['ordem_sort'])
 
-                # Remove colunas individuais de monit para exibir apenas a coluna formatada
                 drop_cols = [c for c in df_exibir.columns if 'MONIT_' in c]
                 df_exibir = df_exibir.drop(columns=drop_cols, errors='ignore')
 
@@ -571,35 +614,40 @@ else:
                 if tec_agendar != "Selecione..." and data_agendada is not None:
                     st.session_state['agenda_matinal'][tec_agendar] = {
                         'data': data_agendada.strftime("%d/%m/%Y"),
-                        'iq_nome': st.session_state['nome_iq']
+                        'iq_nome': st.session_state['nome_iq'],
+                        're_iq': re_logado_str
                     }
-                    salvar_agenda_no_sheets(st.session_state['agenda_matinal'])
+                    salvar_agenda_no_sheets(re_logado_str, st.session_state['agenda_matinal'])
                     st.success(f"Matinal agendada para {tec_agendar}!")
                     st.rerun()
             
             st.write("---")
-            st.write("**Agenda de Matinais Cadastradas:**")
-            if not st.session_state['agenda_matinal']:
-                st.info("Nenhuma matinal agendada.")
+            st.write("**Sua Agenda de Matinais:**")
+            agenda_do_usuario = {tec: info for tec, info in st.session_state['agenda_matinal'].items() if str(info.get('re_iq')) == str(re_logado_str) or perfil_usuario == 'GESTÃO'}
+            
+            if not agenda_do_usuario:
+                st.info("Nenhuma matinal agendada por você.")
             else:
-                for tec, info in list(st.session_state['agenda_matinal'].items()):
+                for tec, info in list(agenda_do_usuario.items()):
                     c1, c2 = st.columns([4, 1])
                     c1.write(f"📌 **Data:** {info['data']} | **Técnico:** {tec} | **IQ:** {info['iq_nome']}")
                     if c2.button("🗑️ Remover", key=f"rm_{tec}"):
                         del st.session_state['agenda_matinal'][tec]
-                        salvar_agenda_no_sheets(st.session_state['agenda_matinal'])
+                        salvar_agenda_no_sheets(re_logado_str, st.session_state['agenda_matinal'])
                         st.rerun()
 
         with tab_executar:
+            agenda_do_usuario = {tec: info for tec, info in st.session_state['agenda_matinal'].items() if str(info.get('re_iq')) == str(re_logado_str) or perfil_usuario == 'GESTÃO'}
+            
             if st.session_state['email_pronto']:
-                st.success("✅ Matinal gravada com sucesso! O Relatório está pronto.")
+                st.success("✅ Vistoria gravada no Google Sheets e evidência armazenada no Drive!")
                 st.markdown(f'<a href="{st.session_state["email_pronto"]}" target="_blank" style="display: inline-block; padding: 0.8em 1.5em; color: white; background-color: #007BFF; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">📩 ABRIR E-MAIL COM O RELATÓRIO</a>', unsafe_allow_html=True)
                 st.write("")
                 if st.button("🧹 Limpar Tela e Voltar para Agenda"):
                     st.session_state['email_pronto'] = None
                     st.rerun()
             else:
-                tec_atual = st.selectbox("Selecione o Téc na Agenda para Vistoriar:", ["Selecione..."] + list(st.session_state['agenda_matinal'].keys()))
+                tec_atual = st.selectbox("Selecione o Téc na Agenda para Vistoriar:", ["Selecione..."] + list(agenda_do_usuario.keys()))
                 
                 if tec_atual != "Selecione...":
                     st.info("⚠️ Assinale abaixo os itens que estão **FALTANDO** ou **IRREGULARES**.")
@@ -613,69 +661,77 @@ else:
                         ferramentas_2 = ['Estilete 18mm', 'Organizador de Ferramentas', 'Striper RG59/58', 'Fita Guia de Nylon 20m', 'Martelo Unha', 'Fuzimec (Cintadeira)', 'Furadeira de Impacto', 'Extensão Elétrica 10a20m']
                         ferramentas_3 = ['Broca de Wídea 8" e 10"', 'Mala de Ferramentas', 'Balde de Lona (Bornal)', 'Telefone Gôndola', 'Lanterna', 'Escada Fibra 6m', 'Escada 4/5 Degraus', 'Câmera Sonda Endoscópica', 'Chaveiro Mini Isolator']
                         
-                        for item in ferramentas_1: 
-                            if c1.checkbox(item): faltas.append(item)
-                        for item in ferramentas_2: 
-                            if c2.checkbox(item): faltas.append(item)
-                        for item in ferramentas_3: 
-                            if c3.checkbox(item): faltas.append(item)
+                        for item in ferramentas_1: if c1.checkbox(item, key=f"f1_{item}"): faltas.append(item)
+                        for item in ferramentas_2: if c2.checkbox(item, key=f"f2_{item}"): faltas.append(item)
+                        for item in ferramentas_3: if c3.checkbox(item, key=f"f3_{item}"): faltas.append(item)
 
                     with t2:
                         cg1, cg2 = st.columns(2)
                         gpon_1 = ['Clivador c/ Gabarito Profiber', 'Gabarito de Conectorização', 'Alicate Decapador Fibra', 'Alicate Decapador Drop', 'Suporte de Escada p/ Clivador', 'Suporte p/ Bobina', 'Testador Cabo de Rede', 'Kit LVM']
                         gpon_2 = ['Caneta de Limpeza Óptica', 'Caneta Óptica (Laser)', 'Kit Lenços p/ Limpeza AGC', 'Álcool Isopropílico', 'Dispenser p/ Líquidos', 'DBAM / Trilithic', 'Power Meter']
                         
-                        for item in gpon_1:
-                            if cg1.checkbox(item): faltas.append(item)
-                        for item in gpon_2:
-                            if cg2.checkbox(item): faltas.append(item)
+                        for item in gpon_1: if cg1.checkbox(item, key=f"g1_{item}"): faltas.append(item)
+                        for item in gpon_2: if cg2.checkbox(item, key=f"g2_{item}"): faltas.append(item)
 
                     with t3:
                         ce1, ce2 = st.columns(2)
                         epi_1 = ['Capacete c/ Aba e Jugular', 'Capa de Chuva', 'Cinto de Segurança', 'Talabarte de Segurança', 'Manta de Proteção', 'Luvas Pigmentada', 'Luvas Vaqueta', 'Óculos de Proteção']
                         epi_2 = ['3 Cones', 'Bandeirola p/ Escada', 'Nivelador de Escada', 'Multímetro / Chave Teste', 'Máscara Semifacial', 'Rolo Fita Zebrada', 'Protetor Solar', 'Pro-Pé']
                         
-                        for item in epi_1:
-                            if ce1.checkbox(item): faltas.append(item)
-                        for item in epi_2:
-                            if ce2.checkbox(item): faltas.append(item)
+                        for item in epi_1: if ce1.checkbox(item, key=f"e1_{item}"): faltas.append(item)
+                        for item in epi_2: if ce2.checkbox(item, key=f"e2_{item}"): faltas.append(item)
                             
                     with t4:
                         ca1, ca2 = st.columns(2)
                         asseio_1 = ['Barba Feita', 'Higiene Pessoal', 'Corte de Cabelo Padrão', 'Uso de Adornos (Irregular)']
                         asseio_2 = ['Camiseta', 'Calça', 'Bota', 'Cinto Pessoal', 'Jaqueta', 'Crachá']
                         
-                        for item in asseio_1:
-                            if ca1.checkbox(item): faltas.append(item)
-                        for item in asseio_2:
-                            if ca2.checkbox(item): faltas.append(item)
+                        for item in asseio_1: if ca1.checkbox(item, key=f"as1_{item}"): faltas.append(item)
+                        for item in asseio_2: if ca2.checkbox(item, key=f"as2_{item}"): faltas.append(item)
 
                     with t5:
                         cv1, cv2 = st.columns(2)
                         veiculo_1 = ['Limpeza do Veículo', 'Organização do Veículo', 'Avarias no Veículo']
                         veiculo_2 = ['PDA (Logado / Bat > 50%)', 'Book Fiscal', 'Flanela', 'Chip de Telefonia', 'Escova e Pá de Lixo']
                         
-                        for item in veiculo_1:
-                            if cv1.checkbox(item): faltas.append(item)
-                        for item in veiculo_2:
-                            if cv2.checkbox(item): faltas.append(item)
+                        for item in veiculo_1: if cv1.checkbox(item, key=f"v1_{item}"): faltas.append(item)
+                        for item in veiculo_2: if cv2.checkbox(item, key=f"v2_{item}"): faltas.append(item)
 
                     st.divider()
-                    foto_upload = st.file_uploader("📸 Anexar Foto da Vistoria", type=['png', 'jpg'])
+                    foto_upload = st.file_uploader("📸 Anexar Foto da Vistoria (Obrigatório)", type=['png', 'jpg'])
                     obs_final = st.text_area("Observações da Tratativa:")
 
-                    resumo_faltas = "\n- ".join(faltas) if faltas else "Todas as ferramentas e condições em conformidade."
-                    corpo_email = f"RELATÓRIO DE MATINAL (IVM 2026)\nTécnico: {tec_atual}\nIQ: {st.session_state['nome_iq']}\n\nITENS FALTANTES/IRREGULARES:\n- {resumo_faltas}\n\nOBSERVAÇÕES DA TRATATIVA:\n{obs_final}"
-                    url_email = f"mailto:?subject=Relatorio Matinal - {tec_atual}&body={urllib.parse.quote(corpo_email)}"
-
+                    resumo_faltas = ", ".join(faltas) if faltas else "Todas as ferramentas e condições em conformidade."
+                    
                     if st.button("Gravar Vistoria e Gerar E-mail", type="primary"):
                         if not foto_upload:
                             st.warning("⚠️ O envio da foto é obrigatório para comprovação.")
                         else:
-                            tec_login = equipe_vigente[equipe_vigente['nome'] == tec_atual]['login'].iloc[0]
+                            _, client_drive = conectar_planilha()
+                            link_foto = salvar_foto_no_drive(client_drive, foto_upload, tec_atual)
+                            
+                            tec_row = equipe_vigente[equipe_vigente['nome'] == tec_atual]
+                            tec_login = tec_row['login'].iloc[0] if not tec_row.empty else "N/A"
+                            
+                            registrar_vistoria_completa(
+                                re_iq=re_logado_str,
+                                nome_iq=st.session_state['nome_iq'],
+                                login_tec=tec_login,
+                                nome_tec=tec_atual,
+                                tipo="Matinal",
+                                irregulares=resumo_faltas,
+                                obs=obs_final,
+                                link_foto=link_foto
+                            )
+                            
                             if aba_acompanhamento:
                                 atualizar_celula_especifica(aba_acompanhamento, tec_login, 'ACOMPANHAMENTO', 'SIM')
+                                
                             del st.session_state['agenda_matinal'][tec_atual]
-                            salvar_agenda_no_sheets(st.session_state['agenda_matinal'])
+                            salvar_agenda_no_sheets(re_logado_str, st.session_state['agenda_matinal'])
+                            
+                            corpo_email = f"RELATÓRIO DE MATINAL (IVM 2026)\nTécnico: {tec_atual}\nIQ: {st.session_state['nome_iq']}\n\nITENS FALTANTES/IRREGULARES:\n- {resumo_faltas}\n\nOBSERVAÇÕES:\n{obs_final}\n\nEVIDÊNCIA FOTO (DRIVE):\n{link_foto}"
+                            url_email = f"mailto:?subject=Relatorio Matinal - {tec_atual}&body={urllib.parse.quote(corpo_email)}"
+                            
                             st.session_state['email_pronto'] = url_email
                             st.rerun()
