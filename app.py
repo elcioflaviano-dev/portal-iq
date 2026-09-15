@@ -77,7 +77,6 @@ def salvar_foto_no_cloudinary(uploaded_file, nome_tecnico):
         nome_limpo = "".join([c for c in nome_tecnico if c.isalnum() or c in (' ', '_')]).strip().replace(' ', '_')
         public_id = f"vistorias/Vistoria_{nome_limpo}_{data_hora_str}"
         
-        # Faz o upload direto do arquivo enviado no Streamlit
         resultado = cloudinary.uploader.upload(
             uploaded_file,
             public_id=public_id,
@@ -506,8 +505,9 @@ else:
 
         st.divider()
         
-        # --- ACOMPANHAMENTO PENDENTE ---
+        # --- ACOMPANHAMENTO PENDENTE COM BOTÃO DE SALVAR ---
         st.subheader(f"⚠️ Acompanhamento Pendente (Referência: {mes_acompanhamento or 'N/A'})")
+        st.write(f"*Marque as monitorias realizadas e clique no botão 'Salvar' para gravar no Sheets.*")
         
         if mes_acompanhamento:
             tecnicos_nao_cert = equipe_vigente[(equipe_vigente[mes_acompanhamento] == 'NÃO') & (equipe_vigente[f'ACOMPANHAMENTO_{mes_acompanhamento}'] != 'SIM')]
@@ -744,11 +744,13 @@ else:
                         if not foto_upload:
                             st.warning("⚠️ O envio da foto é obrigatório para comprovação.")
                         else:
-                            # Faz o upload via Cloudinary
-                            link_foto = salvar_foto_no_cloudinary(foto_upload, tec_atual)
-                            
+                            # Busca o login e o RE do técnico selecionado
                             tec_row = equipe_vigente[equipe_vigente['nome'] == tec_atual]
                             tec_login = tec_row['login'].iloc[0] if not tec_row.empty else "N/A"
+                            tec_re = tec_row['re'].iloc[0] if ('re' in tec_row.columns and not tec_row.empty) else tec_login
+                            
+                            # Faz o upload via Cloudinary
+                            link_foto = salvar_foto_no_cloudinary(foto_upload, tec_atual)
                             
                             registrar_vistoria_completa(
                                 re_iq=re_logado_str,
@@ -767,8 +769,8 @@ else:
                             del st.session_state['agenda_matinal'][tec_atual]
                             salvar_agenda_no_sheets(re_logado_str, st.session_state['agenda_matinal'])
                             
-                            corpo_email = f"RELATÓRIO DE MATINAL (IVM 2026)\nTécnico: {tec_atual}\nIQ: {st.session_state['nome_iq']}\n\nITENS FALTANTES/IRREGULARES:\n- {resumo_faltas}\n\nOBSERVAÇÕES:\n{obs_final}\n\nEVIDÊNCIA FOTO:\n{link_foto}"
-                            url_email = f"mailto:{DESTINATARIOS_EMAIL}?subject=Relatorio Matinal - {tec_atual}&body={urllib.parse.quote(corpo_email)}"
+                            corpo_email = f"RELATÓRIO DE MATINAL (IVM 2026)\nRE: {tec_re}\nTécnico: {tec_atual}\nIQ: {st.session_state['nome_iq']}\n\nITENS FALTANTES/IRREGULARES:\n- {resumo_faltas}\n\nOBSERVAÇÕES:\n{obs_final}\n\nEVIDÊNCIA FOTO:\n{link_foto}"
+                            url_email = f"mailto:{DESTINATARIOS_EMAIL}?subject=Relatorio Matinal - RE {tec_re} - {tec_atual}&body={urllib.parse.quote(corpo_email)}"
                             
                             st.session_state['email_pronto'] = url_email
                             st.rerun()
