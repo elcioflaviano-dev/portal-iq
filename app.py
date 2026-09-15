@@ -14,6 +14,12 @@ import io
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 
+# --- LISTA AUTOMÁTICA DE DESTINATÁRIOS ---
+DESTINATARIOS_EMAIL = "helifa.silva@totaletecnologia.com.br,alexandre.sousa@totaletecnologia.com.br,genilson.almeida@totaletecnologia.com.br,vania.ssousa@totaletecnologia.com.br,paulo.correia@totaletecnologia.com.br,richard.silva@totaletecnologia.com.br,ariel.dias@totaletecnologia.com.br,alexandre.gianechini@totaletecnologia.com.br"
+
+# --- ID DA PASTA COMPARTILHADA DO DRIVE ---
+PASTA_DRIVE_ID = "1AfcKFzB3SF-Qza2uC1XjvVVZw7qwFiwC" 
+
 # --- 1. Configuração Inicial ---
 st.set_page_config(page_title="Portal IQ - Totale", layout="wide", initial_sidebar_state="expanded")
 
@@ -49,64 +55,57 @@ def conectar_planilha():
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         client = gspread.authorize(creds)
-        # Retornamos o client do gspread E as credenciais puras para usar na API do Drive
         return client.open("PORTAL IQ"), creds
     except Exception as e:
         st.error(f"Erro ao conectar com o Google Sheets/Drive. Detalhe: {e}")
         st.stop()
 
 def salvar_foto_no_drive(creds, uploaded_file, nome_tecnico):
-    """Salva a foto no Google Drive na pasta Evidencias_Matinal e retorna o link"""
+    """Salva a foto no Google Drive e retorna o link público"""
     try:
-        # Cria o serviço da API do Drive
         drive_service = build('drive', 'v3', credentials=creds)
+        folder_id = None
         
-        # 1. Procura se a pasta 'Evidencias_Matinal' já existe
-        folder_name = "Evidencias_Matinal"
-        query = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
-        results = drive_service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
-        items = results.get('files', [])
-        
-        # 2. Se a pasta não existir, cria na mesma hora
-        if not items:
-            folder_metadata = {
-                'name': folder_name,
-                'mimeType': 'application/vnd.google-apps.folder'
-            }
-            folder = drive_service.files().create(body=folder_metadata, fields='id').execute()
-            folder_id = folder.get('id')
+        # Usa a pasta hardcoded se fornecida, se não, pesquisa/cria
+        if PASTA_DRIVE_ID != "":
+            folder_id = PASTA_DRIVE_ID
         else:
-            folder_id = items[0].get('id')
+            folder_name = "Evidencias_Matinal"
+            query = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+            results = drive_service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
+            items = results.get('files', [])
             
-        # 3. Prepara a foto para upload
+            if not items:
+                folder_metadata = {
+                    'name': folder_name,
+                    'mimeType': 'application/vnd.google-apps.folder'
+                }
+                folder = drive_service.files().create(body=folder_metadata, fields='id').execute()
+                folder_id = folder.get('id')
+            else:
+                folder_id = items[0].get('id')
+                
+        # Formatação do nome do arquivo
         data_hora_str = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         nome_limpo = "".join([c for c in nome_tecnico if c.isalnum() or c in (' ', '_')]).strip().replace(' ', '_')
         nome_arquivo = f"Vistoria_{nome_limpo}_{data_hora_str}.jpg"
         
-        file_metadata = {
-            'name': nome_arquivo,
-            'parents': [folder_id]
-        }
-        
-        # Converte o arquivo do Streamlit para o formato do Google Drive
+        file_metadata = {'name': nome_arquivo}
+        if folder_id:
+            file_metadata['parents'] = [folder_id]
+            
         media = MediaIoBaseUpload(io.BytesIO(uploaded_file.getvalue()), mimetype='image/jpeg', resumable=True)
-        
-        # 4. Faz o upload e pega o ID e Link
         file = drive_service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
         file_id = file.get('id')
         link_gerado = file.get('webViewLink')
         
-        # 5. Dá permissão de visualização pública para qualquer um com o link
-        permission = {
-            'type': 'anyone',
-            'role': 'reader'
-        }
+        # Torna o link visível
+        permission = {'type': 'anyone', 'role': 'reader'}
         drive_service.permissions().create(fileId=file_id, body=permission).execute()
         
         return link_gerado
     except Exception as e:
-        print(f"Erro detalhado no Drive: {e}")
-        return "Erro ao armazenar imagem no Drive"
+        return f"(ERRO AO SALVAR NO DRIVE: Verifique as permissões de Editor na pasta. Detalhe: {e})"
 
 @st.cache_data(ttl=300)
 def carregar_dados():
@@ -546,15 +545,17 @@ else:
                     m2_val = str(row.get(f'MONIT_2_{mes_acompanhamento}', '')).upper() == 'SIM'
                     m3_val = str(row.get(f'MONIT_3_{mes_acompanhamento}', '')).upper() == 'SIM'
 
-                    with st.container():
-                        c_info, c_m1, c_m2, c_m3 = st.columns([3, 1, 1, 1])
+                    with st.form(key=f"form_monit_{tec_login}"):
+                        c_info, c_m1, c_m2, c_m3, c_btn = st.columns([3, 1, 1, 1, 1])
                         c_info.write(f"👤 **{tec_nome}** (IQ: {nome_iq_resp})")
                         
-                        f_m1 = c_m1.checkbox("Monit. 1", value=m1_val, key=f"m1_{tec_login}")
-                        f_m2 = c_m2.checkbox("Monit. 2", value=m2_val, key=f"m2_{tec_login}")
-                        f_m3 = c_m3.checkbox("Monit. 3", value=m3_val, key=f"m3_{tec_login}")
+                        f_m1 = c_m1.checkbox("Monit. 1", value=m1_val)
+                        f_m2 = c_m2.checkbox("Monit. 2", value=m2_val)
+                        f_m3 = c_m3.checkbox("Monit. 3", value=m3_val)
                         
-                        if f_m1 != m1_val or f_m2 != m2_val or f_m3 != m3_val:
+                        btn_salvar_m = c_btn.form_submit_button("Salvar")
+                        
+                        if btn_salvar_m:
                             val_m1 = 'SIM' if f_m1 else 'NÃO'
                             val_m2 = 'SIM' if f_m2 else 'NÃO'
                             val_m3 = 'SIM' if f_m3 else 'NÃO'
@@ -565,12 +566,15 @@ else:
                             
                             if f_m1 and f_m2 and f_m3:
                                 atualizar_celula_especifica(aba_acompanhamento, tec_login, 'ACOMPANHAMENTO', 'SIM')
+                            
+                            st.success(f"Monitorias de {tec_nome} salvas com sucesso!")
                             st.rerun()
-                        st.divider()
+                        
+                    st.divider()
         else:
             st.info("Crie abas de certificados mensais para habilitar o acompanhamento.")
 
-    # --- PÁGINA 2: HISTÓRICO DE CERTIFICADOS (COM FILTRO CORRIGIDO PARA GESTÃO) ---
+    # --- PÁGINA 2: HISTÓRICO DE CERTIFICADOS ---
     elif st.session_state['pagina_atual'] == "Historico":
         st.title(f"🏆 Histórico de Certificados")
         
@@ -582,7 +586,6 @@ else:
             
             col_re_hist = f"RE_IQ_{mes_historico}"
             
-            # Respeita o filtro de gestão escolhido na barra lateral
             if perfil_usuario == 'GESTÃO':
                 if 're_alvo_str' in locals() and re_alvo_str:
                     base_historico = dados_completos[dados_completos[col_re_hist].astype(str) == str(re_alvo_str)]
@@ -638,7 +641,7 @@ else:
 
                 st.dataframe(df_exibir.style.map(colorir_sim_nao), hide_index=True, use_container_width=True)
 
-    # --- PÁGINA 3: MATINAL (COM ARMAZENAMENTO REAL DA FOTO NO DRIVE) ---
+    # --- PÁGINA 3: MATINAL ---
     elif st.session_state['pagina_atual'] == "Matinal":
         st.title("📋 Agendamento e Execução da Matinal")
         tab_agendar, tab_executar = st.tabs(["1. Agendar Téc", "2. Executar Vistoria (Checklist)"])
@@ -782,7 +785,7 @@ else:
                             salvar_agenda_no_sheets(re_logado_str, st.session_state['agenda_matinal'])
                             
                             corpo_email = f"RELATÓRIO DE MATINAL (IVM 2026)\nTécnico: {tec_atual}\nIQ: {st.session_state['nome_iq']}\n\nITENS FALTANTES/IRREGULARES:\n- {resumo_faltas}\n\nOBSERVAÇÕES:\n{obs_final}\n\nEVIDÊNCIA FOTO (DRIVE):\n{link_foto}"
-                            url_email = f"mailto:?subject=Relatorio Matinal - {tec_atual}&body={urllib.parse.quote(corpo_email)}"
+                            url_email = f"mailto:{DESTINATARIOS_EMAIL}?subject=Relatorio Matinal - {tec_atual}&body={urllib.parse.quote(corpo_email)}"
                             
                             st.session_state['email_pronto'] = url_email
                             st.rerun()
