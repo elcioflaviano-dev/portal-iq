@@ -14,8 +14,31 @@ import io
 import cloudinary
 import cloudinary.uploader
 
-# --- LISTA AUTOMÁTICA DE DESTINATÁRIOS ---
+# --- CONFIGURAÇÕES DE DESTINATÁRIOS E WHATSAPP ---
 DESTINATARIOS_EMAIL = "helifa.silva@totaletecnologia.com.br,alexandre.sousa@totaletecnologia.com.br,genilson.almeida@totaletecnologia.com.br,vania.ssousa@totaletecnologia.com.br,paulo.correia@totaletecnologia.com.br,richard.silva@totaletecnologia.com.br,ariel.dias@totaletecnologia.com.br,alexandre.gianechini@totaletecnologia.com.br"
+WHATSAPP_GRUPO_ID = "5511993259361-1587731165@g.us"
+
+# --- TABELA DE PONTUAÇÃO DE ERROS DE INSTALAÇÃO ---
+ITENS_PONTUACAO_INSTALACAO = {
+    # Categoria: Roteamento e Fibra
+    "Fibra com curva acentuada (Macrocurva)": 10,
+    "Cabo Drop sem esticar / solto na fachada": 10,
+    "Reserva técnica de fibra inadequada / mal acomodada": 5,
+    "Conector Óptico com alto atenuação / mal conectorizado": 15,
+    "Falta de identificação (Etiqueta) no cabo/DIO/ONU": 5,
+    
+    # Categoria: Roteador e Equipamentos
+    "Roteador Wi-Fi instalado em local inadequado (atrás de TV/espelho)": 10,
+    "Fonte de alimentação mal posicionada / sem organização": 5,
+    "Cabo de rede (UTM) mal crimpado / sem conector padrão RJ45": 10,
+    "Falta de teste de velocidade e sinal no app do cliente": 15,
+    
+    # Categoria: Padrão e Organização
+    "Perfuração de parede sem vedação adequada (Passagem de cabo)": 10,
+    "Uso de material fora do padrão Totale": 15,
+    "Limpeza do local de instalação insatisfatória (Sujeira gerada)": 5,
+    "EPI / Uniforme incompleto do técnico em campo": 10
+}
 
 # --- 1. Configuração Inicial ---
 st.set_page_config(page_title="Portal IQ - Totale", layout="wide", initial_sidebar_state="expanded")
@@ -23,6 +46,7 @@ st.set_page_config(page_title="Portal IQ - Totale", layout="wide", initial_sideb
 if 'logado' not in st.session_state: st.session_state['logado'] = False
 if 'pagina_atual' not in st.session_state: st.session_state['pagina_atual'] = "Dashboard"
 if 'email_pronto' not in st.session_state: st.session_state['email_pronto'] = None
+if 'zap_pronto' not in st.session_state: st.session_state['zap_pronto'] = None
 
 # --- Estilização CSS (Responsiva para Celular e TV) ---
 st.markdown("""
@@ -68,19 +92,19 @@ def configurar_cloudinary():
     except Exception as e:
         st.error(f"Erro nas configurações do Cloudinary nos segredos: {e}")
 
-def salvar_foto_no_cloudinary(uploaded_file, nome_tecnico):
+def salvar_foto_no_cloudinary(uploaded_file, nome_tecnico, tipo_pasta):
     """Faz o upload da foto para o Cloudinary e retorna o link público direto"""
     try:
         configurar_cloudinary()
         
         data_hora_str = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         nome_limpo = "".join([c for c in nome_tecnico if c.isalnum() or c in (' ', '_')]).strip().replace(' ', '_')
-        public_id = f"vistorias/Vistoria_{nome_limpo}_{data_hora_str}"
+        public_id = f"{tipo_pasta}/{tipo_pasta}_{nome_limpo}_{data_hora_str}"
         
         resultado = cloudinary.uploader.upload(
             uploaded_file,
             public_id=public_id,
-            folder="Evidencias_Matinal",
+            folder=tipo_pasta,
             overwrite=True,
             resource_type="image"
         )
@@ -132,7 +156,7 @@ def carregar_dados():
                 if 'LOGIN' in dados_completos.columns: dados_completos = dados_completos.drop(columns=['LOGIN'])
         meses_info = [{'nome_aba': 'Certificados', 'mes_nome': 'JULHO'}, {'nome_aba': 'Certificados', 'mes_nome': 'AGOSTO'}, {'nome_aba': 'Certificados', 'mes_nome': 'SETEMBRO'}]
     else:
-        abas_meses = [aba for aba in todas_abas if aba not in ['Base_IQ', 'Base_Tecnicos', 'Controle_IQ', 'Vistorias']]
+        abas_meses = [aba for aba in todas_abas if aba not in ['Base_IQ', 'Base_Tecnicos', 'Controle_IQ', 'Vistorias', 'Vistoria_Instalacao']]
         meses_info = []
 
         for aba in abas_meses:
@@ -250,6 +274,23 @@ def registrar_vistoria_completa(re_iq, nome_iq, login_tec, nome_tec, tipo, irreg
         st.cache_data.clear()
     except Exception as e:
         st.error(f"Erro ao gravar histórico de vistoria: {e}")
+
+def registrar_vistoria_instalacao_sheets(re_iq, nome_iq, login_tec, nome_tec, irregulares, pontos_perdidos, obs, link_foto):
+    try:
+        planilha = conectar_planilha()
+        try:
+            ws = planilha.worksheet("Vistoria_Instalacao")
+        except:
+            ws = planilha.add_worksheet(title="Vistoria_Instalacao", rows=100, cols=15)
+            ws.append_row(["ID_Vistoria", "Data_Hora", "RE_IQ", "Nome_IQ", "Login_Tecnico", "Nome_Tecnico", "Erros_Instalacao", "Pontos_Perdidos", "Observacao", "Link_Foto", "Status"])
+            
+        vistoria_id = str(uuid.uuid4())[:8].upper()
+        data_hora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        
+        ws.append_row([vistoria_id, data_hora, str(re_iq), nome_iq, str(login_tec), nome_tec, irregulares, pontos_perdidos, obs, link_foto, "Registrada"])
+        st.cache_data.clear()
+    except Exception as e:
+        st.error(f"Erro ao gravar vistoria de instalação: {e}")
 
 def atualizar_celula_especifica(nome_aba, login_tecnico, coluna_alvo, valor):
     try:
@@ -394,6 +435,9 @@ else:
         if st.button("📋 Agendamento de Matinal", use_container_width=True): 
             st.session_state['pagina_atual'] = "Matinal"
             st.rerun()
+        if st.button("🛠️ Vistoria de Instalação", use_container_width=True): 
+            st.session_state['pagina_atual'] = "Instalacao"
+            st.rerun()
             
         st.divider()
         if st.button("Sair", use_container_width=True):
@@ -493,7 +537,7 @@ else:
 
         st.divider()
         
-        # --- AGENDA DE MATINAIS (FILTRADA POR RE DO RESPONSÁVEL) ---
+        # --- AGENDA DE MATINAIS ---
         st.subheader("📅 Sua Agenda de Matinais")
         agenda_do_usuario = {tec: info for tec, info in st.session_state['agenda_matinal'].items() if str(info.get('re_iq')) == str(re_logado_str) or perfil_usuario == 'GESTÃO'}
         
@@ -505,7 +549,7 @@ else:
 
         st.divider()
         
-        # --- ACOMPANHAMENTO PENDENTE COM BOTÃO DE SALVAR ---
+        # --- ACOMPANHAMENTO PENDENTE ---
         st.subheader(f"⚠️ Acompanhamento Pendente (Referência: {mes_acompanhamento or 'N/A'})")
         st.write(f"*Marque as monitorias realizadas e clique no botão 'Salvar' para gravar no Sheets.*")
         
@@ -731,8 +775,7 @@ else:
                         
                         for item in veiculo_1:
                             if cv1.checkbox(item, key=f"v1_{item}"): faltas.append(item)
-                        for item in veiculo_2:
-                            if cv2.checkbox(item, key=f"v2_{item}"): faltas.append(item)
+                        for item in cv2.checkbox(item, key=f"v2_{item}"): faltas.append(item)
 
                     st.divider()
                     foto_upload = st.file_uploader("📸 Anexar Foto da Vistoria (Obrigatório)", type=['png', 'jpg'])
@@ -744,13 +787,11 @@ else:
                         if not foto_upload:
                             st.warning("⚠️ O envio da foto é obrigatório para comprovação.")
                         else:
-                            # Busca o login e o RE do técnico selecionado
                             tec_row = equipe_vigente[equipe_vigente['nome'] == tec_atual]
                             tec_login = tec_row['login'].iloc[0] if not tec_row.empty else "N/A"
                             tec_re = tec_row['re'].iloc[0] if ('re' in tec_row.columns and not tec_row.empty) else tec_login
                             
-                            # Faz o upload via Cloudinary
-                            link_foto = salvar_foto_no_cloudinary(foto_upload, tec_atual)
+                            link_foto = salvar_foto_no_cloudinary(foto_upload, tec_atual, "Evidencias_Matinal")
                             
                             registrar_vistoria_completa(
                                 re_iq=re_logado_str,
@@ -774,3 +815,82 @@ else:
                             
                             st.session_state['email_pronto'] = url_email
                             st.rerun()
+
+    # --- PÁGINA 4: VISTORIA DE INSTALAÇÃO (COM PONTUAÇÃO E WHATSAPP) ---
+    elif st.session_state['pagina_atual'] == "Instalacao":
+        st.title("🛠️ Vistoria e Auditoria de Instalação em Campo")
+        st.write("Auditoria de erros em campo com pontuação automática, registro de evidência e disparo para o WhatsApp/E-mail.")
+        
+        if st.session_state['zap_pronto']:
+            st.success("✅ Vistoria de Instalação gravada com sucesso!")
+            
+            c_zap, c_email = st.columns(2)
+            with c_zap:
+                st.markdown(f'<a href="{st.session_state["zap_pronto"]}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">💬 ENVIAR NO WHATSAPP (GRUPO IQ)</a>', unsafe_allow_html=True)
+            with c_email:
+                if st.session_state.get('email_instalacao'):
+                    st.markdown(f'<a href="{st.session_state["email_instalacao"]}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #007BFF; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">📩 ENVIAR POR E-MAIL (GESTÃO)</a>', unsafe_allow_html=True)
+            
+            st.write("")
+            if st.button("🧹 Realizar Nova Vistoria de Instalação"):
+                st.session_state['zap_pronto'] = None
+                st.session_state['email_instalacao'] = None
+                st.rerun()
+        else:
+            tec_inst = st.selectbox("Selecione o Técnico Auditado:", ["Selecione..."] + dados_completos['nome'].tolist())
+            
+            if tec_inst != "Selecione...":
+                st.info("⚠️ Marque abaixo os erros encontrados na instalação. Os pontos perdidos serão somados automaticamente.")
+                
+                erros_encontrados = []
+                pontos_totais_perdidos = 0
+                
+                for erro, pontos in ITENS_PONTUACAO_INSTALACAO.items():
+                    if st.checkbox(f"{erro} (-{pontos} pts)", key=f"err_{erro}"):
+                        erros_encontrados.append(f"{erro} (-{pontos} pts)")
+                        pontos_totais_perdidos += pontos
+                
+                st.markdown(f"### 🛑 Pontuação Total Perdida: `{pontos_totais_perdidos} pontos`")
+                st.divider()
+                
+                foto_inst = st.file_uploader("📸 Anexar Foto da Instalação / Erro (Obrigatório)", type=['png', 'jpg'], key="foto_inst")
+                obs_inst = st.text_area("Observações da Auditoria / Tratativa:", key="obs_inst")
+                
+                resumo_erros = " / ".join(erros_encontrados) if erros_encontrados else "Instalação 100% conforme o padrão."
+                
+                if st.button("Gravar Auditoria e Gerar Disparos", type="primary"):
+                    if not foto_inst:
+                        st.warning("⚠️ O envio da foto é obrigatório para comprovar a auditoria.")
+                    else:
+                        tec_row = dados_completos[dados_completos['nome'] == tec_inst]
+                        tec_login = tec_row['login'].iloc[0] if not tec_row.empty else "N/A"
+                        tec_re = tec_row['re'].iloc[0] if ('re' in tec_row.columns and not tec_row.empty) else tec_login
+                        
+                        # Salva a foto na pasta dedicada do Cloudinary
+                        link_foto = salvar_foto_no_cloudinary(foto_inst, tec_inst, "Evidencias_Instalacao")
+                        
+                        # Grava na aba Vistoria_Instalacao
+                        registrar_vistoria_instalacao_sheets(
+                            re_iq=re_logado_str,
+                            nome_iq=st.session_state['nome_iq'],
+                            login_tec=tec_login,
+                            nome_tec=tec_inst,
+                            irregulares=resumo_erros,
+                            pontos_perdidos=pontos_totais_perdidos,
+                            obs=obs_inst,
+                            link_foto=link_foto
+                        )
+                        
+                        # Monta mensagem para o WhatsApp (Group ID ou chat)
+                        msg_whatsapp = f"*AUDITORIA DE INSTALAÇÃO - TOTALE*\n\n*RE do Técnico:* {tec_re}\n*Técnico:* {tec_inst}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Erros Encontrados:*\n- {resumo_erros}\n*Total de Pontos Perdidos:* {pontos_totais_perdidos} pts\n\n*Observações:* {obs_inst}\n\n*Evidência (Foto):*\n{link_foto}"
+                        
+                        # Link universal para API do WhatsApp (funciona web e app mobile)
+                        url_whatsapp = f"https://api.whatsapp.com/send?phone=&text={urllib.parse.quote(msg_whatsapp)}"
+                        
+                        # Monta link para o E-mail
+                        corpo_email = f"RELATÓRIO DE AUDITORIA DE INSTALAÇÃO\nRE: {tec_re}\nTécnico: {tec_inst}\nIQ: {st.session_state['nome_iq']}\n\nERROS ENCONTRADOS:\n- {resumo_erros}\nPONTOS PERDIDOS: {pontos_totais_perdidos} pts\n\nOBSERVAÇÕES:\n{obs_inst}\n\nEVIDÊNCIA FOTO:\n{link_foto}"
+                        url_email = f"mailto:{DESTINATARIOS_EMAIL}?subject=Auditoria de Instalacao - RE {tec_re} - {tec_inst}&body={urllib.parse.quote(corpo_email)}"
+                        
+                        st.session_state['zap_pronto'] = url_whatsapp
+                        st.session_state['email_instalacao'] = url_email
+                        st.rerun()
