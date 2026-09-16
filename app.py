@@ -15,7 +15,9 @@ import cloudinary
 import cloudinary.uploader
 
 # --- CONFIGURAÇÕES DE DESTINATÁRIOS E WHATSAPP ---
-DESTINATARIOS_EMAIL = "helifa.silva@totaletecnologia.com.br,alexandre.sousa@totaletecnologia.com.br,genilson.almeida@totaletecnologia.com.br,vania.ssousa@totaletecnologia.com.br,paulo.correia@totaletecnologia.com.br,richard.silva@totaletecnologia.com.br,ariel.dias@totaletecnologia.com.br,alexandre.gianechini@totaletecnologia.com.br"
+DESTINATARIOS_MATINAL = "helifa.silva@totaletecnologia.com.br,alexandre.sousa@totaletecnologia.com.br,genilson.almeida@totaletecnologia.com.br,vania.ssousa@totaletecnologia.com.br,paulo.correia@totaletecnologia.com.br,richard.silva@totaletecnologia.com.br,ariel.dias@totaletecnologia.com.br,alexandre.gianechini@totaletecnologia.com.br"
+DESTINATARIOS_INSTALACAO = "alexandre.sousa@totaletecnologia.com.br,genilson.almeida@totaletecnologia.com.br,vania.ssousa@totaletecnologia.com.br,elcio.nunes@totaletecnologia.com.br,denis.vick@totaletecnologia.com.br"
+
 WHATSAPP_GRUPO_ID = "5511993259361-1587731165@g.us"
 
 # --- LISTA DE FALHAS DE INSTALAÇÃO (POR CATEGORIA) ---
@@ -560,7 +562,7 @@ else:
 
         st.divider()
         
-        # --- AGENDA DE MATINAIS (FILTRADA POR RE DO RESPONSÁVEL) ---
+        # --- AGENDA DE MATINAIS ---
         st.subheader("📅 Sua Agenda de Matinais")
         agenda_do_usuario = {tec: info for tec, info in st.session_state['agenda_matinal'].items() if str(info.get('re_iq')) == str(re_logado_str) or perfil_usuario == 'GESTÃO'}
         
@@ -572,7 +574,7 @@ else:
 
         st.divider()
         
-        # --- ACOMPANHAMENTO PENDENTE COM BOTÃO DE SALVAR ---
+        # --- ACOMPANHAMENTO PENDENTE ---
         st.subheader(f"⚠️ Acompanhamento Pendente (Referência: {mes_acompanhamento or 'N/A'})")
         st.write(f"*Marque as monitorias realizadas e clique no botão 'Salvar' para gravar no Sheets.*")
         
@@ -798,8 +800,7 @@ else:
                         
                         for item in veiculo_1:
                             if cv1.checkbox(item, key=f"v1_{item}"): faltas.append(item)
-                        for item in veiculo_2:
-                            if cv2.checkbox(item, key=f"v2_{item}"): faltas.append(item)
+                        for item in cv2.checkbox(item, key=f"v2_{item}"): faltas.append(item)
 
                     st.divider()
                     foto_upload = st.file_uploader("📸 Anexar Foto da Vistoria (Obrigatório)", type=['png', 'jpg'])
@@ -835,7 +836,7 @@ else:
                             salvar_agenda_no_sheets(re_logado_str, st.session_state['agenda_matinal'])
                             
                             corpo_email = f"RELATÓRIO DE MATINAL (IVM 2026)\nRE: {tec_re}\nTécnico: {tec_atual}\nIQ: {st.session_state['nome_iq']}\n\nITENS FALTANTES/IRREGULARES:\n- {resumo_faltas}\n\nOBSERVAÇÕES:\n{obs_final}\n\nEVIDÊNCIA FOTO:\n{link_foto}"
-                            url_email = f"mailto:{DESTINATARIOS_EMAIL}?subject=Relatorio Matinal - RE {tec_re} - {tec_atual}&body={urllib.parse.quote(corpo_email)}"
+                            url_email = f"mailto:{DESTINATARIOS_MATINAL}?subject=Relatorio Matinal - RE {tec_re} - {tec_atual}&body={urllib.parse.quote(corpo_email)}"
                             
                             st.session_state['email_pronto'] = url_email
                             st.rerun()
@@ -892,9 +893,7 @@ else:
                 st.divider()
                 
                 foto_inst = st.file_uploader("📸 Anexar Foto da Instalação / Erro (Obrigatório)", type=['png', 'jpg'], key="foto_inst")
-                obs_inst = st.text_area("Observações da Auditoria / Tratativa:", key="obs_inst")
-                
-                resumo_erros = " / ".join(erros_encontrados) if erros_encontrados else "Instalação sem falhas registradas."
+                obs_inst = st.text_area("Observações da Tratativa:", key="obs_inst")
                 
                 if st.button("Gravar Auditoria e Gerar Disparos", type="primary"):
                     if not foto_inst:
@@ -904,8 +903,11 @@ else:
                         tec_login = tec_row['login'].iloc[0] if not tec_row.empty else "N/A"
                         tec_re = tec_row['re'].iloc[0] if ('re' in tec_row.columns and not tec_row.empty) else tec_login
                         
-                        # Salva a foto na pasta dedicada do Cloudinary
+                        # Salva a foto no Cloudinary
                         link_foto = salvar_foto_no_cloudinary(foto_inst, tec_inst, "Evidencias_Instalacao")
+                        
+                        # Formata a string para salvar na planilha com barras
+                        resumo_erros_sheets = " / ".join(erros_encontrados) if erros_encontrados else "Instalação sem falhas registradas."
                         
                         # Grava na aba Vistoria_Instalacao
                         registrar_vistoria_instalacao_sheets(
@@ -913,21 +915,25 @@ else:
                             nome_iq=st.session_state['nome_iq'],
                             login_tec=tec_login,
                             nome_tec=tec_inst,
-                            irregulares=resumo_erros,
+                            irregulares=resumo_erros_sheets,
                             obs=obs_inst,
                             link_foto=link_foto
                         )
                         
-                        # Monta mensagem para o WhatsApp
-                        msg_whatsapp = f"*AUDITORIA DE INSTALAÇÃO - TOTALE*\n\n*RE do Técnico:* {tec_re}\n*Técnico:* {tec_inst}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Falhas Encontradas:*\n- {resumo_erros}\n\n*Observações:* {obs_inst}\n\n*Evidência (Foto):*\n{link_foto}"
+                        # Formata cada erro em uma linha separada para o WhatsApp (\n)
+                        if erros_encontrados:
+                            linhas_erros = "\n".join([f"- {erro}" for erro in erros_encontrados])
+                        else:
+                            linhas_erros = "- Nenhuma falha encontrada (100% conforme)"
+
+                        # Mensagem formatada linha por linha para o WhatsApp
+                        msg_whatsapp = f"*AUDITORIA DE INSTALAÇÃO - TOTALE*\n\n*RE do Técnico:* {tec_re}\n*Técnico:* {tec_inst}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Falhas Encontradas:*\n{linhas_erros}\n\n*Observações:* {obs_inst}\n\n*Evidência (Foto):*\n{link_foto}"
                         
-                        # Link universal para API do WhatsApp focado no ID do grupo fornecido
-                        # A API wa.me aceita o ID do grupo diretamente, ou redireciona via web
                         url_whatsapp = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_whatsapp)}"
                         
-                        # Monta link para o E-mail de backup
-                        corpo_email = f"RELATÓRIO DE AUDITORIA DE INSTALAÇÃO\nRE: {tec_re}\nTécnico: {tec_inst}\nIQ: {st.session_state['nome_iq']}\n\nFALHAS ENCONTRADAS:\n- {resumo_erros}\n\nOBSERVAÇÕES:\n{obs_inst}\n\nEVIDÊNCIA FOTO:\n{link_foto}"
-                        url_email = f"mailto:{DESTINATARIOS_EMAIL}?subject=Auditoria de Instalacao - RE {tec_re} - {tec_inst}&body={urllib.parse.quote(corpo_email)}"
+                        # E-mail com a lista exata de destinatários de instalação
+                        corpo_email = f"RELATÓRIO DE AUDITORIA DE INSTALAÇÃO\nRE: {tec_re}\nTécnico: {tec_inst}\nIQ: {st.session_state['nome_iq']}\n\nFALHAS ENCONTRADAS:\n{linhas_erros}\n\nOBSERVAÇÕES:\n{obs_inst}\n\nEVIDÊNCIA FOTO:\n{link_foto}"
+                        url_email = f"mailto:{DESTINATARIOS_INSTALACAO}?subject=Auditoria de Instalacao - RE {tec_re} - {tec_inst}&body={urllib.parse.quote(corpo_email)}"
                         
                         st.session_state['zap_pronto'] = url_whatsapp
                         st.session_state['email_instalacao'] = url_email
