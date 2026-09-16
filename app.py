@@ -15,7 +15,7 @@ import cloudinary
 import cloudinary.uploader
 
 # --- CONFIGURAÇÕES DE DESTINATÁRIOS E WHATSAPP ---
-DESTINATARIOS_MATINAL = "helifa.silva@totaletecnologia.com.br,alexandre.sousa@totaletecnologia.com.br,genilson.almeida@totaletecnologia.com.br,vania.ssousa@totaletecnologia.com.br,elcio.nunes@totaletecnologia.com.br,denis.vick@totaletecnologia.com.br,paulo.correia@totaletecnologia.com.br,richard.silva@totaletecnologia.com.br,ariel.dias@totaletecnologia.com.br,alexandre.gianechini@totaletecnologia.com.br"
+DESTINATARIOS_MATINAL = "helifa.silva@totaletecnologia.com.br,alexandre.sousa@totaletecnologia.com.br,genilson.almeida@totaletecnologia.com.br,vania.ssousa@totaletecnologia.com.br,paulo.correia@totaletecnologia.com.br,richard.silva@totaletecnologia.com.br,ariel.dias@totaletecnologia.com.br,alexandre.gianechini@totaletecnologia.com.br"
 DESTINATARIOS_INSTALACAO = "alexandre.sousa@totaletecnologia.com.br,genilson.almeida@totaletecnologia.com.br,vania.ssousa@totaletecnologia.com.br,elcio.nunes@totaletecnologia.com.br,denis.vick@totaletecnologia.com.br"
 
 WHATSAPP_GRUPO_ID = "5511993259361-1587731165@g.us"
@@ -78,7 +78,7 @@ ITENS_MATINAL = {
         "EXTENSÃO DE TOMADA ELÉTRICA DE 10 A 20M", "BROCA DE WÍDEA LONGA 8\"", "BROCA DE WÍDEA LONGA 10\"", 
         "MALA DE FERRAMENTAS", "BALDE DE LONA (BORNAL)", "TELEFONE GÔNDOLA COM IDENTIFICADOR DE CHAMADA", 
         "LANTERNA", "ESCADA DE FIBRA (6Mts)", "ESCADA DE 4 E/OU 5 DEGRAUS ALTURA UTIL 1.50m (MÍNIMO)", 
-        "CÂMERA SONDA ENDOSCÓPICA", "CHAVEIRO MINI ISOLATOR", "CAPA DE MINI", "NUMERAL"
+        "CÂMERA SONDA ENDOSCÓPICA", "CHAVEIRO MINI ISOLATOR", "capa de mini", "numeral"
     ],
     "📡 GPON/Outros": [
         "CLIVADOR COM GABARITO PROFIBER", "GABARITO DE CONECTORIZAÇÃO", "ALICATE DECAPADOR DE FIBRA ÓPTICA", 
@@ -114,7 +114,7 @@ ITENS_MATINAL = {
 }
 
 # --- 1. Configuração Inicial ---
-st.set_page_config(page_title="Portal IQ - TOTALE ABC", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Portal IQ - Totale", layout="wide", initial_sidebar_state="expanded")
 
 if 'logado' not in st.session_state: st.session_state['logado'] = False
 if 'pagina_atual' not in st.session_state: st.session_state['pagina_atual'] = "Dashboard"
@@ -517,7 +517,7 @@ if not st.session_state['logado']:
     with col_logo:
         if os.path.exists("novo-logo-totale.png"): st.image(Image.open("novo-logo-totale.png"), use_container_width=True)
             
-    st.title("Acesso Operacional - IQ TOTALE ABC")
+    st.title("Acesso Operacional - Totale")
     
     with st.form("form_login"):
         re_input = st.text_input("RE (Login)")
@@ -642,7 +642,7 @@ else:
 
     # --- PÁGINA 1: DASHBOARD ---
     elif st.session_state['pagina_atual'] == "Dashboard":
-        titulo_painel = f"Painel Operacional IQ - {st.session_state['nome_iq']}"
+        titulo_painel = f"Painel Operacional - {st.session_state['nome_iq']}"
         if perfil_usuario == 'GESTÃO' and 're_alvo_str' in locals() and re_alvo_str:
             nome_iq_filtro = dados_iqs[dados_iqs['re_iq'] == re_alvo_str]['nome_iq'].values
             if nome_iq_filtro: titulo_painel = f"Painel Operacional (Visão: {nome_iq_filtro[0]})"
@@ -658,14 +658,12 @@ else:
         if not df_res_mat.empty:
             df_res_mat.columns = [str(c).strip() for c in df_res_mat.columns]
             
-            # Procurar coluna Nota_Geral (independente de maiúsculas/minúsculas)
             col_ng = next((c for c in df_res_mat.columns if c.upper() == 'NOTA_GERAL'), None)
             if col_ng:
                 vals_g = df_res_mat[col_ng].dropna()
                 if not vals_g.empty:
                     nota_geral_val = str(vals_g.iloc[-1])
             
-            # Procurar colunas RE_IQ e Nota_IQ
             col_re = next((c for c in df_res_mat.columns if c.upper() == 'RE_IQ'), None)
             col_niq = next((c for c in df_res_mat.columns if c.upper() == 'NOTA_IQ'), None)
             
@@ -676,7 +674,7 @@ else:
                     if not vals_iq.empty:
                         nota_iq_val = str(vals_iq.iloc[-1])
 
-        st.markdown("### 📊 Resultado da Matinal Oficial CLARO")
+        st.markdown("### 📊 Resultado da Matinal (Destaque)")
         c_nota1, c_nota2 = st.columns(2)
         with c_nota1:
             st.markdown('<div class="metric-card-blue">', unsafe_allow_html=True)
@@ -992,7 +990,7 @@ else:
                     if tec_atual != "Selecione...":
                         st.info(f"⚠️ Assinale abaixo os itens que estão **FALTANDO** ou **IRREGULARES** para **{tec_atual}** ({data_selecionada_exec}).")
                         
-                        # CAMPOS OBRIGATÓRIOS SEPARADOS (LOTE CAPACETE E VENCIMENTO CARNEIRA)
+                        # CAMPOS OBRIGATÓRIOS (LOTES, VALIDADES E TAMANHOS)
                         st.markdown("### 🏷️ Informações de Lotes, Validades e Tamanhos (Preenchimento Obrigatório)")
                         col_l1, col_l2, col_l3 = st.columns(3)
                         with col_l1:
@@ -1033,9 +1031,40 @@ else:
 
                         renderizar_itens_matinal(ITENS_MATINAL["🛠️ Ferramental"], t_ferr)
                         renderizar_itens_matinal(ITENS_MATINAL["📡 GPON/Outros"], t_gpon)
-                        renderizar_itens_matinal(ITENS_MATINAL["👷 EPI / EPC"], t_epi)
+                        
+                        # INCLUINDO OS ITENS OBRIGATÓRIOS NA ABA DE EPI/EPC PARA TICAR SE TEM
+                        with t_epi:
+                            cols_epi = st.columns(2)
+                            itens_epi_base = ITENS_MATINAL["👷 EPI / EPC"]
+                            for i, item in enumerate(itens_epi_base):
+                                if cols_epi[i % 2].checkbox(item, key=f"mat_epi_{i}"):
+                                    faltas.append(item)
+                            
+                            st.divider()
+                            st.write("**Confirmação de Posse dos Itens Obrigatórios:**")
+                            if not cols_epi[0].checkbox("Possui Capacete e Carneira?", key="posse_cap"): faltas.append("Capacete/Carneira não ticado como presente")
+                            if not cols_epi[1].checkbox("Possui Cinto de Segurança?", key="posse_cin"): faltas.append("Cinto não ticado como presente")
+                            if not cols_epi[0].checkbox("Possui Talabarte?", key="posse_tal"): faltas.append("Talabarte não ticado como presente")
+                            if not cols_epi[1].checkbox("Possui Luva Pigmentada?", key="posse_lvp"): faltas.append("Luva Pigmentada não ticado como presente")
+                            if not cols_epi[0].checkbox("Possui Luva Vaqueta?", key="posse_lvv"): faltas.append("Luva Vaqueta não ticado como presente")
+                            if not cols_epi[1].checkbox("Possui Protetor Solar?", key="posse_pro"): faltas.append("Protetor Solar não ticado como presente")
+
                         renderizar_itens_matinal(ITENS_MATINAL["🧹 Asseio"], t_asseio)
-                        renderizar_itens_matinal(ITENS_MATINAL["📱 Sistemas"], t_sis)
+                        
+                        # INCLUINDO UNIFORMES NA ABA DE SISTEMAS OU ASSEIO PARA TICAR SE TEM
+                        with t_sis:
+                            cols_sis = st.columns(2)
+                            itens_sis_base = ITENS_MATINAL["📱 Sistemas"]
+                            for i, item in enumerate(itens_sis_base):
+                                if cols_sis[i % 2].checkbox(item, key=f"mat_sis_{i}"):
+                                    faltas.append(item)
+                                    
+                            st.divider()
+                            st.write("**Confirmação de Uniformes:**")
+                            if not cols_sis[0].checkbox("Possui Uniforme - Camisa?", key="posse_cam"): faltas.append("Uniforme Camisa não ticado")
+                            if not cols_sis[1].checkbox("Possui Uniforme - Calça?", key="posse_calc"): faltas.append("Uniforme Calça não ticado")
+                            if not cols_sis[0].checkbox("Possui Uniforme - Jaqueta?", key="posse_jaq"): faltas.append("Uniforme Jaqueta não ticado")
+
                         renderizar_itens_matinal(ITENS_MATINAL["🚗 Veículo"], t_veic)
 
                         st.divider()
@@ -1181,7 +1210,7 @@ else:
                             linhas_erros = "- Nenhuma falha encontrada (100% conforme)"
 
                         fotos_txt = "\n".join(links_fotos)
-                        msg_whatsapp = f"*AUDITORIA DE INSTALAÇÃO - TOTALE ABC*\n\n*Contrato:* {num_contrato}\n*RE do Técnico:* {tec_re}\n*Técnico:* {tec_inst}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Falhas Encontradas:*\n{linhas_erros}\n\n*Observações:* {obs_inst}\n\n*Evidências (Fotos):*\n{fotos_txt}"
+                        msg_whatsapp = f"*AUDITORIA DE INSTALAÇÃO - TOTALE*\n\n*Contrato:* {num_contrato}\n*RE do Técnico:* {tec_re}\n*Técnico:* {tec_inst}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Falhas Encontradas:*\n{linhas_erros}\n\n*Observações:* {obs_inst}\n\n*Evidências (Fotos):*\n{fotos_txt}"
                         url_whatsapp = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_whatsapp)}"
                         
                         corpo_email = f"RELATÓRIO DE AUDITORIA DE INSTALAÇÃO\nContrato: {num_contrato}\nRE: {tec_re}\nTécnico: {tec_inst}\nIQ: {st.session_state['nome_iq']}\n\nFALHAS ENCONTRADAS:\n{linhas_erros}\n\nOBSERVAÇÕES:\n{obs_inst}\n\nEVIDÊNCIA FOTO:\n{fotos_txt}"
