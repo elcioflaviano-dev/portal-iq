@@ -72,6 +72,8 @@ if 'logado' not in st.session_state: st.session_state['logado'] = False
 if 'pagina_atual' not in st.session_state: st.session_state['pagina_atual'] = "Dashboard"
 if 'email_pronto' not in st.session_state: st.session_state['email_pronto'] = None
 if 'zap_pronto' not in st.session_state: st.session_state['zap_pronto'] = None
+if 'tec_selecionado_atalho' not in st.session_state: st.session_state['tec_selecionado_atalho'] = None
+if 'aba_matinal_ativa' not in st.session_state: st.session_state['aba_matinal_ativa'] = 0
 
 # --- Estilização CSS ---
 st.markdown("""
@@ -454,6 +456,7 @@ else:
             st.rerun()
         if st.button("📋 Agendamento de Matinal", use_container_width=True): 
             st.session_state['pagina_atual'] = "Matinal"
+            st.session_state['aba_matinal_ativa'] = 0
             st.rerun()
         if st.button("🛠️ Vistoria de Instalação", use_container_width=True): 
             st.session_state['pagina_atual'] = "Instalacao"
@@ -560,18 +563,26 @@ else:
 
         st.divider()
         
-        # --- AGENDA DE MATINAIS (COM PERMISSÃO DE EDIÇÃO PARA GESTÃO) ---
-        st.subheader("📅 Agenda de Matinais")
+        # --- AGENDA DE MATINAIS (COM LINKS DE ATALHO DIRETO) ---
+        st.subheader("📅 Sua Agenda de Matinais (Clique no nome para realizar a vistoria)")
         agenda_do_usuario = {tec: info for tec, info in st.session_state['agenda_matinal'].items() if str(info.get('re_iq')) == str(re_logado_str) or perfil_usuario == 'GESTÃO'}
         
         if not agenda_do_usuario:
-            st.info("Sua agenda está vazia.")
+            st.info("Sua agenda está vazia. Vá na aba 'Agendamento de Matinal' para adicionar.")
         else:
             for tec, info in list(agenda_do_usuario.items()):
-                c_age1, c_age2 = st.columns([4, 1])
-                c_age1.write(f"📌 **Data:** {info['data']} | **Técnico:** {tec} | **IQ Resp:** {info['iq_nome']} (RE: {info['re_iq']})")
+                c_dash1, c_dash2, c_dash3 = st.columns([3, 2, 1])
+                c_dash1.write(f"📌 **Data:** {info['data']}")
+                
+                # Botão de Atalho Direto para a Matinal
+                if c_dash2.button(f"👤 {tec}", key=f"btn_link_{tec}", help="Clique para ir direto à execução"):
+                    st.session_state['tec_selecionado_atalho'] = tec
+                    st.session_state['pagina_atual'] = "Matinal"
+                    st.session_state['aba_matinal_ativa'] = 1
+                    st.rerun()
+                    
                 if perfil_usuario == 'GESTÃO' or str(info.get('re_iq')) == str(re_logado_str):
-                    if c_age2.button("🗑️ Remover", key=f"rm_dash_{tec}"):
+                    if c_dash3.button("🗑️ Remover", key=f"rm_dash_{tec}"):
                         del st.session_state['agenda_matinal'][tec]
                         salvar_agenda_no_sheets(info['re_iq'], st.session_state['agenda_matinal'])
                         st.rerun()
@@ -694,9 +705,11 @@ else:
 
                 st.dataframe(df_exibir.style.map(colorir_sim_nao), hide_index=True, use_container_width=True)
 
-    # --- PÁGINA 3: MATINAL ---
+    # --- PÁGINA 3: MATINAL (COM SELEÇÃO DE DATA E FILTRAGEM DE TÉCNICOS) ---
     elif st.session_state['pagina_atual'] == "Matinal":
         st.title("📋 Agendamento e Execução da Matinal")
+        
+        # Mantém a aba ativa sincronizada com o clique do atalho do Dashboard
         tab_agendar, tab_executar = st.tabs(["1. Agendar Téc", "2. Executar Vistoria (Checklist)"])
         
         with tab_agendar:
@@ -741,106 +754,128 @@ else:
                 st.write("")
                 if st.button("🧹 Limpar Tela e Voltar para Agenda"):
                     st.session_state['email_pronto'] = None
+                    st.session_state['tec_selecionado_atalho'] = None
                     st.rerun()
             else:
-                tec_atual = st.selectbox("Selecione o Téc na Agenda para Vistoriar:", ["Selecione..."] + list(agenda_do_usuario.keys()))
-                
-                if tec_atual != "Selecione...":
-                    st.info("⚠️ Assinale abaixo os itens que estão **FALTANDO** ou **IRREGULARES**.")
-                    faltas = []
+                if not agenda_do_usuario:
+                    st.warning("Não há nenhum técnico agendado na sua agenda.")
+                else:
+                    # 1. Filtro por Data Agendada
+                    datas_disponiveis = sorted(list(set([info['data'] for info in agenda_do_usuario.values()])))
                     
-                    t1, t2, t3, t4, t5 = st.tabs(["🛠️ Ferramental", "📡 GPON / Fibra", "👷 EPI / EPC", "🧹 Asseio", "🚗 Veículo / Outros"])
+                    col_d1, col_d2 = st.columns(2)
+                    with col_d1:
+                        data_selecionada_exec = st.selectbox("📅 Selecione a Data da Matinal:", datas_disponiveis)
                     
-                    with t1:
-                        c1, c2, c3 = st.columns(3)
-                        ferramentas_1 = ['Alicate Crimpador RG59/58', 'Alicate Crimpador RJ11/45', 'Alicate de Bico Reto 6"', 'Alicate Corte Diagonal 6"', 'Alicate Universal 8"', 'Chaves de Fenda (G/M/P)', 'Chaves Phillips (G/M/P)', 'Chave Trava Lock / GTP', 'Chave Torque / BQ']
-                        ferramentas_2 = ['Estilete 18mm', 'Organizador de Ferramentas', 'Striper RG59/58', 'Fita Guia de Nylon 20m', 'Martelo Unha', 'Fuzimec (Cintadeira)', 'Furadeira de Impacto', 'Extensão Elétrica 10a20m']
-                        ferramentas_3 = ['Broca de Wídea 8" e 10"', 'Mala de Ferramentas', 'Balde de Lona (Bornal)', 'Telefone Gôndola', 'Lanterna', 'Escada Fibra 6m', 'Escada 4/5 Degraus', 'Câmera Sonda Endoscópica', 'Chaveiro Mini Isolator']
-                        
-                        for item in ferramentas_1:
-                            if c1.checkbox(item, key=f"f1_{item}"): faltas.append(item)
-                        for item in ferramentas_2:
-                            if c2.checkbox(item, key=f"f2_{item}"): faltas.append(item)
-                        for item in ferramentas_3:
-                            if c3.checkbox(item, key=f"f3_{item}"): faltas.append(item)
-
-                    with t2:
-                        cg1, cg2 = st.columns(2)
-                        gpon_1 = ['Clivador c/ Gabarito Profiber', 'Gabarito de Conectorização', 'Alicate Decapador Fibra', 'Alicate Decapador Drop', 'Suporte de Escada p/ Clivador', 'Suporte p/ Bobina', 'Testador Cabo de Rede', 'Kit LVM']
-                        gpon_2 = ['Caneta de Limpeza Óptica', 'Caneta Óptica (Laser)', 'Kit Lenços p/ Limpeza AGC', 'Álcool Isopropílico', 'Dispenser p/ Líquidos', 'DBAM / Trilithic', 'Power Meter']
-                        
-                        for item in gpon_1:
-                            if cg1.checkbox(item, key=f"g1_{item}"): faltas.append(item)
-                        for item in gpon_2:
-                            if cg2.checkbox(item, key=f"g2_{item}"): faltas.append(item)
-
-                    with t3:
-                        ce1, ce2 = st.columns(2)
-                        epi_1 = ['Capacete c/ Aba e Jugular', 'Capa de Chuva', 'Cinto de Segurança', 'Talabarte de Segurança', 'Manta de Proteção', 'Luvas Pigmentada', 'Luvas Vaqueta', 'Óculos de Proteção']
-                        epi_2 = ['3 Cones', 'Bandeirola p/ Escada', 'Nivelador de Escada', 'Multímetro / Chave Teste', 'Máscara Semifacial', 'Rolo Fita Zebrada', 'Protetor Solar', 'Pro-Pé']
-                        
-                        for item in epi_1:
-                            if ce1.checkbox(item, key=f"e1_{item}"): faltas.append(item)
-                        for item in epi_2:
-                            if ce2.checkbox(item, key=f"e2_{item}"): faltas.append(item)
-                            
-                    with t4:
-                        ca1, ca2 = st.columns(2)
-                        asseio_1 = ['Barba Feita', 'Higiene Pessoal', 'Corte de Cabelo Padrão', 'Uso de Adornos (Irregular)']
-                        asseio_2 = ['Camiseta', 'Calça', 'Bota', 'Cinto Pessoal', 'Jaqueta', 'Crachá']
-                        
-                        for item in asseio_1:
-                            if ca1.checkbox(item, key=f"as1_{item}"): faltas.append(item)
-                        for item in asseio_2:
-                            if ca2.checkbox(item, key=f"as2_{item}"): faltas.append(item)
-
-                    with t5:
-                        cv1, cv2 = st.columns(2)
-                        veiculo_1 = ['Limpeza do Veículo', 'Organização do Veículo', 'Avarias no Veículo']
-                        veiculo_2 = ['PDA (Logado / Bat > 50%)', 'Book Fiscal', 'Flanela', 'Chip de Telefonia', 'Escova e Pá de Lixo']
-                        
-                        for item in veiculo_1:
-                            if cv1.checkbox(item, key=f"v1_{item}"): faltas.append(item)
-                        for item in cv2.checkbox(item, key=f"v2_{item}"): faltas.append(item)
-
-                    st.divider()
-                    foto_upload = st.file_uploader("📸 Anexar Foto da Vistoria (Obrigatório)", type=['png', 'jpg'])
-                    obs_final = st.text_area("Observações da Tratativa:")
-
-                    resumo_faltas = " / ".join(faltas) if faltas else "Todas as ferramentas e condições em conformidade."
+                    # Filtra os técnicos que possuem agendamento para a data escolhida
+                    tecs_na_data = [tec for tec, info in agenda_do_usuario.items() if info['data'] == data_selecionada_exec]
                     
-                    if st.button("Gravar Vistoria e Gerar E-mail", type="primary"):
-                        if not foto_upload:
-                            st.warning("⚠️ O envio da foto é obrigatório para comprovação.")
-                        else:
-                            tec_row = equipe_vigente[equipe_vigente['nome'] == tec_atual]
-                            tec_login = tec_row['login'].iloc[0] if not tec_row.empty else "N/A"
-                            tec_re = tec_row['re'].iloc[0] if ('re' in tec_row.columns and not tec_row.empty) else tec_login
+                    # Se veio do atalho do dashboard, tenta pré-selecionar o técnico se ele estiver na data
+                    indice_default = 0
+                    if st.session_state.get('tec_selecionado_atalho') in tecs_na_data:
+                        indice_default = tecs_nao_cert = tecs_na_data.index(st.session_state['tec_selecionado_atalho']) + 1
+                    
+                    with col_d2:
+                        tec_atual = st.selectbox("Selecione o Técnico Agendado:", ["Selecione..."] + tecs_na_data, index=indice_default)
+                    
+                    if tec_atual != "Selecione...":
+                        st.info(f"⚠️ Assinale abaixo os itens que estão **FALTANDO** ou **IRREGULARES** para **{tec_atual}** ({data_selecionada_exec}).")
+                        faltas = []
+                        
+                        t1, t2, t3, t4, t5 = st.tabs(["🛠️ Ferramental", "📡 GPON / Fibra", "👷 EPI / EPC", "🧹 Asseio", "🚗 Veículo / Outros"])
+                        
+                        with t1:
+                            c1, c2, c3 = st.columns(3)
+                            ferramentas_1 = ['Alicate Crimpador RG59/58', 'Alicate Crimpador RJ11/45', 'Alicate de Bico Reto 6"', 'Alicate Corte Diagonal 6"', 'Alicate Universal 8"', 'Chaves de Fenda (G/M/P)', 'Chaves Phillips (G/M/P)', 'Chave Trava Lock / GTP', 'Chave Torque / BQ']
+                            ferramentas_2 = ['Estilete 18mm', 'Organizador de Ferramentas', 'Striper RG59/58', 'Fita Guia de Nylon 20m', 'Martelo Unha', 'Fuzimec (Cintadeira)', 'Furadeira de Impacto', 'Extensão Elétrica 10a20m']
+                            ferramentas_3 = ['Broca de Wídea 8" e 10"', 'Mala de Ferramentas', 'Balde de Lona (Bornal)', 'Telefone Gôndola', 'Lanterna', 'Escada Fibra 6m', 'Escada 4/5 Degraus', 'Câmera Sonda Endoscópica', 'Chaveiro Mini Isolator']
                             
-                            link_foto = salvar_foto_no_cloudinary(foto_upload, tec_atual, "Evidencias_Matinal")
+                            for item in ferramentas_1:
+                                if c1.checkbox(item, key=f"f1_{item}"): faltas.append(item)
+                            for item in ferramentas_2:
+                                if c2.checkbox(item, key=f"f2_{item}"): faltas.append(item)
+                            for item in ferramentas_3:
+                                if c3.checkbox(item, key=f"f3_{item}"): faltas.append(item)
+
+                        with t2:
+                            cg1, cg2 = st.columns(2)
+                            gpon_1 = ['Clivador c/ Gabarito Profiber', 'Gabarito de Conectorização', 'Alicate Decapador Fibra', 'Alicate Decapador Drop', 'Suporte de Escada p/ Clivador', 'Suporte p/ Bobina', 'Testador Cabo de Rede', 'Kit LVM']
+                            gpon_2 = ['Caneta de Limpeza Óptica', 'Caneta Óptica (Laser)', 'Kit Lenços p/ Limpeza AGC', 'Álcool Isopropílico', 'Dispenser p/ Líquidos', 'DBAM / Trilithic', 'Power Meter']
                             
-                            registrar_vistoria_completa(
-                                re_iq=re_logado_str,
-                                nome_iq=st.session_state['nome_iq'],
-                                login_tec=tec_login,
-                                nome_tec=tec_atual,
-                                tipo="Matinal",
-                                irregulares=resumo_faltas,
-                                obs=obs_final,
-                                link_foto=link_foto
-                            )
+                            for item in gpon_1:
+                                if cg1.checkbox(item, key=f"g1_{item}"): faltas.append(item)
+                            for item in gpon_2:
+                                if cg2.checkbox(item, key=f"g2_{item}"): faltas.append(item)
+
+                        with t3:
+                            ce1, ce2 = st.columns(2)
+                            epi_1 = ['Capacete c/ Aba e Jugular', 'Capa de Chuva', 'Cinto de Segurança', 'Talabarte de Segurança', 'Manta de Proteção', 'Luvas Pigmentada', 'Luvas Vaqueta', 'Óculos de Proteção']
+                            epi_2 = ['3 Cones', 'Bandeirola p/ Escada', 'Nivelador de Escada', 'Multímetro / Chave Teste', 'Máscara Semifacial', 'Rolo Fita Zebrada', 'Protetor Solar', 'Pro-Pé']
                             
-                            if aba_acompanhamento:
-                                atualizar_celula_especifica(aba_acompanhamento, tec_login, 'ACOMPANHAMENTO', 'SIM')
+                            for item in epi_1:
+                                if ce1.checkbox(item, key=f"e1_{item}"): faltas.append(item)
+                            for item in epi_2:
+                                if ce2.checkbox(item, key=f"e2_{item}"): faltas.append(item)
                                 
-                            del st.session_state['agenda_matinal'][tec_atual]
-                            salvar_agenda_no_sheets(re_logado_str, st.session_state['agenda_matinal'])
+                        with t4:
+                            ca1, ca2 = st.columns(2)
+                            asseio_1 = ['Barba Feita', 'Higiene Pessoal', 'Corte de Cabelo Padrão', 'Uso de Adornos (Irregular)']
+                            asseio_2 = ['Camiseta', 'Calça', 'Bota', 'Cinto Pessoal', 'Jaqueta', 'Crachá']
                             
-                            corpo_email = f"RELATÓRIO DE MATINAL (IVM 2026)\nRE: {tec_re}\nTécnico: {tec_atual}\nIQ: {st.session_state['nome_iq']}\n\nITENS FALTANTES/IRREGULARES:\n- {resumo_faltas}\n\nOBSERVAÇÕES:\n{obs_final}\n\nEVIDÊNCIA FOTO:\n{link_foto}"
-                            url_email = f"mailto:{DESTINATARIOS_MATINAL}?subject=Relatorio Matinal - RE {tec_re} - {tec_atual}&body={urllib.parse.quote(corpo_email)}"
+                            for item in asseio_1:
+                                if ca1.checkbox(item, key=f"as1_{item}"): faltas.append(item)
+                            for item in asseio_2:
+                                if ca2.checkbox(item, key=f"as2_{item}"): faltas.append(item)
+
+                        with t5:
+                            cv1, cv2 = st.columns(2)
+                            veiculo_1 = ['Limpeza do Veículo', 'Organização do Veículo', 'Avarias no Veículo']
+                            veiculo_2 = ['PDA (Logado / Bat > 50%)', 'Book Fiscal', 'Flanela', 'Chip de Telefonia', 'Escova e Pá de Lixo']
                             
-                            st.session_state['email_pronto'] = url_email
-                            st.rerun()
+                            for item in veiculo_1:
+                                if cv1.checkbox(item, key=f"v1_{item}"): faltas.append(item)
+                            for item in veiculo_2:
+                                if cv2.checkbox(item, key=f"v2_{item}"): faltas.append(item)
+
+                        st.divider()
+                        foto_upload = st.file_uploader("📸 Anexar Foto da Vistoria (Obrigatório)", type=['png', 'jpg'])
+                        obs_final = st.text_area("Observações da Tratativa:")
+
+                        resumo_faltas = " / ".join(faltas) if faltas else "Todas as ferramentas e condições em conformidade."
+                        
+                        if st.button("Gravar Vistoria e Gerar E-mail", type="primary"):
+                            if not foto_upload:
+                                st.warning("⚠️ O envio da foto é obrigatório para comprovação.")
+                            else:
+                                tec_row = equipe_vigente[equipe_vigente['nome'] == tec_atual]
+                                tec_login = tec_row['login'].iloc[0] if not tec_row.empty else "N/A"
+                                tec_re = tec_row['re'].iloc[0] if ('re' in tec_row.columns and not tec_row.empty) else tec_login
+                                
+                                link_foto = salvar_foto_no_cloudinary(foto_upload, tec_atual, "Evidencias_Matinal")
+                                
+                                registrar_vistoria_completa(
+                                    re_iq=re_logado_str,
+                                    nome_iq=st.session_state['nome_iq'],
+                                    login_tec=tec_login,
+                                    nome_tec=tec_atual,
+                                    tipo="Matinal",
+                                    irregulares=resumo_faltas,
+                                    obs=obs_final,
+                                    link_foto=link_foto
+                                )
+                                
+                                if aba_acompanhamento:
+                                    atualizar_celula_especifica(aba_acompanhamento, tec_login, 'ACOMPANHAMENTO', 'SIM')
+                                    
+                                del st.session_state['agenda_matinal'][tec_atual]
+                                salvar_agenda_no_sheets(re_logado_str, st.session_state['agenda_matinal'])
+                                
+                                corpo_email = f"RELATÓRIO DE MATINAL (IVM 2026)\nRE: {tec_re}\nTécnico: {tec_atual}\nIQ: {st.session_state['nome_iq']}\n\nITENS FALTANTES/IRREGULARES:\n- {resumo_faltas}\n\nOBSERVAÇÕES:\n{obs_final}\n\nEVIDÊNCIA FOTO:\n{link_foto}"
+                                url_email = f"mailto:{DESTINATARIOS_MATINAL}?subject=Relatorio Matinal - RE {tec_re} - {tec_atual}&body={urllib.parse.quote(corpo_email)}"
+                                
+                                st.session_state['email_pronto'] = url_email
+                                st.session_state['tec_selecionado_atalho'] = None
+                                st.rerun()
 
     # --- PÁGINA 4: VISTORIA DE INSTALAÇÃO ---
     elif st.session_state['pagina_atual'] == "Instalacao":
@@ -878,7 +913,7 @@ else:
                         cols = st.columns(2)
                         for i, item in enumerate(lista_itens):
                             col_atual = cols[i % 2]
-                            if col_atual.checkbox(item, key=f"inst_{item[:4]}"):
+                            if col_atual.checkbox(item, key=f"inst_{item[:4]}_{i}"):
                                 erros_encontrados.append(item)
 
                 renderizar_colunas_checklist(FALHAS_INSTALACAO["Tap/Isolador/Emenda"], tab1)
