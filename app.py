@@ -296,18 +296,18 @@ def registrar_vistoria_completa(re_iq, nome_iq, login_tec, nome_tec, tipo, irreg
     except Exception as e:
         st.error(f"Erro ao gravar histórico de vistoria: {e}")
 
-def registrar_vistoria_instalacao_sheets(re_iq, nome_iq, login_tec, nome_tec, irregulares, obs, link_foto):
+def registrar_vistoria_instalacao_sheets(re_iq, nome_iq, login_tec, nome_tec, contrato, irregulares, obs, link_foto):
     try:
         planilha = conectar_planilha()
         try:
             ws = planilha.worksheet("Vistoria_Instalacao")
         except:
-            ws = planilha.add_worksheet(title="Vistoria_Instalacao", rows=100, cols=10)
-            ws.append_row(["ID_Vistoria", "Data_Hora", "RE_IQ", "Nome_IQ", "Login_Tecnico", "Nome_Tecnico", "Erros_Instalacao", "Observacao", "Link_Foto", "Status"])
+            ws = planilha.add_worksheet(title="Vistoria_Instalacao", rows=100, cols=11)
+            ws.append_row(["ID_Vistoria", "Data_Hora", "RE_IQ", "Nome_IQ", "Login_Tecnico", "Nome_Tecnico", "Contrato", "Erros_Instalacao", "Observacao", "Link_Foto", "Status"])
             
         vistoria_id = str(uuid.uuid4())[:8].upper()
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        ws.append_row([vistoria_id, data_hora, str(re_iq), nome_iq, str(login_tec), nome_tec, irregulares, obs, link_foto, "Registrada"])
+        ws.append_row([vistoria_id, data_hora, str(re_iq), nome_iq, str(login_tec), nome_tec, str(contrato), irregulares, obs, link_foto, "Registrada"])
         st.cache_data.clear()
     except Exception as e:
         st.error(f"Erro ao gravar vistoria de instalação: {e}")
@@ -461,9 +461,12 @@ else:
         if st.button("🛠️ Vistoria de Instalação", use_container_width=True): 
             st.session_state['pagina_atual'] = "Instalacao"
             st.rerun()
-        if st.button("📥 Relatórios e Exportação", use_container_width=True): 
-            st.session_state['pagina_atual'] = "Relatorios"
-            st.rerun()
+            
+        # Menu restrito apenas para Gestores
+        if perfil_usuario == 'GESTÃO':
+            if st.button("📥 Relatórios e Exportação", use_container_width=True): 
+                st.session_state['pagina_atual'] = "Relatorios"
+                st.rerun()
             
         st.divider()
         if st.button("Sair", use_container_width=True):
@@ -705,11 +708,10 @@ else:
 
                 st.dataframe(df_exibir.style.map(colorir_sim_nao), hide_index=True, use_container_width=True)
 
-    # --- PÁGINA 3: MATINAL (COM SELEÇÃO DE DATA E FILTRAGEM DE TÉCNICOS) ---
+    # --- PÁGINA 3: MATINAL ---
     elif st.session_state['pagina_atual'] == "Matinal":
         st.title("📋 Agendamento e Execução da Matinal")
         
-        # Mantém a aba ativa sincronizada com o clique do atalho do Dashboard
         tab_agendar, tab_executar = st.tabs(["1. Agendar Téc", "2. Executar Vistoria (Checklist)"])
         
         with tab_agendar:
@@ -760,17 +762,14 @@ else:
                 if not agenda_do_usuario:
                     st.warning("Não há nenhum técnico agendado na sua agenda.")
                 else:
-                    # 1. Filtro por Data Agendada
                     datas_disponiveis = sorted(list(set([info['data'] for info in agenda_do_usuario.values()])))
                     
                     col_d1, col_d2 = st.columns(2)
                     with col_d1:
                         data_selecionada_exec = st.selectbox("📅 Selecione a Data da Matinal:", datas_disponiveis)
                     
-                    # Filtra os técnicos que possuem agendamento para a data escolhida
                     tecs_na_data = [tec for tec, info in agenda_do_usuario.items() if info['data'] == data_selecionada_exec]
                     
-                    # Se veio do atalho do dashboard, tenta pré-selecionar o técnico se ele estiver na data
                     indice_default = 0
                     if st.session_state.get('tec_selecionado_atalho') in tecs_na_data:
                         indice_default = tecs_nao_cert = tecs_na_data.index(st.session_state['tec_selecionado_atalho']) + 1
@@ -834,7 +833,7 @@ else:
                             
                             for item in veiculo_1:
                                 if cv1.checkbox(item, key=f"v1_{item}"): faltas.append(item)
-                            for item in veiculo_2:
+                            for item in cv2:
                                 if cv2.checkbox(item, key=f"v2_{item}"): faltas.append(item)
 
                         st.divider()
@@ -877,7 +876,7 @@ else:
                                 st.session_state['tec_selecionado_atalho'] = None
                                 st.rerun()
 
-    # --- PÁGINA 4: VISTORIA DE INSTALAÇÃO ---
+    # --- PÁGINA 4: VISTORIA DE INSTALAÇÃO (COM CAMPO CONTRATO) ---
     elif st.session_state['pagina_atual'] == "Instalacao":
         st.title("🛠️ Vistoria e Auditoria de Instalação em Campo")
         st.write("Auditoria baseada nos códigos oficiais da Totale. Registro de evidência e disparo para o WhatsApp (Grupo IQ).")
@@ -898,7 +897,11 @@ else:
                 st.session_state['email_instalacao'] = None
                 st.rerun()
         else:
-            tec_inst = st.selectbox("Selecione o Técnico Auditado:", ["Selecione..."] + dados_completos['nome'].tolist())
+            col_tec, col_cont = st.columns(2)
+            with col_tec:
+                tec_inst = st.selectbox("Selecione o Técnico Auditado:", ["Selecione..."] + dados_completos['nome'].tolist())
+            with col_cont:
+                num_contrato = st.text_input("📄 Número do Contrato Vistoriado:")
             
             if tec_inst != "Selecione...":
                 st.info("⚠️ Marque abaixo as falhas encontradas na instalação, divididas por tópicos.")
@@ -932,6 +935,8 @@ else:
                 if st.button("Gravar Auditoria e Gerar Disparos", type="primary"):
                     if not foto_inst:
                         st.warning("⚠️ O envio da foto é obrigatório para comprovar a auditoria.")
+                    elif not num_contrato.strip():
+                        st.warning("⚠️ O número do contrato é obrigatório.")
                     else:
                         tec_row = dados_completos[dados_completos['nome'] == tec_inst]
                         tec_login = tec_row['login'].iloc[0] if not tec_row.empty else "N/A"
@@ -945,6 +950,7 @@ else:
                             nome_iq=st.session_state['nome_iq'],
                             login_tec=tec_login,
                             nome_tec=tec_inst,
+                            contrato=num_contrato,
                             irregulares=resumo_erros_sheets,
                             obs=obs_inst,
                             link_foto=link_foto
@@ -955,63 +961,66 @@ else:
                         else:
                             linhas_erros = "- Nenhuma falha encontrada (100% conforme)"
 
-                        msg_whatsapp = f"*AUDITORIA DE INSTALAÇÃO - TOTALE*\n\n*RE do Técnico:* {tec_re}\n*Técnico:* {tec_inst}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Falhas Encontradas:*\n{linhas_erros}\n\n*Observações:* {obs_inst}\n\n*Evidência (Foto):*\n{link_foto}"
+                        msg_whatsapp = f"*AUDITORIA DE INSTALAÇÃO - TOTALE*\n\n*Contrato:* {num_contrato}\n*RE do Técnico:* {tec_re}\n*Técnico:* {tec_inst}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Falhas Encontradas:*\n{linhas_erros}\n\n*Observações:* {obs_inst}\n\n*Evidência (Foto):*\n{link_foto}"
                         url_whatsapp = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_whatsapp)}"
                         
-                        corpo_email = f"RELATÓRIO DE AUDITORIA DE INSTALAÇÃO\nRE: {tec_re}\nTécnico: {tec_inst}\nIQ: {st.session_state['nome_iq']}\n\nFALHAS ENCONTRADAS:\n{linhas_erros}\n\nOBSERVAÇÕES:\n{obs_inst}\n\nEVIDÊNCIA FOTO:\n{link_foto}"
-                        url_email = f"mailto:{DESTINATARIOS_INSTALACAO}?subject=Auditoria de Instalacao - RE {tec_re} - {tec_inst}&body={urllib.parse.quote(corpo_email)}"
+                        corpo_email = f"RELATÓRIO DE AUDITORIA DE INSTALAÇÃO\nContrato: {num_contrato}\nRE: {tec_re}\nTécnico: {tec_inst}\nIQ: {st.session_state['nome_iq']}\n\nFALHAS ENCONTRADAS:\n{linhas_erros}\n\nOBSERVAÇÕES:\n{obs_inst}\n\nEVIDÊNCIA FOTO:\n{link_foto}"
+                        url_email = f"mailto:{DESTINATARIOS_INSTALACAO}?subject=Auditoria - Contrato {num_contrato} - RE {tec_re} - {tec_inst}&body={urllib.parse.quote(corpo_email)}"
                         
                         st.session_state['zap_pronto'] = url_whatsapp
                         st.session_state['email_instalacao'] = url_email
                         st.rerun()
 
-    # --- PÁGINA 5: RELATÓRIOS E EXPORTAÇÃO PARA EXCEL ---
+    # --- PÁGINA 5: RELATÓRIOS E EXPORTAÇÃO (EXCLUSIVO PARA GESTÃO) ---
     elif st.session_state['pagina_atual'] == "Relatorios":
-        st.title("📥 Relatórios e Exportação de Dados")
-        st.write("Baixe os relatórios completos de Vistorias Matinais e Auditorias de Instalação em formato Excel (.xlsx).")
-        
-        planilha_con = conectar_planilha()
-        
-        tab_exp1, tab_exp2 = st.tabs(["📊 Vistorias Matinais", "🛠️ Vistorias de Instalação"])
-        
-        with tab_exp1:
-            st.subheader("Relatório de Vistorias Matinais")
-            try:
-                ws_mat = planilha_con.worksheet("Vistorias")
-                df_mat = pd.DataFrame(ws_mat.get_all_records())
-            except:
-                df_mat = pd.DataFrame()
-                
-            if df_mat.empty:
-                st.info("Nenhum registro encontrado na aba Vistorias.")
-            else:
-                st.dataframe(df_mat, hide_index=True, use_container_width=True)
-                excel_mat = exportar_para_excel(df_mat, "vistorias_matinais.xlsx")
-                st.download_button(
-                    label="📥 Baixar Excel (Matinais)",
-                    data=excel_mat,
-                    file_name=f"Vistorias_Matinais_{datetime.now().strftime('%Y-%m-%d')}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    type="primary"
-                )
-                
-        with tab_exp2:
-            st.subheader("Relatório de Auditorias de Instalação")
-            try:
-                ws_inst = planilha_con.worksheet("Vistoria_Instalacao")
-                df_inst = pd.DataFrame(ws_inst.get_all_records())
-            except:
-                df_inst = pd.DataFrame()
-                
-            if df_inst.empty:
-                st.info("Nenhum registro encontrado na aba Vistoria_Instalacao.")
-            else:
-                st.dataframe(df_inst, hide_index=True, use_container_width=True)
-                excel_inst = exportar_para_excel(df_inst, "vistorias_instalacao.xlsx")
-                st.download_button(
-                    label="📥 Baixar Excel (Instalação)",
-                    data=excel_inst,
-                    file_name=f"Vistorias_Instalacao_{datetime.now().strftime('%Y-%m-%d')}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    type="primary"
-                )
+        if perfil_usuario != 'GESTÃO':
+            st.warning("Acesso restrito a gestores.")
+        else:
+            st.title("📥 Relatórios e Exportação de Dados")
+            st.write("Baixe os relatórios completos de Vistorias Matinais e Auditorias de Instalação em formato Excel (.xlsx).")
+            
+            planilha_con = conectar_planilha()
+            
+            tab_exp1, tab_exp2 = st.tabs(["📊 Vistorias Matinais", "🛠️ Vistorias de Instalação"])
+            
+            with tab_exp1:
+                st.subheader("Relatório de Vistorias Matinais")
+                try:
+                    ws_mat = planilha_con.worksheet("Vistorias")
+                    df_mat = pd.DataFrame(ws_mat.get_all_records())
+                except:
+                    df_mat = pd.DataFrame()
+                    
+                if df_mat.empty:
+                    st.info("Nenhum registro encontrado na aba Vistorias.")
+                else:
+                    st.dataframe(df_mat, hide_index=True, use_container_width=True)
+                    excel_mat = exportar_para_excel(df_mat, "vistorias_matinais.xlsx")
+                    st.download_button(
+                        label="📥 Baixar Excel (Matinais)",
+                        data=excel_mat,
+                        file_name=f"Vistorias_Matinais_{datetime.now().strftime('%Y-%m-%d')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        type="primary"
+                    )
+                    
+            with tab_exp2:
+                st.subheader("Relatório de Auditorias de Instalação")
+                try:
+                    ws_inst = planilha_con.worksheet("Vistoria_Instalacao")
+                    df_inst = pd.DataFrame(ws_inst.get_all_records())
+                except:
+                    df_inst = pd.DataFrame()
+                    
+                if df_inst.empty:
+                    st.info("Nenhum registro encontrado na aba Vistoria_Instalacao.")
+                else:
+                    st.dataframe(df_inst, hide_index=True, use_container_width=True)
+                    excel_inst = exportar_para_excel(df_inst, "vistorias_instalacao.xlsx")
+                    st.download_button(
+                        label="📥 Baixar Excel (Instalação)",
+                        data=excel_inst,
+                        file_name=f"Vistorias_Instalacao_{datetime.now().strftime('%Y-%m-%d')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        type="primary"
+                    )
