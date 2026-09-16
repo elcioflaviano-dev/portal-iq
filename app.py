@@ -15,7 +15,7 @@ import cloudinary
 import cloudinary.uploader
 
 # --- CONFIGURAÇÕES DE DESTINATÁRIOS E WHATSAPP ---
-DESTINATARIOS_MATINAL = "helifa.silva@totaletecnologia.com.br,alexandre.sousa@totaletecnologia.com.br,genilson.almeida@totaletecnologia.com.br,vania.ssousa@totaletecnologia.com.br,paulo.correia@totaletecnologia.com.br,richard.silva@totaletecnologia.com.br,ariel.dias@totaletecnologia.com.br,alexandre.gianechini@totaletecnologia.com.br"
+DESTINATARIOS_MATINAL = "helifa.silva@totaletecnologia.com.br,alexandre.sousa@totaletecnologia.com.br,genilson.almeida@totaletecnologia.com.br,vania.ssousa@totaletecnologia.com.br,elcio.nunes@totaletecnologia.com.br,denis.vick@totaletecnologia,paulo.correia@totaletecnologia.com.br,richard.silva@totaletecnologia.com.br,ariel.dias@totaletecnologia.com.br,alexandre.gianechini@totaletecnologia.com.br"
 DESTINATARIOS_INSTALACAO = "alexandre.sousa@totaletecnologia.com.br,genilson.almeida@totaletecnologia.com.br,vania.ssousa@totaletecnologia.com.br,elcio.nunes@totaletecnologia.com.br,denis.vick@totaletecnologia.com.br"
 
 WHATSAPP_GRUPO_ID = "5511993259361-1587731165@g.us"
@@ -502,7 +502,7 @@ if not st.session_state['logado']:
     with col_logo:
         if os.path.exists("novo-logo-totale.png"): st.image(Image.open("novo-logo-totale.png"), use_container_width=True)
             
-    st.title("Acesso Operacional - Totale")
+    st.title("Acesso Operacional - IQ TOTALE abc")
     
     with st.form("form_login"):
         re_input = st.text_input("RE (Login)")
@@ -1120,7 +1120,7 @@ else:
                             linhas_erros = "- Nenhuma falha encontrada (100% conforme)"
 
                         fotos_txt = "\n".join(links_fotos)
-                        msg_whatsapp = f"*AUDITORIA DE INSTALAÇÃO - TOTALE*\n\n*Contrato:* {num_contrato}\n*RE do Técnico:* {tec_re}\n*Técnico:* {tec_inst}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Falhas Encontradas:*\n{linhas_erros}\n\n*Observações:* {obs_inst}\n\n*Evidências (Fotos):*\n{fotos_txt}"
+                        msg_whatsapp = f"*AUDITORIA DE INSTALAÇÃO - TOTALE ABC*\n\n*Contrato:* {num_contrato}\n*RE do Técnico:* {tec_re}\n*Técnico:* {tec_inst}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Falhas Encontradas:*\n{linhas_erros}\n\n*Observações:* {obs_inst}\n\n*Evidências (Fotos):*\n{fotos_txt}"
                         url_whatsapp = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_whatsapp)}"
                         
                         corpo_email = f"RELATÓRIO DE AUDITORIA DE INSTALAÇÃO\nContrato: {num_contrato}\nRE: {tec_re}\nTécnico: {tec_inst}\nIQ: {st.session_state['nome_iq']}\n\nFALHAS ENCONTRADAS:\n{linhas_erros}\n\nOBSERVAÇÕES:\n{obs_inst}\n\nEVIDÊNCIAS FOTOS:\n{fotos_txt}"
