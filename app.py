@@ -678,7 +678,7 @@ else:
                     if not vals_iq.empty:
                         nota_iq_val = str(vals_iq.iloc[-1])
 
-        st.markdown("### 📊 Resultado da Matinal (Destaque)")
+        st.markdown("### 📊 Resultado da Matinal CLARO")
         c_nota1, c_nota2 = st.columns(2)
         with c_nota1:
             st.markdown('<div class="metric-card-blue">', unsafe_allow_html=True)
@@ -744,10 +744,10 @@ else:
                 st.markdown('<div class="metric-sub">Sem abas mensais</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
-        # CARD 2: HORAS DE MONITORIA
+        # CARD 2: HORAS DE MONITORIA RPPA
         with col2:
             st.markdown('<div class="metric-card-green">', unsafe_allow_html=True)
-            st.markdown('<div class="metric-title">⏱️ Horas de Monitoria</div>', unsafe_allow_html=True)
+            st.markdown('<div class="metric-title">⏱️ Horas de Monitoria RPPA</div>', unsafe_allow_html=True)
             
             if perfil_usuario == 'GESTÃO':
                 meta_input = st.number_input("Meta de Horas:", value=meta_alvo, step=1, key=f"meta_{re_alvo_horas}")
@@ -765,7 +765,7 @@ else:
         # CARD 3: PENDENTES
         with col3:
             st.markdown('<div class="metric-card-orange">', unsafe_allow_html=True)
-            st.markdown('<div class="metric-title">⚠️ Monitoramento Pendente</div>', unsafe_allow_html=True)
+            st.markdown('<div class="metric-title">⚠️ Monitoramento Pendente RPPA</div>', unsafe_allow_html=True)
             
             if mes_acompanhamento:
                 pendentes_hoje = len(equipe_vigente[(equipe_vigente[mes_acompanhamento] == 'NÃO') & (equipe_vigente[f'ACOMPANHAMENTO_{mes_acompanhamento}'] != 'SIM')])
