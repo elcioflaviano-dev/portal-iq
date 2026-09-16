@@ -219,7 +219,7 @@ def carregar_dados():
                 if 'LOGIN' in dados_completos.columns: dados_completos = dados_completos.drop(columns=['LOGIN'])
         meses_info = [{'nome_aba': 'Certificados', 'mes_nome': 'JULHO'}, {'nome_aba': 'Certificados', 'mes_nome': 'AGOSTO'}, {'nome_aba': 'Certificados', 'mes_nome': 'SETEMBRO'}]
     else:
-        abas_meses = [aba for aba in todas_abas if aba not in ['Base_IQ', 'Base_Tecnicos', 'Controle_IQ', 'Agenda_Matinal', 'Vistorias', 'Vistoria_Instalacao', 'Log_Acessos']]
+        abas_meses = [aba for aba in todas_abas if aba not in ['Base_IQ', 'Base_Tecnicos', 'Controle_IQ', 'Agenda_Matinal', 'Vistorias_Matinal', 'Vistoria_Instalacao', 'Log_Acessos']]
         meses_info = []
 
         for aba in abas_meses:
@@ -344,9 +344,9 @@ def registrar_vistoria_completa(re_iq, nome_iq, login_tec, nome_tec, tipo, irreg
     try:
         planilha = conectar_planilha()
         try:
-            ws = planilha.worksheet("Vistorias")
+            ws = planilha.worksheet("Vistorias_Matinal")
         except:
-            ws = planilha.add_worksheet(title="Vistorias", rows=100, cols=15)
+            ws = planilha.add_worksheet(title="Vistorias_Matinal", rows=100, cols=15)
             ws.append_row(["ID_Vistoria", "Data_Hora", "RE_IQ", "Nome_IQ", "Login_Tecnico", "Nome_Tecnico", "Tipo_Vistoria", "Itens_Irregulares", "Observacao", "Links_Fotos", "Status"])
             
         vistoria_id = str(uuid.uuid4())[:8].upper()
@@ -1078,20 +1078,20 @@ else:
             with tab_exp1:
                 st.subheader("Relatório de Vistorias Matinais")
                 try:
-                    ws_mat = planilha_con.worksheet("Vistorias")
+                    ws_mat = planilha_con.worksheet("Vistorias_Matinal")
                     df_mat = pd.DataFrame(ws_mat.get_all_records())
                 except:
                     df_mat = pd.DataFrame()
                     
                 if df_mat.empty:
-                    st.info("Nenhum registro encontrado na aba Vistorias.")
+                    st.info("Nenhum registro encontrado na aba Vistorias_Matinal.")
                 else:
                     st.dataframe(df_mat, hide_index=True, use_container_width=True)
                     excel_mat = exportar_para_excel(df_mat, "vistorias_matinais.xlsx")
                     st.download_button(
                         label="📥 Baixar Excel (Matinais)",
                         data=excel_mat,
-                        file_name=f"Vistorias_Matinais_{datetime.now().strftime('%Y-%m-%d')}.xlsx",
+                        file_name=f"Vistorias_Matinal_{datetime.now().strftime('%Y-%m-%d')}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         type="primary"
                     )
