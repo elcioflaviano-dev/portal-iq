@@ -65,6 +65,57 @@ FALHAS_INSTALACAO = {
     ]
 }
 
+# --- ITENS ATUALIZADOS DA MATINAL (BASEADO NO FORMS) ---
+ITENS_MATINAL = {
+    "🛠️ Ferramental": [
+        "ALICATE CRIMPADOR RG59/58 (PRESSÃO)", "ALICATE CRIMPADOR RJ11/45", "ALICATE DE BICO RETO 6\"", 
+        "ALICATE DE CORTE DIAGONAL 6\"", "ALICATE UNIVERSAL 8\"", "CHAVE DE FENDA 1/4 (GRANDE)", 
+        "CHAVE DE FENDA 3/16 (MÉDIA)", "CHAVE DE FENDA 1/8 (PEQUENA)", "CHAVE PHILLIPS 1/4 (GRANDE)", 
+        "CHAVE PHILLIPS 3/16 (MÉDIA)", "CHAVE PHILLIPS 1/8 (PEQUENA)", "CHAVE TRAVA LOCK - (Preta)", 
+        "CHAVE GTP SEGURANÇA - (Azul)", "ESTILETE 18MM C/ TRAVA", "CHAVE TORQUE", "CHAVE BQ", 
+        "ORGANIZADOR DE FERRAMENTAS", "STRIPER (DESCASCADOR) RG59/58", "FITA GUIA DE NYLON 20Mts", 
+        "MARTELO UNHA (500G)", "FUZIMEC (CINTADEIRA)", "FURADEIRA DE IMPACTO", 
+        "EXTENSÃO DE TOMADA ELÉTRICA DE 10 A 20M", "BROCA DE WÍDEA LONGA 8\"", "BROCA DE WÍDEA LONGA 10\"", 
+        "MALA DE FERRAMENTAS", "BALDE DE LONA (BORNAL)", "TELEFONE GÔNDOLA COM IDENTIFICADOR DE CHAMADA", 
+        "LANTERNA", "ESCADA DE FIBRA (6Mts)", "ESCADA DE 4 E/OU 5 DEGRAUS ALTURA UTIL 1.50m (MÍNIMO)", 
+        "CÂMERA SONDA ENDOSCÓPICA", "CHAVEIRO MINI ISOLATOR", "MININUMERAL"
+    ],
+    "📡 GPON / Outros": [
+        "CLIVADOR COM GABARITO PROFIBER", "GABARITO DE CONECTORIZAÇÃO", "ALICATE DECAPADOR DE FIBRA ÓPTICA", 
+        "SUPORTE DE ESCADA PARA CLIVADOR", "SUPORTE PARA BOBINA DE CABO", "TESTADOR DE CABO DE REDE", 
+        "CANETA DE LIMPEZA ÓPTICA", "ALICATE DECAPADOR DE DROP (BETTER)",
+        "BOOK FISCAL", "MANTA DE PROTEÇÃO", "FLANELA", "CHIP DE TELEFONIA", "ESCOVA DE LIMPEZA E PÁ DE LIXO", 
+        "KIT LENÇOS PARA LIMPEZA FIBRA AGC", "ÁLCOOL ISOPROPÍLICO", "DISPENSER PARA LÍQUIDOS",
+        "DBAM / TRILITHIC", "POWER METER", "CANETA ÓPTICA"
+    ],
+    "👷 EPI / EPC": [
+        "CAPACETE COM ABA TOTAL E JUGULAR", "CAPA DE CHUVA", "CINTO DE SEGURANÇA", 
+        "TALABARTE DE SEGURANÇA - POSICIONAMENTO E/OU ANCORAGEM", "KIT LVM", "PAR DE LUVAS PIGMENTADA", 
+        "PAR DE LUVAS DE VAQUETA (COURO)", "ÓCULOS DE PROTEÇÃO", "3 CONES", "BANDEIROLA PARA ESCADA DE 6Mts", 
+        "NIVELADOR DE ESCADA", "MULTIMETRO OU CHAVE TESTE", "MÁSCARA PROTEÇÃO SEMIFACIAL", 
+        "ROLO DE FITA ZEBRADA", "PROTETOR SOLAR", "PRO-PÉ",
+        "Escada: Bandeirola", "Escada: Papagaio", "Escada: Sapata", "Escada: Guia de ponta da escada", "Escada: Cinta de Borracha"
+    ],
+    "🧹 Asseio & Uniforme": [
+        "Barba feita", "Higiene pessoal", "Corte de cabelo padrão Claro", "Uso de adornos", "Crachá",
+        "Uniforme | CAMISA", "Uniforme | CALÇA", "Uniforme | JAQUETA", "Sapato de Segurança (engraxado)"
+    ],
+    "📱 Sistemas & Lotes": [
+        "PDA (Logado e bateria com mínimo de 50%)", 
+        "Acesso Conectado/Nota 10 (verificar treinamentos de 1 ponto pendentes)", 
+        "Acesso ao Conectale (portal da empresa)",
+        "Lote Capacete / Vencimento Carneira", "Lote Cinto", "Lote Talabarte", 
+        "Lote Luva Pigmentada", "Lote Luva Vaqueta", "Vencimento Protetor Solar"
+    ],
+    "🚗 Veículo": [
+        "Veículo Interno: Organizado?", "Veículo Interno: Limpo?", "Veículo Interno: Tomada Carregamento OK?", 
+        "Veículo Interno: Óleo no Nível?", "Veículo Interno: Água no Nível?",
+        "Veículo Externo: Lâmpadas Queimadas?", "Veículo Externo: Pneus em Boas Condições?", 
+        "Veículo Externo: Calotas OK?", "Veículo Externo: Rack OK?", "Veículo Externo: Avarias?", 
+        "Veículo Externo: Bandeirola OK?", "Veículo Externo: Adesivos OK?"
+    ]
+}
+
 # --- 1. Configuração Inicial ---
 st.set_page_config(page_title="Portal IQ - Totale", layout="wide", initial_sidebar_state="expanded")
 
@@ -798,7 +849,7 @@ else:
 
                 st.dataframe(df_exibir.style.map(colorir_sim_nao), hide_index=True, use_container_width=True)
 
-    # --- PÁGINA 3: MATINAL ---
+    # --- PÁGINA 3: MATINAL (ATUALIZADA COM OS ITENS DO FORMS) ---
     elif st.session_state['pagina_atual'] == "Matinal":
         st.title("📋 Agendamento e Execução da Matinal")
         
@@ -871,60 +922,25 @@ else:
                         st.info(f"⚠️ Assinale abaixo os itens que estão **FALTANDO** ou **IRREGULARES** para **{tec_atual}** ({data_selecionada_exec}).")
                         faltas = []
                         
-                        t1, t2, t3, t4, t5 = st.tabs(["🛠️ Ferramental", "📡 GPON / Fibra", "👷 EPI / EPC", "🧹 Asseio", "🚗 Veículo / Outros"])
+                        # Abas baseadas exatamente no Forms novo
+                        t_ferr, t_gpon, t_epi, t_asseio, t_sis, t_veic = st.tabs([
+                            "🛠️ Ferramental", "📡 GPON/Outros", "👷 EPI / EPC", "🧹 Asseio & Uniforme", "📱 Sistemas & Lotes", "🚗 Veículo"
+                        ])
                         
-                        with t1:
-                            c1, c2, c3 = st.columns(3)
-                            ferramentas_1 = ['Alicate Crimpador RG59/58', 'Alicate Crimpador RJ11/45', 'Alicate de Bico Reto 6"', 'Alicate Corte Diagonal 6"', 'Alicate Universal 8"', 'Chaves de Fenda (G/M/P)', 'Chaves Phillips (G/M/P)', 'Chave Trava Lock / GTP', 'Chave Torque / BQ']
-                            ferramentas_2 = ['Estilete 18mm', 'Organizador de Ferramentas', 'Striper RG59/58', 'Fita Guia de Nylon 20m', 'Martelo Unha', 'Fuzimec (Cintadeira)', 'Furadeira de Impacto', 'Extensão Elétrica 10a20m']
-                            ferramentas_3 = ['Broca de Wídea 8" e 10"', 'Mala de Ferramentas', 'Balde de Lona (Bornal)', 'Telefone Gôndola', 'Lanterna', 'Escada Fibra 6m', 'Escada 4/5 Degraus', 'Câmera Sonda Endoscópica', 'Chaveiro Mini Isolator']
-                            
-                            for item in ferramentas_1:
-                                if c1.checkbox(item, key=f"f1_{item}"): faltas.append(item)
-                            for item in ferramentas_2:
-                                if c2.checkbox(item, key=f"f2_{item}"): faltas.append(item)
-                            for item in ferramentas_3:
-                                if c3.checkbox(item, key=f"f3_{item}"): faltas.append(item)
+                        def renderizar_itens_matinal(lista_itens, aba):
+                            with aba:
+                                cols = st.columns(2)
+                                for i, item in enumerate(lista_itens):
+                                    col_atual = cols[i % 2]
+                                    if col_atual.checkbox(item, key=f"mat_{item}_{i}"):
+                                        faltas.append(item)
 
-                        with t2:
-                            cg1, cg2 = st.columns(2)
-                            gpon_1 = ['Clivador c/ Gabarito Profiber', 'Gabarito de Conectorização', 'Alicate Decapador Fibra', 'Alicate Decapador Drop', 'Suporte de Escada p/ Clivador', 'Suporte p/ Bobina', 'Testador Cabo de Rede', 'Kit LVM']
-                            gpon_2 = ['Caneta de Limpeza Óptica', 'Caneta Óptica (Laser)', 'Kit Lenços p/ Limpeza AGC', 'Álcool Isopropílico', 'Dispenser p/ Líquidos', 'DBAM / Trilithic', 'Power Meter']
-                            
-                            for item in gpon_1:
-                                if cg1.checkbox(item, key=f"g1_{item}"): faltas.append(item)
-                            for item in gpon_2:
-                                if cg2.checkbox(item, key=f"g2_{item}"): faltas.append(item)
-
-                        with t3:
-                            ce1, ce2 = st.columns(2)
-                            epi_1 = ['Capacete c/ Aba e Jugular', 'Capa de Chuva', 'Cinto de Segurança', 'Talabarte de Segurança', 'Manta de Proteção', 'Luvas Pigmentada', 'Luvas Vaqueta', 'Óculos de Proteção']
-                            epi_2 = ['3 Cones', 'Bandeirola p/ Escada', 'Nivelador de Escada', 'Multímetro / Chave Teste', 'Máscara Semifacial', 'Rolo Fita Zebrada', 'Protetor Solar', 'Pro-Pé']
-                            
-                            for item in epi_1:
-                                if ce1.checkbox(item, key=f"e1_{item}"): faltas.append(item)
-                            for item in epi_2:
-                                if ce2.checkbox(item, key=f"e2_{item}"): faltas.append(item)
-                                
-                        with t4:
-                            ca1, ca2 = st.columns(2)
-                            asseio_1 = ['Barba Feita', 'Higiene Pessoal', 'Corte de Cabelo Padrão', 'Uso de Adornos (Irregular)']
-                            asseio_2 = ['Camiseta', 'Calça', 'Bota', 'Cinto Pessoal', 'Jaqueta', 'Crachá']
-                            
-                            for item in asseio_1:
-                                if ca1.checkbox(item, key=f"as1_{item}"): faltas.append(item)
-                            for item in asseio_2:
-                                if ca2.checkbox(item, key=f"as2_{item}"): faltas.append(item)
-
-                        with t5:
-                            cv1, cv2_tab = st.columns(2)
-                            veiculo_1 = ['Limpeza do Veículo', 'Organização do Veículo', 'Avarias no Veículo']
-                            veiculo_2 = ['PDA (Logado / Bat > 50%)', 'Book Fiscal', 'Flanela', 'Chip de Telefonia', 'Escova e Pá de Lixo']
-                            
-                            for item in veiculo_1:
-                                if cv1.checkbox(item, key=f"v1_{item}"): faltas.append(item)
-                            for item in veiculo_2:
-                                if cv2_tab.checkbox(item, key=f"v2_{item}"): faltas.append(item)
+                        renderizar_itens_matinal(ITENS_MATINAL["🛠️ Ferramental"], t_ferr)
+                        renderizar_itens_matinal(ITENS_MATINAL["📡 GPON/Outros"], t_gpon)
+                        renderizar_itens_matinal(ITENS_MATINAL["👷 EPI / EPC"], t_epi)
+                        renderizar_itens_matinal(ITENS_MATINAL["🧹 Asseio & Uniforme"], t_asseio)
+                        renderizar_itens_matinal(ITENS_MATINAL["📱 Sistemas & Lotes"], t_sis)
+                        renderizar_itens_matinal(ITENS_MATINAL["🚗 Veículo"], t_veic)
 
                         st.divider()
                         fotos_upload = st.file_uploader("📸 Anexar Fotos da Vistoria (Múltiplas fotos permitidas)", type=['png', 'jpg'], accept_multiple_files=True)
@@ -1053,7 +1069,7 @@ else:
                             linhas_erros = "- Nenhuma falha encontrada (100% conforme)"
 
                         fotos_txt = "\n".join(links_fotos)
-                        msg_whatsapp = f"*AUDITORIA DE INSTALAÇÃO - TOTALE ABC*\n\n*Contrato:* {num_contrato}\n*RE do Técnico:* {tec_re}\n*Técnico:* {tec_inst}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Falhas Encontradas:*\n{linhas_erros}\n\n*Observações:* {obs_inst}\n\n*Evidências (Fotos):*\n{fotos_txt}"
+                        msg_whatsapp = f"*AUDITORIA DE INSTALAÇÃO - TOTALE*\n\n*Contrato:* {num_contrato}\n*RE do Técnico:* {tec_re}\n*Técnico:* {tec_inst}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Falhas Encontradas:*\n{linhas_erros}\n\n*Observações:* {obs_inst}\n\n*Evidências (Fotos):*\n{fotos_txt}"
                         url_whatsapp = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_whatsapp)}"
                         
                         corpo_email = f"RELATÓRIO DE AUDITORIA DE INSTALAÇÃO\nContrato: {num_contrato}\nRE: {tec_re}\nTécnico: {tec_inst}\nIQ: {st.session_state['nome_iq']}\n\nFALHAS ENCONTRADAS:\n{linhas_erros}\n\nOBSERVAÇÕES:\n{obs_inst}\n\nEVIDÊNCIAS FOTOS:\n{fotos_txt}"
