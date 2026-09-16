@@ -642,7 +642,7 @@ else:
 
     # --- PÁGINA 1: DASHBOARD ---
     elif st.session_state['pagina_atual'] == "Dashboard":
-        titulo_painel = f"Painel Operacional - {st.session_state['nome_iq']}"
+        titulo_painel = f"Painel Operacional IQ - {st.session_state['nome_iq']}"
         if perfil_usuario == 'GESTÃO' and 're_alvo_str' in locals() and re_alvo_str:
             nome_iq_filtro = dados_iqs[dados_iqs['re_iq'] == re_alvo_str]['nome_iq'].values
             if nome_iq_filtro: titulo_painel = f"Painel Operacional (Visão: {nome_iq_filtro[0]})"
