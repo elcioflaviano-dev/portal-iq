@@ -492,7 +492,7 @@ if not st.session_state['logado']:
     with col_logo:
         if os.path.exists("novo-logo-totale.png"): st.image(Image.open("novo-logo-totale.png"), use_container_width=True)
             
-    st.title("Acesso Operacional - Totale")
+    st.title("Acesso Operacional - IQ Totale ABC")
     
     with st.form("form_login"):
         re_input = st.text_input("RE (Login)")
