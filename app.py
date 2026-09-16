@@ -179,7 +179,7 @@ def carregar_dados():
                 if 'LOGIN' in dados_completos.columns: dados_completos = dados_completos.drop(columns=['LOGIN'])
         meses_info = [{'nome_aba': 'Certificados', 'mes_nome': 'JULHO'}, {'nome_aba': 'Certificados', 'mes_nome': 'AGOSTO'}, {'nome_aba': 'Certificados', 'mes_nome': 'SETEMBRO'}]
     else:
-        abas_meses = [aba for aba in todas_abas if aba not in ['Base_IQ', 'Base_Tecnicos', 'Controle_IQ', 'Vistorias', 'Vistoria_Instalacao']]
+        abas_meses = [aba for aba in todas_abas if aba not in ['Base_IQ', 'Base_Tecnicos', 'Controle_IQ', 'Agenda_Matinal', 'Vistorias', 'Vistoria_Instalacao']]
         meses_info = []
 
         for aba in abas_meses:
@@ -232,12 +232,34 @@ def carregar_controle_iq():
         try:
             ws = planilha.worksheet("Controle_IQ")
         except:
-            ws = planilha.add_worksheet(title="Controle_IQ", rows=100, cols=10)
-            ws.append_row(["RE_IQ", "META_HORAS", "REALIZADO_HORAS", "AGENDA_TECNICO", "AGENDA_DATA", "AGENDA_IQ_NOME"])
+            ws = planilha.add_worksheet(title="Controle_IQ", rows=100, cols=5)
+            ws.append_row(["RE_IQ", "META_HORAS", "REALIZADO_HORAS"])
         registros = ws.get_all_records()
         return pd.DataFrame(registros) if registros else pd.DataFrame()
     except:
         return pd.DataFrame()
+
+def carregar_agenda_matinal_sheets():
+    try:
+        planilha = conectar_planilha()
+        try:
+            ws = planilha.worksheet("Agenda_Matinal")
+        except:
+            ws = planilha.add_worksheet(title="Agenda_Matinal", rows=100, cols=10)
+            ws.append_row(["RE_IQ", "AGENDA_TECNICO", "AGENDA_DATA", "AGENDA_IQ_NOME"])
+        registros = ws.get_all_records()
+        agenda_dict = {}
+        for row in registros:
+            tec = str(row.get('AGENDA_TECNICO', '')).strip()
+            if tec:
+                agenda_dict[tec] = {
+                    'data': str(row.get('AGENDA_DATA', '')),
+                    'iq_nome': str(row.get('AGENDA_IQ_NOME', '')),
+                    're_iq': str(row.get('RE_IQ', ''))
+                }
+        return agenda_dict
+    except:
+        return {}
 
 def salvar_horas_no_sheets(re_iq, meta, realizado):
     try:
@@ -253,27 +275,25 @@ def salvar_horas_no_sheets(re_iq, meta, realizado):
                 encontrou = True
                 break
         if not encontrou:
-            ws.append_row([str(re_iq), meta, realizado, "", "", ""])
+            ws.append_row([str(re_iq), meta, realizado])
         st.cache_data.clear()
     except Exception as e:
         st.error(f"Erro ao salvar horas: {e}")
 
-def salvar_agenda_no_sheets(re_iq_responsavel, agenda_dict):
+def salvar_agenda_no_sheets(agenda_dict):
     try:
         planilha = conectar_planilha()
-        ws = planilha.worksheet("Controle_IQ")
-        registros = ws.get_all_records()
-        
+        try:
+            ws = planilha.worksheet("Agenda_Matinal")
+        except:
+            ws = planilha.add_worksheet(title="Agenda_Matinal", rows=100, cols=10)
+            
         novas_linhas = []
-        for row in registros:
-            if str(row.get('RE_IQ', '')).strip().replace('.0', '') != str(re_iq_responsavel):
-                novas_linhas.append([str(row.get('RE_IQ','')), row.get('META_HORAS',40), row.get('REALIZADO_HORAS',0), row.get('AGENDA_TECNICO',''), row.get('AGENDA_DATA',''), row.get('AGENDA_IQ_NOME','')])
-                
         for tec, info in agenda_dict.items():
-            novas_linhas.append([str(info['re_iq']), 40, 0, tec, info['data'], info['iq_nome']])
+            novas_linhas.append([str(info['re_iq']), tec, info['data'], info['iq_nome']])
                 
         ws.clear()
-        ws.append_row(["RE_IQ", "META_HORAS", "REALIZADO_HORAS", "AGENDA_TECNICO", "AGENDA_DATA", "AGENDA_IQ_NOME"])
+        ws.append_row(["RE_IQ", "AGENDA_TECNICO", "AGENDA_DATA", "AGENDA_IQ_NOME"])
         if novas_linhas:
             ws.append_rows(novas_linhas)
         st.cache_data.clear()
@@ -403,16 +423,7 @@ else:
     perfil_usuario = st.session_state.get('perfil', 'IQ')
 
     if 'agenda_matinal' not in st.session_state:
-        st.session_state['agenda_matinal'] = {}
-        if not df_ctrl.empty and 'AGENDA_TECNICO' in df_ctrl.columns:
-            for _, row in df_ctrl.iterrows():
-                tec = str(row.get('AGENDA_TECNICO', '')).strip()
-                if tec and tec != '':
-                    st.session_state['agenda_matinal'][tec] = {
-                        'data': str(row.get('AGENDA_DATA', '')),
-                        'iq_nome': str(row.get('AGENDA_IQ_NOME', '')),
-                        're_iq': str(row.get('RE_IQ', ''))
-                    }
+        st.session_state['agenda_matinal'] = carregar_agenda_matinal_sheets()
 
     meta_atual, realizado_atual = 40, 0
     if not df_ctrl.empty and 'RE_IQ' in df_ctrl.columns:
@@ -462,7 +473,6 @@ else:
             st.session_state['pagina_atual'] = "Instalacao"
             st.rerun()
             
-        # Menu restrito apenas para Gestores
         if perfil_usuario == 'GESTÃO':
             if st.button("📥 Relatórios e Exportação", use_container_width=True): 
                 st.session_state['pagina_atual'] = "Relatorios"
@@ -577,7 +587,6 @@ else:
                 c_dash1, c_dash2, c_dash3 = st.columns([3, 2, 1])
                 c_dash1.write(f"📌 **Data:** {info['data']}")
                 
-                # Botão de Atalho Direto para a Matinal
                 if c_dash2.button(f"👤 {tec}", key=f"btn_link_{tec}", help="Clique para ir direto à execução"):
                     st.session_state['tec_selecionado_atalho'] = tec
                     st.session_state['pagina_atual'] = "Matinal"
@@ -587,7 +596,7 @@ else:
                 if perfil_usuario == 'GESTÃO' or str(info.get('re_iq')) == str(re_logado_str):
                     if c_dash3.button("🗑️ Remover", key=f"rm_dash_{tec}"):
                         del st.session_state['agenda_matinal'][tec]
-                        salvar_agenda_no_sheets(info['re_iq'], st.session_state['agenda_matinal'])
+                        salvar_agenda_no_sheets(st.session_state['agenda_matinal'])
                         st.rerun()
 
         st.divider()
@@ -728,7 +737,7 @@ else:
                         'iq_nome': st.session_state['nome_iq'],
                         're_iq': re_logado_str
                     }
-                    salvar_agenda_no_sheets(re_logado_str, st.session_state['agenda_matinal'])
+                    salvar_agenda_no_sheets(st.session_state['agenda_matinal'])
                     st.success(f"Matinal agendada para {tec_agendar}!")
                     st.rerun()
             
@@ -744,7 +753,7 @@ else:
                     c1.write(f"📌 **Data:** {info['data']} | **Técnico:** {tec} | **IQ:** {info['iq_nome']} (RE: {info['re_iq']})")
                     if c2.button("🗑️ Remover", key=f"rm_mat_{tec}"):
                         del st.session_state['agenda_matinal'][tec]
-                        salvar_agenda_no_sheets(info['re_iq'], st.session_state['agenda_matinal'])
+                        salvar_agenda_no_sheets(st.session_state['agenda_matinal'])
                         st.rerun()
 
         with tab_executar:
@@ -833,7 +842,7 @@ else:
                             
                             for item in veiculo_1:
                                 if cv1.checkbox(item, key=f"v1_{item}"): faltas.append(item)
-                            for item in cv2:
+                            for item in veiculo_2:
                                 if cv2.checkbox(item, key=f"v2_{item}"): faltas.append(item)
 
                         st.divider()
@@ -867,7 +876,7 @@ else:
                                     atualizar_celula_especifica(aba_acompanhamento, tec_login, 'ACOMPANHAMENTO', 'SIM')
                                     
                                 del st.session_state['agenda_matinal'][tec_atual]
-                                salvar_agenda_no_sheets(re_logado_str, st.session_state['agenda_matinal'])
+                                salvar_agenda_no_sheets(st.session_state['agenda_matinal'])
                                 
                                 corpo_email = f"RELATÓRIO DE MATINAL (IVM 2026)\nRE: {tec_re}\nTécnico: {tec_atual}\nIQ: {st.session_state['nome_iq']}\n\nITENS FALTANTES/IRREGULARES:\n- {resumo_faltas}\n\nOBSERVAÇÕES:\n{obs_final}\n\nEVIDÊNCIA FOTO:\n{link_foto}"
                                 url_email = f"mailto:{DESTINATARIOS_MATINAL}?subject=Relatorio Matinal - RE {tec_re} - {tec_atual}&body={urllib.parse.quote(corpo_email)}"
@@ -876,7 +885,7 @@ else:
                                 st.session_state['tec_selecionado_atalho'] = None
                                 st.rerun()
 
-    # --- PÁGINA 4: VISTORIA DE INSTALAÇÃO (COM CAMPO CONTRATO) ---
+    # --- PÁGINA 4: VISTORIA DE INSTALAÇÃO ---
     elif st.session_state['pagina_atual'] == "Instalacao":
         st.title("🛠️ Vistoria e Auditoria de Instalação em Campo")
         st.write("Auditoria baseada nos códigos oficiais da Totale. Registro de evidência e disparo para o WhatsApp (Grupo IQ).")
