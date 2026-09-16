@@ -394,10 +394,10 @@ def registrar_vistoria_completa(re_iq, nome_iq, login_tec, nome_tec, tipo, irreg
         try:
             ws = planilha.worksheet("Vistorias_Matinal")
         except:
-            ws = planilha.add_worksheet(title="Vistorias_Matinal", rows=100, cols=20)
+            ws = planilha.add_worksheet(title="Vistorias_Matinal", rows=100, cols=21)
             ws.append_row([
                 "ID_Vistoria", "Data_Hora", "RE_IQ", "Nome_IQ", "Login_Tecnico", "Nome_Tecnico", 
-                "Tipo_Vistoria", "Itens_Irregulares", "Lote_Capacete_Venc", "Lote_Cinto", 
+                "Tipo_Vistoria", "Itens_Irregulares", "Lote_Capacete", "Venc_Carneira", "Lote_Cinto", 
                 "Lote_Talabarte", "Lote_Luva_Pig", "Lote_Luva_Vaq", "Venc_Protetor_Solar", 
                 "Tam_Camisa", "Tam_Calca", "Tam_Jaqueta", "Observacao", "Links_Fotos", "Status"
             ])
@@ -408,7 +408,7 @@ def registrar_vistoria_completa(re_iq, nome_iq, login_tec, nome_tec, tipo, irreg
         
         ws.append_row([
             vistoria_id, data_hora, str(re_iq), nome_iq, str(login_tec), nome_tec, tipo, irregulares,
-            extra_info.get('lote_capacete', ''), extra_info.get('lote_cinto', ''),
+            extra_info.get('lote_capacete', ''), extra_info.get('venc_carneira', ''), extra_info.get('lote_cinto', ''),
             extra_info.get('lote_talabarte', ''), extra_info.get('lote_luva_pig', ''),
             extra_info.get('lote_luva_vaq', ''), extra_info.get('venc_protetor', ''),
             extra_info.get('tam_camisa', ''), extra_info.get('tam_calca', ''),
@@ -931,21 +931,23 @@ else:
                     if tec_atual != "Selecione...":
                         st.info(f"⚠️ Assinale abaixo os itens que estão **FALTANDO** ou **IRREGULARES** para **{tec_atual}** ({data_selecionada_exec}).")
                         
-                        # CAMPOS OBRIGATÓRIOS DE LOTES, VALIDADES E TAMANHOS
+                        # CAMPOS OBRIGATÓRIOS SEPARADOS (LOTE CAPACETE E VENCIMENTO CARNEIRA)
                         st.markdown("### 🏷️ Informações de Lotes, Validades e Tamanhos (Preenchimento Obrigatório)")
                         col_l1, col_l2, col_l3 = st.columns(3)
                         with col_l1:
-                            lote_capacete = st.text_input("Lote Capacete / Vencimento Carneira *")
-                            lote_cinto = st.text_input("Lote Cinto *")
+                            lote_capacete = st.text_input("Lote Capacete *")
+                            venc_carneira = st.text_input("Vencimento Carneira *")
                         with col_l2:
+                            lote_cinto = st.text_input("Lote Cinto *")
                             lote_talabarte = st.text_input("Lote Talabarte *")
-                            lote_luva_pig = st.text_input("Lote Luva Pigmentada *")
                         with col_l3:
+                            lote_luva_pig = st.text_input("Lote Luva Pigmentada *")
                             lote_luva_vaq = st.text_input("Lote Luva Vaqueta *")
-                            venc_protetor = st.text_input("Vencimento Protetor Solar *")
 
                         st.write("")
-                        col_t1, col_t2, col_t3 = st.columns(3)
+                        col_l4, col_t1, col_t2, col_t3 = st.columns(4)
+                        with col_l4:
+                            venc_protetor = st.text_input("Vencimento Protetor Solar *")
                         with col_t1:
                             tam_camisa = st.text_input("Tamanho Uniforme | CAMISA *")
                         with col_t2:
@@ -984,7 +986,7 @@ else:
                         if st.button("Gravar Vistoria e Gerar E-mail", type="primary"):
                             if not fotos_upload:
                                 st.warning("⚠️ O envio de ao menos uma foto é obrigatório para comprovação.")
-                            elif not (lote_capacete.strip() and lote_cinto.strip() and lote_talabarte.strip() and lote_luva_pig.strip() and lote_luva_vaq.strip() and venc_protetor.strip() and tam_camisa.strip() and tam_calca.strip() and tam_jaqueta.strip()):
+                            elif not (lote_capacete.strip() and venc_carneira.strip() and lote_cinto.strip() and lote_talabarte.strip() and lote_luva_pig.strip() and lote_luva_vaq.strip() and venc_protetor.strip() and tam_camisa.strip() and tam_calca.strip() and tam_jaqueta.strip()):
                                 st.warning("⚠️ Todos os campos de Lotes, Validades e Tamanhos de Uniformes são obrigatórios.")
                             else:
                                 tec_row = equipe_vigente[equipe_vigente['nome'] == tec_atual]
@@ -995,6 +997,7 @@ else:
                                 
                                 extra_info = {
                                     'lote_capacete': lote_capacete,
+                                    'venc_carneira': venc_carneira,
                                     'lote_cinto': lote_cinto,
                                     'lote_talabarte': lote_talabarte,
                                     'lote_luva_pig': lote_luva_pig,
@@ -1024,7 +1027,7 @@ else:
                                 salvar_agenda_no_sheets(st.session_state['agenda_matinal'])
                                 
                                 fotos_txt = "\n".join(links_fotos)
-                                corpo_email = f"RELATÓRIO DE MATINAL (IVM 2026)\nRE: {tec_re}\nTécnico: {tec_atual}\nIQ: {st.session_state['nome_iq']}\n\nLOTES, VALIDADES E TAMANHOS:\n- Lote Capacete / Venc. Carneira: {lote_capacete}\n- Lote Cinto: {lote_cinto}\n- Lote Talabarte: {lote_talabarte}\n- Lote Luva Pigmentada: {lote_luva_pig}\n- Lote Luva Vaqueta: {lote_luva_vaq}\n- Venc. Protetor Solar: {venc_protetor}\n- Tamanho Camisa: {tam_camisa}\n- Tamanho Calça: {tam_calca}\n- Tamanho Jaqueta: {tam_jaqueta}\n\nITENS FALTANTES/IRREGULARES:\n- {resumo_faltas}\n\nOBSERVAÇÕES:\n{obs_final}\n\nEVIDÊNCIAS FOTOS:\n{fotos_txt}"
+                                corpo_email = f"RELATÓRIO DE MATINAL (IVM 2026)\nRE: {tec_re}\nTécnico: {tec_atual}\nIQ: {st.session_state['nome_iq']}\n\nLOTES, VALIDADES E TAMANHOS:\n- Lote Capacete: {lote_capacete}\n- Vencimento Carneira: {venc_carneira}\n- Lote Cinto: {lote_cinto}\n- Lote Talabarte: {lote_talabarte}\n- Lote Luva Pigmentada: {lote_luva_pig}\n- Lote Luva Vaqueta: {lote_luva_vaq}\n- Venc. Protetor Solar: {venc_protetor}\n- Tamanho Camisa: {tam_camisa}\n- Tamanho Calça: {tam_calca}\n- Tamanho Jaqueta: {tam_jaqueta}\n\nITENS FALTANTES/IRREGULARES:\n- {resumo_faltas}\n\nOBSERVAÇÕES:\n{obs_final}\n\nEVIDÊNCIAS FOTOS:\n{fotos_txt}"
                                 url_email = f"mailto:{DESTINATARIOS_MATINAL}?subject=Relatorio Matinal - RE {tec_re} - {tec_atual}&body={urllib.parse.quote(corpo_email)}"
                                 
                                 st.session_state['email_pronto'] = url_email
