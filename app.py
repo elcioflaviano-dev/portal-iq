@@ -576,8 +576,8 @@ else:
 
         st.divider()
         
-        # --- AGENDA DE MATINAIS (COM LINKS DE ATALHO DIRETO) ---
-        st.subheader("📅 Sua Agenda de Matinais (Clique no nome para realizar a vistoria)")
+        # --- AGENDA DE MATINAIS (EXIBE O NOME DO IQ PARA O GESTOR SABER DE QUEM É) ---
+        st.subheader("📅 Agenda de Matinais (Clique no nome para realizar a vistoria)")
         agenda_do_usuario = {tec: info for tec, info in st.session_state['agenda_matinal'].items() if str(info.get('re_iq')) == str(re_logado_str) or perfil_usuario == 'GESTÃO'}
         
         if not agenda_do_usuario:
@@ -585,7 +585,7 @@ else:
         else:
             for tec, info in list(agenda_do_usuario.items()):
                 c_dash1, c_dash2, c_dash3 = st.columns([3, 2, 1])
-                c_dash1.write(f"📌 **Data:** {info['data']}")
+                c_dash1.write(f"📌 **Data:** {info['data']} | **IQ:** {info['iq_nome']}")
                 
                 if c_dash2.button(f"👤 {tec}", key=f"btn_link_{tec}", help="Clique para ir direto à execução"):
                     st.session_state['tec_selecionado_atalho'] = tec
@@ -781,7 +781,7 @@ else:
                     
                     indice_default = 0
                     if st.session_state.get('tec_selecionado_atalho') in tecs_na_data:
-                        indice_default = tecs_nao_cert = tecs_na_data.index(st.session_state['tec_selecionado_atalho']) + 1
+                        indice_default = tecs_na_data.index(st.session_state['tec_selecionado_atalho']) + 1
                     
                     with col_d2:
                         tec_atual = st.selectbox("Selecione o Técnico Agendado:", ["Selecione..."] + tecs_na_data, index=indice_default)
