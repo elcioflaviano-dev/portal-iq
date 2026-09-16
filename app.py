@@ -108,6 +108,46 @@ def conectar_planilha():
         st.error(f"Erro ao conectar com o Google Sheets. Detalhe: {e}")
         st.stop()
 
+def registrar_log_acesso(re_iq, nome_iq, acao, pagina):
+    try:
+        planilha = conectar_planilha()
+        try:
+            ws = planilha.worksheet("Log_Acessos")
+        except:
+            ws = planilha.add_worksheet(title="Log_Acessos", rows=100, cols=6)
+            ws.append_row(["Data_Hora", "RE_IQ", "Nome_IQ", "Acao", "Pagina"])
+        
+        data_hora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        ws.append_row([data_hora, str(re_iq), nome_iq, acao, pagina])
+    except Exception as e:
+        print(f"Erro ao registrar log: {e}")
+
+def alterar_senha_sheets(re_iq, nova_senha):
+    try:
+        planilha = conectar_planilha()
+        ws = planilha.worksheet("Base_IQ")
+        registros = ws.get_all_records()
+        
+        col_re = -1
+        col_senha = -1
+        cabecalhos = [str(c).strip().upper() for c in ws.row_values(1)]
+        
+        for i, c in enumerate(cabecalhos):
+            if 'RE' in c: col_re = i + 1
+            if 'SENHA' in c: col_senha = i + 1
+            
+        if col_re == -1 or col_senha == -1:
+            return False, "Colunas RE ou Senha não encontradas na Base_IQ."
+            
+        coluna_res = ws.col_values(col_re)
+        for idx, val in enumerate(coluna_res):
+            if str(val).strip().replace('.0', '') == str(re_iq).strip():
+                ws.update_cell(idx + 1, col_senha, nova_senha.strip())
+                return True, "Senha alterada com sucesso!"
+        return False, "RE não encontrado na base."
+    except Exception as e:
+        return False, f"Erro ao atualizar senha: {e}"
+
 def configurar_cloudinary():
     try:
         cloudinary.config(
@@ -179,7 +219,7 @@ def carregar_dados():
                 if 'LOGIN' in dados_completos.columns: dados_completos = dados_completos.drop(columns=['LOGIN'])
         meses_info = [{'nome_aba': 'Certificados', 'mes_nome': 'JULHO'}, {'nome_aba': 'Certificados', 'mes_nome': 'AGOSTO'}, {'nome_aba': 'Certificados', 'mes_nome': 'SETEMBRO'}]
     else:
-        abas_meses = [aba for aba in todas_abas if aba not in ['Base_IQ', 'Base_Tecnicos', 'Controle_IQ', 'Agenda_Matinal', 'Vistorias', 'Vistoria_Instalacao']]
+        abas_meses = [aba for aba in todas_abas if aba not in ['Base_IQ', 'Base_Tecnicos', 'Controle_IQ', 'Agenda_Matinal', 'Vistorias', 'Vistoria_Instalacao', 'Log_Acessos']]
         meses_info = []
 
         for aba in abas_meses:
@@ -413,6 +453,9 @@ if not st.session_state['logado']:
             st.session_state['re_usuario'] = re_input.strip()
             st.session_state['nome_iq'] = iq_valido.iloc[0]['nome_iq']
             st.session_state['perfil'] = iq_valido.iloc[0]['PERFIL']
+            
+            # Registra Log de Login
+            registrar_log_acesso(re_input.strip(), iq_valido.iloc[0]['nome_iq'], "LOGIN", "Dashboard")
             st.rerun()
         else:
             st.error("RE ou Senha incorretos.")
@@ -460,31 +503,68 @@ else:
         st.divider()
         
         if st.button("📊 Dashboard Inicial", use_container_width=True): 
+            registrar_log_acesso(re_logado_str, st.session_state['nome_iq'], "NAVEGACAO", "Dashboard")
             st.session_state['pagina_atual'] = "Dashboard"
             st.rerun()
         if st.button("🏆 Histórico de Certificados", use_container_width=True): 
+            registrar_log_acesso(re_logado_str, st.session_state['nome_iq'], "NAVEGACAO", "Historico")
             st.session_state['pagina_atual'] = "Historico"
             st.rerun()
         if st.button("📋 Agendamento de Matinal", use_container_width=True): 
+            registrar_log_acesso(re_logado_str, st.session_state['nome_iq'], "NAVEGACAO", "Matinal")
             st.session_state['pagina_atual'] = "Matinal"
             st.session_state['aba_matinal_ativa'] = 0
             st.rerun()
         if st.button("🛠️ Vistoria de Instalação", use_container_width=True): 
+            registrar_log_acesso(re_logado_str, st.session_state['nome_iq'], "NAVEGACAO", "Instalacao")
             st.session_state['pagina_atual'] = "Instalacao"
+            st.rerun()
+        if st.button("🔑 Alterar Senha", use_container_width=True):
+            registrar_log_acesso(re_logado_str, st.session_state['nome_iq'], "NAVEGACAO", "AlterarSenha")
+            st.session_state['pagina_atual'] = "AlterarSenha"
             st.rerun()
             
         if perfil_usuario == 'GESTÃO':
             if st.button("📥 Relatórios e Exportação", use_container_width=True): 
+                registrar_log_acesso(re_logado_str, st.session_state['nome_iq'], "NAVEGACAO", "Relatorios")
                 st.session_state['pagina_atual'] = "Relatorios"
                 st.rerun()
             
         st.divider()
         if st.button("Sair", use_container_width=True):
+            registrar_log_acesso(re_logado_str, st.session_state['nome_iq'], "LOGOUT", "Sistema")
             st.session_state['logado'] = False
             st.rerun()
 
+    # --- PÁGINA: ALTERAR SENHA ---
+    if st.session_state['pagina_atual'] == "AlterarSenha":
+        st.title("🔑 Alterar Senha de Acesso")
+        st.write("Atualize sua senha de login no sistema.")
+        
+        with st.form("form_nova_senha"):
+            senha_atual = st.text_input("Senha Atual", type="password")
+            nova_senha_1 = st.text_input("Nova Senha", type="password")
+            nova_senha_2 = st.text_input("Confirme a Nova Senha", type="password")
+            btn_salvar_senha = st.form_submit_button("Salvar Nova Senha", type="primary")
+            
+        if btn_salvar_senha:
+            iq_reg = dados_iqs[dados_iqs['re_iq'] == re_logado_str]
+            if iq_reg.empty or iq_reg.iloc[0]['senha'] != senha_atual.strip():
+                st.error("A senha atual está incorreta.")
+            elif not nova_senha_1.strip():
+                st.error("A nova senha não pode estar vazia.")
+            elif nova_senha_1.strip() != nova_senha_2.strip():
+                st.error("As senhas novas não coincidem.")
+            else:
+                sucesso, msg = alterar_senha_sheets(re_logado_str, nova_senha_1)
+                if sucesso:
+                    st.success("✅ Senha alterada com sucesso! Faça login novamente ou continue utilizando o sistema.")
+                    st.cache_data.clear()
+                else:
+                    st.error(f"Erro: {msg}")
+
     # --- PÁGINA 1: DASHBOARD ---
-    if st.session_state['pagina_atual'] == "Dashboard":
+    elif st.session_state['pagina_atual'] == "Dashboard":
         titulo_painel = f"Painel Operacional - {st.session_state['nome_iq']}"
         if perfil_usuario == 'GESTÃO' and 're_alvo_str' in locals() and re_alvo_str:
             nome_iq_filtro = dados_iqs[dados_iqs['re_iq'] == re_alvo_str]['nome_iq'].values
@@ -576,7 +656,7 @@ else:
 
         st.divider()
         
-        # --- AGENDA DE MATINAIS (EXIBE O NOME DO IQ PARA O GESTOR SABER DE QUEM É) ---
+        # --- AGENDA DE MATINAIS (COM NOME DO IQ) ---
         st.subheader("📅 Agenda de Matinais (Clique no nome para realizar a vistoria)")
         agenda_do_usuario = {tec: info for tec, info in st.session_state['agenda_matinal'].items() if str(info.get('re_iq')) == str(re_logado_str) or perfil_usuario == 'GESTÃO'}
         
@@ -836,14 +916,14 @@ else:
                                 if ca2.checkbox(item, key=f"as2_{item}"): faltas.append(item)
 
                         with t5:
-                            cv1, cv2 = st.columns(2)
+                            cv1, cv2_tab = st.columns(2)
                             veiculo_1 = ['Limpeza do Veículo', 'Organização do Veículo', 'Avarias no Veículo']
                             veiculo_2 = ['PDA (Logado / Bat > 50%)', 'Book Fiscal', 'Flanela', 'Chip de Telefonia', 'Escova e Pá de Lixo']
                             
                             for item in veiculo_1:
                                 if cv1.checkbox(item, key=f"v1_{item}"): faltas.append(item)
                             for item in veiculo_2:
-                                if cv2.checkbox(item, key=f"v2_{item}"): faltas.append(item)
+                                if cv2_tab.checkbox(item, key=f"v2_{item}"): faltas.append(item)
 
                         st.divider()
                         foto_upload = st.file_uploader("📸 Anexar Foto da Vistoria (Obrigatório)", type=['png', 'jpg'])
