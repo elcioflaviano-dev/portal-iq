@@ -75,9 +75,15 @@ if 'zap_pronto' not in st.session_state: st.session_state['zap_pronto'] = None
 if 'tec_selecionado_atalho' not in st.session_state: st.session_state['tec_selecionado_atalho'] = None
 if 'aba_matinal_ativa' not in st.session_state: st.session_state['aba_matinal_ativa'] = 0
 
-# --- Estilização CSS ---
+# --- Estilização CSS (Com fundo cinza personalizado para o menu lateral) ---
 st.markdown("""
     <style>
+    [data-testid="stSidebar"] {
+        background-color: #2b2b2b;
+    }
+    [data-testid="stSidebar"] * {
+        color: #f1f1f1 !important;
+    }
     .metric-card-blue, .metric-card-green, .metric-card-orange {
         padding: 20px;
         border-radius: 12px;
