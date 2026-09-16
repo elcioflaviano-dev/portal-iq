@@ -80,7 +80,7 @@ ITENS_MATINAL = {
         "LANTERNA", "ESCADA DE FIBRA (6Mts)", "ESCADA DE 4 E/OU 5 DEGRAUS ALTURA UTIL 1.50m (MÍNIMO)", 
         "CÂMERA SONDA ENDOSCÓPICA", "CHAVEIRO MINI ISOLATOR", "MININUMERAL"
     ],
-    "📡 GPON / Outros": [
+    "📡 GPON/Outros": [
         "CLIVADOR COM GABARITO PROFIBER", "GABARITO DE CONECTORIZAÇÃO", "ALICATE DECAPADOR DE FIBRA ÓPTICA", 
         "SUPORTE DE ESCADA PARA CLIVADOR", "SUPORTE PARA BOBINA DE CABO", "TESTADOR DE CABO DE REDE", 
         "CANETA DE LIMPEZA ÓPTICA", "ALICATE DECAPADOR DE DROP (BETTER)",
@@ -849,7 +849,7 @@ else:
 
                 st.dataframe(df_exibir.style.map(colorir_sim_nao), hide_index=True, use_container_width=True)
 
-    # --- PÁGINA 3: MATINAL (ATUALIZADA COM OS ITENS DO FORMS) ---
+    # --- PÁGINA 3: MATINAL ---
     elif st.session_state['pagina_atual'] == "Matinal":
         st.title("📋 Agendamento e Execução da Matinal")
         
@@ -1069,7 +1069,7 @@ else:
                             linhas_erros = "- Nenhuma falha encontrada (100% conforme)"
 
                         fotos_txt = "\n".join(links_fotos)
-                        msg_whatsapp = f"*AUDITORIA DE INSTALAÇÃO - TOTALE ABC*\n\n*Contrato:* {num_contrato}\n*RE do Técnico:* {tec_re}\n*Técnico:* {tec_inst}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Falhas Encontradas:*\n{linhas_erros}\n\n*Observações:* {obs_inst}\n\n*Evidências (Fotos):*\n{fotos_txt}"
+                        msg_whatsapp = f"*AUDITORIA DE INSTALAÇÃO - TOTALE*\n\n*Contrato:* {num_contrato}\n*RE do Técnico:* {tec_re}\n*Técnico:* {tec_inst}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Falhas Encontradas:*\n{linhas_erros}\n\n*Observações:* {obs_inst}\n\n*Evidências (Fotos):*\n{fotos_txt}"
                         url_whatsapp = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_whatsapp)}"
                         
                         corpo_email = f"RELATÓRIO DE AUDITORIA DE INSTALAÇÃO\nContrato: {num_contrato}\nRE: {tec_re}\nTécnico: {tec_inst}\nIQ: {st.session_state['nome_iq']}\n\nFALHAS ENCONTRADAS:\n{linhas_erros}\n\nOBSERVAÇÕES:\n{obs_inst}\n\nEVIDÊNCIAS FOTOS:\n{fotos_txt}"
