@@ -15,7 +15,7 @@ import cloudinary
 import cloudinary.uploader
 
 # --- CONFIGURAÇÕES DE DESTINATÁRIOS E WHATSAPP ---
-DESTINATARIOS_MATINAL = "helifa.silva@totaletecnologia.com.br,alexandre.sousa@totaletecnologia.com.br,genilson.almeida@totaletecnologia.com.br,vania.ssousa@totaletecnologia.com.br,elcio.nunes@totaletecnologia.com.br,denis.vick@totaletecnologia.com.br,paulo.correia@totaletecnologia.com.br,richard.silva@totaletecnologia.com.br,ariel.dias@totaletecnologia.com.br,alexandre.gianechini@totaletecnologia.com.br"
+DESTINATARIOS_MATINAL = "helifa.silva@totaletecnologia.com.br,alexandre.sousa@totaletecnologia.com.br,genilson.almeida@totaletecnologia.com.br,vania.ssousa@totaletecnologia.com.br,paulo.correia@totaletecnologia.com.br,richard.silva@totaletecnologia.com.br,ariel.dias@totaletecnologia.com.br,alexandre.gianechini@totaletecnologia.com.br"
 DESTINATARIOS_INSTALACAO = "alexandre.sousa@totaletecnologia.com.br,genilson.almeida@totaletecnologia.com.br,vania.ssousa@totaletecnologia.com.br,elcio.nunes@totaletecnologia.com.br,denis.vick@totaletecnologia.com.br"
 
 WHATSAPP_GRUPO_ID = "5511993259361-1587731165@g.us"
@@ -114,7 +114,7 @@ ITENS_MATINAL = {
 }
 
 # --- 1. Configuração Inicial ---
-st.set_page_config(page_title="Portal IQ - Totale ABC", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Portal IQ - Totale", layout="wide", initial_sidebar_state="expanded")
 
 if 'logado' not in st.session_state: st.session_state['logado'] = False
 if 'pagina_atual' not in st.session_state: st.session_state['pagina_atual'] = "Dashboard"
@@ -126,7 +126,7 @@ if 'aba_matinal_ativa' not in st.session_state: st.session_state['aba_matinal_at
 # --- Estilização CSS ---
 st.markdown("""
     <style>
-    .metric-card-blue, .metric-card-green, .metric-card-orange {
+    .metric-card-blue, .metric-card-green, .metric-card-orange, .metric-card-purple {
         padding: 20px;
         border-radius: 12px;
         color: white !important;
@@ -136,6 +136,7 @@ st.markdown("""
     .metric-card-blue { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); }
     .metric-card-green { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
     .metric-card-orange { background: linear-gradient(135deg, #f2994a 0%, #f2c94c 100%); }
+    .metric-card-purple { background: linear-gradient(135deg, #654ea3 0%, #eaafc8 100%); }
     
     .metric-card * { color: white !important; }
     .metric-title { font-size: 14px; font-weight: 600; text-transform: uppercase; margin-bottom: 8px; opacity: 0.9; }
@@ -192,6 +193,20 @@ def alterar_senha_sheets(re_iq, nova_senha):
         return False, "RE não encontrado na base."
     except Exception as e:
         return False, f"Erro ao atualizar senha: {e}"
+
+def carregar_resultados_matinal():
+    try:
+        planilha = conectar_planilha()
+        try:
+            ws = planilha.worksheet("Resultado_Matinal")
+            registros = ws.get_all_records()
+            return pd.DataFrame(registros) if registros else pd.DataFrame()
+        except:
+            ws = planilha.add_worksheet(title="Resultado_Matinal", rows=100, cols=5)
+            ws.append_row(["Data", "RE_IQ", "Nome_IQ", "Nota_IQ", "Nota_Geral"])
+            return pd.DataFrame()
+    except:
+        return pd.DataFrame()
 
 def configurar_cloudinary():
     try:
@@ -267,7 +282,7 @@ def carregar_dados():
                 if 'LOGIN' in dados_completos.columns: dados_completos = dados_completos.drop(columns=['LOGIN'])
         meses_info = [{'nome_aba': 'Certificados', 'mes_nome': 'JULHO'}, {'nome_aba': 'Certificados', 'mes_nome': 'AGOSTO'}, {'nome_aba': 'Certificados', 'mes_nome': 'SETEMBRO'}]
     else:
-        abas_meses = [aba for aba in todas_abas if aba not in ['Base_IQ', 'Base_Tecnicos', 'Controle_IQ', 'Agenda_Matinal', 'Vistorias_Matinal', 'Vistoria_Instalacao', 'Log_Acessos']]
+        abas_meses = [aba for aba in todas_abas if aba not in ['Base_IQ', 'Base_Tecnicos', 'Controle_IQ', 'Agenda_Matinal', 'Vistorias_Matinal', 'Vistoria_Instalacao', 'Log_Acessos', 'Resultado_Matinal']]
         meses_info = []
 
         for aba in abas_meses:
@@ -502,7 +517,7 @@ if not st.session_state['logado']:
     with col_logo:
         if os.path.exists("novo-logo-totale.png"): st.image(Image.open("novo-logo-totale.png"), use_container_width=True)
             
-    st.title("Acesso Operacional - IQ TOTALE ABC")
+    st.title("Acesso Operacional - Totale")
     
     with st.form("form_login"):
         re_input = st.text_input("RE (Login)")
@@ -634,6 +649,40 @@ else:
         
         st.title(titulo_painel)
         st.write("")
+
+        # --- CARREGAR E EXIBIR NOTAS DA MATINAL EM DESTAQUE ---
+        df_res_mat = carregar_resultados_matinal()
+        nota_geral_val = "N/A"
+        nota_iq_val = "N/A"
+
+        if not df_res_mat.empty:
+            df_res_mat.columns = [str(c).strip().upper() for c in df_res_mat.columns]
+            if 'NOTA_GERAL' in df_res_mat.columns:
+                notas_g = pd.to_numeric(df_res_mat['NOTA_GERAL'], errors='coerce').dropna()
+                if not notas_g.empty: nota_geral_val = round(notas_g.iloc[-1], 2)
+            
+            if 'RE_IQ' in df_res_mat.columns and 'NOTA_IQ' in df_res_mat.columns:
+                df_iq_log = df_res_mat[df_res_mat['RE_IQ'].astype(str).str.strip().str.replace('.0','') == re_logado_str]
+                if not df_iq_log.empty:
+                    notas_iq_f = pd.to_numeric(df_iq_log['NOTA_IQ'], errors='coerce').dropna()
+                    if not notas_iq_f.empty: nota_iq_val = round(notas_iq_f.iloc[-1], 2)
+
+        st.markdown("### 📊 Resultado da Matinal (Destaque)")
+        c_nota1, c_nota2 = st.columns(2)
+        with c_nota1:
+            st.markdown('<div class="metric-card-blue">', unsafe_allow_html=True)
+            st.markdown('<div class="metric-title">⭐ Nota Geral da Operação</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-value">{nota_geral_val}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-sub">Média consolidada</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+        with c_nota2:
+            st.markdown('<div class="metric-card-purple">', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-title">⭐ Nota do IQ ({st.session_state["nome_iq"]})</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-value">{nota_iq_val}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-sub">Seu resultado recente</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        st.divider()
 
         re_alvo_horas = re_alvo_str if (perfil_usuario == 'GESTÃO' and re_alvo_str) else re_logado_str
         
@@ -992,7 +1041,7 @@ else:
                             elif not (lote_capacete.strip() and venc_carneira.strip() and lote_cinto.strip() and lote_talabarte.strip() and lote_luva_pig.strip() and lote_luva_vaq.strip() and venc_protetor.strip() and tam_camisa.strip() and tam_calca.strip() and tam_jaqueta.strip()):
                                 st.warning("⚠️ Todos os campos de Lotes, Validades e Tamanhos de Uniformes são obrigatórios.")
                             else:
-                                tec_row = dados_completos[dados_completos['nome'] == tec_atual]
+                                tec_row = equipe_vigente[equipe_vigente['nome'] == tec_atual]
                                 tec_login = tec_row['login'].iloc[0] if not tec_row.empty else "N/A"
                                 tec_re = tec_row['re'].iloc[0] if ('re' in tec_row.columns and not tec_row.empty) else tec_login
                                 
@@ -1123,7 +1172,7 @@ else:
                             linhas_erros = "- Nenhuma falha encontrada (100% conforme)"
 
                         fotos_txt = "\n".join(links_fotos)
-                        msg_whatsapp = f"*AUDITORIA DE INSTALAÇÃO - TOTALE ABC*\n\n*Contrato:* {num_contrato}\n*RE do Técnico:* {tec_re}\n*Técnico:* {tec_inst}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Falhas Encontradas:*\n{linhas_erros}\n\n*Observações:* {obs_inst}\n\n*Evidências (Fotos):*\n{fotos_txt}"
+                        msg_whatsapp = f"*AUDITORIA DE INSTALAÇÃO - TOTALE*\n\n*Contrato:* {num_contrato}\n*RE do Técnico:* {tec_re}\n*Técnico:* {tec_inst}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Falhas Encontradas:*\n{linhas_erros}\n\n*Observações:* {obs_inst}\n\n*Evidências (Fotos):*\n{fotos_txt}"
                         url_whatsapp = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_whatsapp)}"
                         
                         corpo_email = f"RELATÓRIO DE AUDITORIA DE INSTALAÇÃO\nContrato: {num_contrato}\nRE: {tec_re}\nTécnico: {tec_inst}\nIQ: {st.session_state['nome_iq']}\n\nFALHAS ENCONTRADAS:\n{linhas_erros}\n\nOBSERVAÇÕES:\n{obs_inst}\n\nEVIDÊNCIAS FOTOS:\n{fotos_txt}"
