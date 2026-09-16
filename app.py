@@ -65,7 +65,7 @@ FALHAS_INSTALACAO = {
     ]
 }
 
-# --- ITENS ATUALIZADOS DA MATINAL (BASEADO NO FORMS) ---
+# --- ITENS DA MATINAL (BASEADO NO FORMS) ---
 ITENS_MATINAL = {
     "🛠️ Ferramental": [
         "ALICATE CRIMPADOR RG59/58 (PRESSÃO)", "ALICATE CRIMPADOR RJ11/45", "ALICATE DE BICO RETO 6\"", 
@@ -96,16 +96,13 @@ ITENS_MATINAL = {
         "ROLO DE FITA ZEBRADA", "PROTETOR SOLAR", "PRO-PÉ",
         "Escada: Bandeirola", "Escada: Papagaio", "Escada: Sapata", "Escada: Guia de ponta da escada", "Escada: Cinta de Borracha"
     ],
-    "🧹 Asseio & Uniforme": [
-        "Barba feita", "Higiene pessoal", "Corte de cabelo padrão Claro", "Uso de adornos", "Crachá",
-        "Uniforme | CAMISA", "Uniforme | CALÇA", "Uniforme | JAQUETA", "Sapato de Segurança (engraxado)"
+    "🧹 Asseio": [
+        "Barba feita", "Higiene pessoal", "Corte de cabelo padrão Claro", "Uso de adornos", "Crachá"
     ],
-    "📱 Sistemas & Lotes": [
+    "📱 Sistemas": [
         "PDA (Logado e bateria com mínimo de 50%)", 
         "Acesso Conectado/Nota 10 (verificar treinamentos de 1 ponto pendentes)", 
-        "Acesso ao Conectale (portal da empresa)",
-        "Lote Capacete / Vencimento Carneira", "Lote Cinto", "Lote Talabarte", 
-        "Lote Luva Pigmentada", "Lote Luva Vaqueta", "Vencimento Protetor Solar"
+        "Acesso ao Conectale (portal da empresa)"
     ],
     "🚗 Veículo": [
         "Veículo Interno: Organizado?", "Veículo Interno: Limpo?", "Veículo Interno: Tomada Carregamento OK?", 
@@ -391,19 +388,32 @@ def salvar_agenda_no_sheets(agenda_dict):
     except Exception as e:
         print(f"Erro ao salvar agenda: {e}")
 
-def registrar_vistoria_completa(re_iq, nome_iq, login_tec, nome_tec, tipo, irregulares, obs, links_fotos):
+def registrar_vistoria_completa(re_iq, nome_iq, login_tec, nome_tec, tipo, irregulares, extra_info, obs, links_fotos):
     try:
         planilha = conectar_planilha()
         try:
             ws = planilha.worksheet("Vistorias_Matinal")
         except:
-            ws = planilha.add_worksheet(title="Vistorias_Matinal", rows=100, cols=15)
-            ws.append_row(["ID_Vistoria", "Data_Hora", "RE_IQ", "Nome_IQ", "Login_Tecnico", "Nome_Tecnico", "Tipo_Vistoria", "Itens_Irregulares", "Observacao", "Links_Fotos", "Status"])
+            ws = planilha.add_worksheet(title="Vistorias_Matinal", rows=100, cols=20)
+            ws.append_row([
+                "ID_Vistoria", "Data_Hora", "RE_IQ", "Nome_IQ", "Login_Tecnico", "Nome_Tecnico", 
+                "Tipo_Vistoria", "Itens_Irregulares", "Lote_Capacete_Venc", "Lote_Cinto", 
+                "Lote_Talabarte", "Lote_Luva_Pig", "Lote_Luva_Vaq", "Venc_Protetor_Solar", 
+                "Tam_Camisa", "Tam_Calca", "Tam_Jaqueta", "Observacao", "Links_Fotos", "Status"
+            ])
             
         vistoria_id = str(uuid.uuid4())[:8].upper()
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         links_str = " | ".join(links_fotos)
-        ws.append_row([vistoria_id, data_hora, str(re_iq), nome_iq, str(login_tec), nome_tec, tipo, irregulares, obs, links_str, "Concluída"])
+        
+        ws.append_row([
+            vistoria_id, data_hora, str(re_iq), nome_iq, str(login_tec), nome_tec, tipo, irregulares,
+            extra_info.get('lote_capacete', ''), extra_info.get('lote_cinto', ''),
+            extra_info.get('lote_talabarte', ''), extra_info.get('lote_luva_pig', ''),
+            extra_info.get('lote_luva_vaq', ''), extra_info.get('venc_protetor', ''),
+            extra_info.get('tam_camisa', ''), extra_info.get('tam_calca', ''),
+            extra_info.get('tam_jaqueta', ''), obs, links_str, "Concluída"
+        ])
         st.cache_data.clear()
     except Exception as e:
         st.error(f"Erro ao gravar histórico de vistoria: {e}")
@@ -492,7 +502,7 @@ if not st.session_state['logado']:
     with col_logo:
         if os.path.exists("novo-logo-totale.png"): st.image(Image.open("novo-logo-totale.png"), use_container_width=True)
             
-    st.title("Acesso Operacional - IQ Totale ABC")
+    st.title("Acesso Operacional - Totale")
     
     with st.form("form_login"):
         re_input = st.text_input("RE (Login)")
@@ -920,11 +930,34 @@ else:
                     
                     if tec_atual != "Selecione...":
                         st.info(f"⚠️ Assinale abaixo os itens que estão **FALTANDO** ou **IRREGULARES** para **{tec_atual}** ({data_selecionada_exec}).")
+                        
+                        # CAMPOS OBRIGATÓRIOS DE LOTES, VALIDADES E TAMANHOS
+                        st.markdown("### 🏷️ Informações de Lotes, Validades e Tamanhos (Preenchimento Obrigatório)")
+                        col_l1, col_l2, col_l3 = st.columns(3)
+                        with col_l1:
+                            lote_capacete = st.text_input("Lote Capacete / Vencimento Carneira *")
+                            lote_cinto = st.text_input("Lote Cinto *")
+                        with col_l2:
+                            lote_talabarte = st.text_input("Lote Talabarte *")
+                            lote_luva_pig = st.text_input("Lote Luva Pigmentada *")
+                        with col_l3:
+                            lote_luva_vaq = st.text_input("Lote Luva Vaqueta *")
+                            venc_protetor = st.text_input("Vencimento Protetor Solar *")
+
+                        st.write("")
+                        col_t1, col_t2, col_t3 = st.columns(3)
+                        with col_t1:
+                            tam_camisa = st.text_input("Tamanho Uniforme | CAMISA *")
+                        with col_t2:
+                            tam_calca = st.text_input("Tamanho Uniforme | CALÇA *")
+                        with col_t3:
+                            tam_jaqueta = st.text_input("Tamanho Uniforme | JAQUETA *")
+
+                        st.divider()
                         faltas = []
                         
-                        # Abas baseadas exatamente no Forms novo
                         t_ferr, t_gpon, t_epi, t_asseio, t_sis, t_veic = st.tabs([
-                            "🛠️ Ferramental", "📡 GPON/Outros", "👷 EPI / EPC", "🧹 Asseio & Uniforme", "📱 Sistemas & Lotes", "🚗 Veículo"
+                            "🛠️ Ferramental", "📡 GPON/Outros", "👷 EPI / EPC", "🧹 Asseio", "📱 Sistemas", "🚗 Veículo"
                         ])
                         
                         def renderizar_itens_matinal(lista_itens, aba):
@@ -938,8 +971,8 @@ else:
                         renderizar_itens_matinal(ITENS_MATINAL["🛠️ Ferramental"], t_ferr)
                         renderizar_itens_matinal(ITENS_MATINAL["📡 GPON/Outros"], t_gpon)
                         renderizar_itens_matinal(ITENS_MATINAL["👷 EPI / EPC"], t_epi)
-                        renderizar_itens_matinal(ITENS_MATINAL["🧹 Asseio & Uniforme"], t_asseio)
-                        renderizar_itens_matinal(ITENS_MATINAL["📱 Sistemas & Lotes"], t_sis)
+                        renderizar_itens_matinal(ITENS_MATINAL["🧹 Asseio"], t_asseio)
+                        renderizar_itens_matinal(ITENS_MATINAL["📱 Sistemas"], t_sis)
                         renderizar_itens_matinal(ITENS_MATINAL["🚗 Veículo"], t_veic)
 
                         st.divider()
@@ -951,6 +984,8 @@ else:
                         if st.button("Gravar Vistoria e Gerar E-mail", type="primary"):
                             if not fotos_upload:
                                 st.warning("⚠️ O envio de ao menos uma foto é obrigatório para comprovação.")
+                            elif not (lote_capacete.strip() and lote_cinto.strip() and lote_talabarte.strip() and lote_luva_pig.strip() and lote_luva_vaq.strip() and venc_protetor.strip() and tam_camisa.strip() and tam_calca.strip() and tam_jaqueta.strip()):
+                                st.warning("⚠️ Todos os campos de Lotes, Validades e Tamanhos de Uniformes são obrigatórios.")
                             else:
                                 tec_row = equipe_vigente[equipe_vigente['nome'] == tec_atual]
                                 tec_login = tec_row['login'].iloc[0] if not tec_row.empty else "N/A"
@@ -958,6 +993,18 @@ else:
                                 
                                 links_fotos = salvar_fotos_no_cloudinary(fotos_upload, tec_atual, "Evidencias_Matinal")
                                 
+                                extra_info = {
+                                    'lote_capacete': lote_capacete,
+                                    'lote_cinto': lote_cinto,
+                                    'lote_talabarte': lote_talabarte,
+                                    'lote_luva_pig': lote_luva_pig,
+                                    'lote_luva_vaq': lote_luva_vaq,
+                                    'venc_protetor': venc_protetor,
+                                    'tam_camisa': tam_camisa,
+                                    'tam_calca': tam_calca,
+                                    'tam_jaqueta': tam_jaqueta
+                                }
+
                                 registrar_vistoria_completa(
                                     re_iq=re_logado_str,
                                     nome_iq=st.session_state['nome_iq'],
@@ -965,6 +1012,7 @@ else:
                                     nome_tec=tec_atual,
                                     tipo="Matinal",
                                     irregulares=resumo_faltas,
+                                    extra_info=extra_info,
                                     obs=obs_final,
                                     links_fotos=links_fotos
                                 )
@@ -976,7 +1024,7 @@ else:
                                 salvar_agenda_no_sheets(st.session_state['agenda_matinal'])
                                 
                                 fotos_txt = "\n".join(links_fotos)
-                                corpo_email = f"RELATÓRIO DE MATINAL (IVM 2026)\nRE: {tec_re}\nTécnico: {tec_atual}\nIQ: {st.session_state['nome_iq']}\n\nITENS FALTANTES/IRREGULARES:\n- {resumo_faltas}\n\nOBSERVAÇÕES:\n{obs_final}\n\nEVIDÊNCIAS FOTOS:\n{fotos_txt}"
+                                corpo_email = f"RELATÓRIO DE MATINAL (IVM 2026)\nRE: {tec_re}\nTécnico: {tec_atual}\nIQ: {st.session_state['nome_iq']}\n\nLOTES, VALIDADES E TAMANHOS:\n- Lote Capacete / Venc. Carneira: {lote_capacete}\n- Lote Cinto: {lote_cinto}\n- Lote Talabarte: {lote_talabarte}\n- Lote Luva Pigmentada: {lote_luva_pig}\n- Lote Luva Vaqueta: {lote_luva_vaq}\n- Venc. Protetor Solar: {venc_protetor}\n- Tamanho Camisa: {tam_camisa}\n- Tamanho Calça: {tam_calca}\n- Tamanho Jaqueta: {tam_jaqueta}\n\nITENS FALTANTES/IRREGULARES:\n- {resumo_faltas}\n\nOBSERVAÇÕES:\n{obs_final}\n\nEVIDÊNCIAS FOTOS:\n{fotos_txt}"
                                 url_email = f"mailto:{DESTINATARIOS_MATINAL}?subject=Relatorio Matinal - RE {tec_re} - {tec_atual}&body={urllib.parse.quote(corpo_email)}"
                                 
                                 st.session_state['email_pronto'] = url_email
