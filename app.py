@@ -676,7 +676,7 @@ else:
                     if not vals_iq.empty:
                         nota_iq_val = str(vals_iq.iloc[-1])
 
-        st.markdown("### 📊 Resultado da Matinal (Destaque)")
+        st.markdown("### 📊 Resultado da Matinal Oficial CLARO")
         c_nota1, c_nota2 = st.columns(2)
         with c_nota1:
             st.markdown('<div class="metric-card-blue">', unsafe_allow_html=True)
