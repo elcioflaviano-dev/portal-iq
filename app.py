@@ -15,7 +15,7 @@ import cloudinary
 import cloudinary.uploader
 
 # --- CONFIGURAÇÕES DE DESTINATÁRIOS E WHATSAPP ---
-DESTINATARIOS_MATINAL = "helifa.silva@totaletecnologia.com.br,alexandre.sousa@totaletecnologia.com.br,genilson.almeida@totaletecnologia.com.br,vania.ssousa@totaletecnologia.com.br,elcio.nunes@totaletecnologia.com.br,denis.vick@totaletecnologia,paulo.correia@totaletecnologia.com.br,richard.silva@totaletecnologia.com.br,ariel.dias@totaletecnologia.com.br,alexandre.gianechini@totaletecnologia.com.br"
+DESTINATARIOS_MATINAL = "helifa.silva@totaletecnologia.com.br,alexandre.sousa@totaletecnologia.com.br,genilson.almeida@totaletecnologia.com.br,vania.ssousa@totaletecnologia.com.br,,elcio.nunes@totaletecnologia.com.br,denis.vick@totaletecnologia.com.br",paulo.correia@totaletecnologia.com.br,richard.silva@totaletecnologia.com.br,ariel.dias@totaletecnologia.com.br,alexandre.gianechini@totaletecnologia.com.br"
 DESTINATARIOS_INSTALACAO = "alexandre.sousa@totaletecnologia.com.br,genilson.almeida@totaletecnologia.com.br,vania.ssousa@totaletecnologia.com.br,elcio.nunes@totaletecnologia.com.br,denis.vick@totaletecnologia.com.br"
 
 WHATSAPP_GRUPO_ID = "5511993259361-1587731165@g.us"
@@ -32,7 +32,7 @@ FALHAS_INSTALACAO = {
         "016G-Conexão em poste correto", "067G-Divisor na Rede"
     ],
     "DG/Apto": [
-        "017G-Identificação do cabo", "018G-Torque correto na conexão do DG", "019G-Preparação dos conectores do DG",
+        "017G-Identificação do cabo", "018G-Torque correto na conexão do DG", "019G-Preparação dos conectores no DG",
         "020M-Disposição do cabo (dentro do DG)", "021M-Roteamento do Cabo", "022M-Fixação do cabo"
     ],
     "PAQ": [
@@ -65,7 +65,7 @@ FALHAS_INSTALACAO = {
     ]
 }
 
-# --- ITENS DA MATINAL (ATUALIZADOS) ---
+# --- ITENS DA MATINAL (BASEADO NO FORMS) ---
 ITENS_MATINAL = {
     "🛠️ Ferramental": [
         "ALICATE CRIMPADOR RG59/58 (PRESSÃO)", "ALICATE CRIMPADOR RJ11/45", "ALICATE DE BICO RETO 6\"", 
@@ -90,7 +90,7 @@ ITENS_MATINAL = {
     ],
     "👷 EPI / EPC": [
         "CAPACETE COM ABA TOTAL E JUGULAR", "CAPA DE CHUVA", "CINTO DE SEGURANÇA", 
-        "TALABARTE DE SEGURANÇA - POSICIONAMENTO E/OU ANCORAGEM", "KIT LVM", "PAR DE LUVAS PIGMENTADA", 
+        "TALABARTE DE SEGURANÇA - POSICIONAMENTO E/O ANCORAGEM", "KIT LVM", "PAR DE LUVAS PIGMENTADA", 
         "PAR DE LUVAS DE VAQUETA (COURO)", "ÓCULOS DE PROTEÇÃO", "3 CONES", "BANDEIROLA PARA ESCADA DE 6Mts", 
         "NIVELADOR DE ESCADA", "MULTIMETRO OU CHAVE TESTE", "MÁSCARA PROTEÇÃO SEMIFACIAL", 
         "ROLO DE FITA ZEBRADA", "PROTETOR SOLAR", "PRO-PÉ",
@@ -114,7 +114,7 @@ ITENS_MATINAL = {
 }
 
 # --- 1. Configuração Inicial ---
-st.set_page_config(page_title="Portal IQ - Totale", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Portal IQ - Totale ABC", layout="wide", initial_sidebar_state="expanded")
 
 if 'logado' not in st.session_state: st.session_state['logado'] = False
 if 'pagina_atual' not in st.session_state: st.session_state['pagina_atual'] = "Dashboard"
@@ -502,7 +502,7 @@ if not st.session_state['logado']:
     with col_logo:
         if os.path.exists("novo-logo-totale.png"): st.image(Image.open("novo-logo-totale.png"), use_container_width=True)
             
-    st.title("Acesso Operacional - IQ TOTALE abc")
+    st.title("Acesso Operacional - IQ TOTALE ABC")
     
     with st.form("form_login"):
         re_input = st.text_input("RE (Login)")
@@ -866,9 +866,12 @@ else:
         tab_agendar, tab_executar = st.tabs(["1. Agendar Téc", "2. Executar Vistoria (Checklist)"])
         
         with tab_agendar:
+            tipo_selecao_tec = st.radio("Selecione a base de técnicos para agendamento:", ["Minha Equipe", "Geral (Todos os Técnicos)"], horizontal=True)
+            lista_tecs_disponiveis = equipe_vigente['nome'].tolist() if tipo_selecao_tec == "Minha Equipe" else dados_completos['nome'].tolist()
+
             col_a1, col_a2 = st.columns(2)
             with col_a1:
-                tec_agendar = st.selectbox("Selecione o Técnico:", ["Selecione..."] + equipe_vigente['nome'].tolist())
+                tec_agendar = st.selectbox("Selecione o Técnico:", ["Selecione..."] + lista_tecs_disponiveis)
             with col_a2:
                 data_agendada = st.date_input("Escolha o Dia:", value=None, format="DD/MM/YYYY")
                 
@@ -989,7 +992,7 @@ else:
                             elif not (lote_capacete.strip() and venc_carneira.strip() and lote_cinto.strip() and lote_talabarte.strip() and lote_luva_pig.strip() and lote_luva_vaq.strip() and venc_protetor.strip() and tam_camisa.strip() and tam_calca.strip() and tam_jaqueta.strip()):
                                 st.warning("⚠️ Todos os campos de Lotes, Validades e Tamanhos de Uniformes são obrigatórios.")
                             else:
-                                tec_row = equipe_vigente[equipe_vigente['nome'] == tec_atual]
+                                tec_row = dados_completos[dados_completos['nome'] == tec_atual]
                                 tec_login = tec_row['login'].iloc[0] if not tec_row.empty else "N/A"
                                 tec_re = tec_row['re'].iloc[0] if ('re' in tec_row.columns and not tec_row.empty) else tec_login
                                 
