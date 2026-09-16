@@ -73,7 +73,7 @@ if 'pagina_atual' not in st.session_state: st.session_state['pagina_atual'] = "D
 if 'email_pronto' not in st.session_state: st.session_state['email_pronto'] = None
 if 'zap_pronto' not in st.session_state: st.session_state['zap_pronto'] = None
 
-# --- Estilização CSS (Responsiva para Celular e TV) ---
+# --- Estilização CSS ---
 st.markdown("""
     <style>
     .metric-card-blue, .metric-card-green, .metric-card-orange {
@@ -118,10 +118,8 @@ def configurar_cloudinary():
         st.error(f"Erro nas configurações do Cloudinary nos segredos: {e}")
 
 def salvar_foto_no_cloudinary(uploaded_file, nome_tecnico, tipo_pasta):
-    """Faz o upload da foto para o Cloudinary e retorna o link público direto"""
     try:
         configurar_cloudinary()
-        
         data_hora_str = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         nome_limpo = "".join([c for c in nome_tecnico if c.isalnum() or c in (' ', '_')]).strip().replace(' ', '_')
         public_id = f"{tipo_pasta}/{tipo_pasta}_{nome_limpo}_{data_hora_str}"
@@ -133,7 +131,6 @@ def salvar_foto_no_cloudinary(uploaded_file, nome_tecnico, tipo_pasta):
             overwrite=True,
             resource_type="image"
         )
-        
         return resultado.get("secure_url")
     except Exception as e:
         return f"(ERRO CLOUDINARY: {e})"
@@ -168,7 +165,6 @@ def carregar_dados():
     dados_tecnicos = dados_tecnicos.drop(columns=[c for c in colunas_remover if c in dados_tecnicos.columns], errors='ignore')
 
     dados_completos = dados_tecnicos.copy()
-    
     todas_abas = [ws.title for ws in planilha.worksheets()]
     
     if "Certificados" in todas_abas:
@@ -272,8 +268,7 @@ def salvar_agenda_no_sheets(re_iq_responsavel, agenda_dict):
                 novas_linhas.append([str(row.get('RE_IQ','')), row.get('META_HORAS',40), row.get('REALIZADO_HORAS',0), row.get('AGENDA_TECNICO',''), row.get('AGENDA_DATA',''), row.get('AGENDA_IQ_NOME','')])
                 
         for tec, info in agenda_dict.items():
-            if str(info.get('re_iq')) == str(re_iq_responsavel):
-                novas_linhas.append([str(re_iq_responsavel), 40, 0, tec, info['data'], info['iq_nome']])
+            novas_linhas.append([str(info['re_iq']), 40, 0, tec, info['data'], info['iq_nome']])
                 
         ws.clear()
         ws.append_row(["RE_IQ", "META_HORAS", "REALIZADO_HORAS", "AGENDA_TECNICO", "AGENDA_DATA", "AGENDA_IQ_NOME"])
@@ -294,7 +289,6 @@ def registrar_vistoria_completa(re_iq, nome_iq, login_tec, nome_tec, tipo, irreg
             
         vistoria_id = str(uuid.uuid4())[:8].upper()
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        
         ws.append_row([vistoria_id, data_hora, str(re_iq), nome_iq, str(login_tec), nome_tec, tipo, irregulares, obs, link_foto, "Concluída"])
         st.cache_data.clear()
     except Exception as e:
@@ -311,7 +305,6 @@ def registrar_vistoria_instalacao_sheets(re_iq, nome_iq, login_tec, nome_tec, ir
             
         vistoria_id = str(uuid.uuid4())[:8].upper()
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        
         ws.append_row([vistoria_id, data_hora, str(re_iq), nome_iq, str(login_tec), nome_tec, irregulares, obs, link_foto, "Registrada"])
         st.cache_data.clear()
     except Exception as e:
@@ -328,7 +321,6 @@ def atualizar_celula_especifica(nome_aba, login_tecnico, coluna_alvo, valor):
             if coluna_alvo.upper() in c:
                 col_idx = i + 1
                 break
-                
         if col_idx == -1: return 
         
         col_login_idx = -1
@@ -336,7 +328,6 @@ def atualizar_celula_especifica(nome_aba, login_tecnico, coluna_alvo, valor):
             if 'LOGIN' in c:
                 col_login_idx = i + 1
                 break
-                
         if col_login_idx == -1: return
         
         coluna_logins = ws.col_values(col_login_idx)
@@ -356,13 +347,18 @@ def colorir_sim_nao(val):
         return 'background-color: #f8d7da; color: #721c24; font-weight: bold;'
     return ''
 
+def exportar_para_excel(df, nome_arquivo):
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Dados')
+    processed_data = output.getvalue()
+    return processed_data
+
 dados_iqs, dados_completos, meses_info = carregar_dados()
 
-# --- Meses Vigente e de Acompanhamento ---
 if meses_info:
     mes_vigente_info = meses_info[-1]
     mes_vigente = mes_vigente_info['mes_nome']
-    
     if len(meses_info) >= 2:
         mes_acompanhamento_info = meses_info[-2]
         mes_acompanhamento = mes_acompanhamento_info['mes_nome']
@@ -373,7 +369,6 @@ if meses_info:
 else:
     mes_vigente, aba_acompanhamento, mes_acompanhamento = None, None, None
 
-# --- Carrega Agenda Filtrada por RE ---
 df_ctrl = carregar_controle_iq()
 
 # --- 3. Telas de Acesso ---
@@ -462,6 +457,9 @@ else:
             st.rerun()
         if st.button("🛠️ Vistoria de Instalação", use_container_width=True): 
             st.session_state['pagina_atual'] = "Instalacao"
+            st.rerun()
+        if st.button("📥 Relatórios e Exportação", use_container_width=True): 
+            st.session_state['pagina_atual'] = "Relatorios"
             st.rerun()
             
         st.divider()
@@ -562,21 +560,26 @@ else:
 
         st.divider()
         
-        # --- AGENDA DE MATINAIS ---
-        st.subheader("📅 Sua Agenda de Matinais")
+        # --- AGENDA DE MATINAIS (COM PERMISSÃO DE EDIÇÃO PARA GESTÃO) ---
+        st.subheader("📅 Agenda de Matinais")
         agenda_do_usuario = {tec: info for tec, info in st.session_state['agenda_matinal'].items() if str(info.get('re_iq')) == str(re_logado_str) or perfil_usuario == 'GESTÃO'}
         
         if not agenda_do_usuario:
-            st.info("Sua agenda está vazia. Vá na aba 'Agendamento de Matinal' para adicionar.")
+            st.info("Sua agenda está vazia.")
         else:
             for tec, info in list(agenda_do_usuario.items()):
-                st.write(f"📌 **Data:** {info['data']} | **Técnico:** {tec} | **IQ Responsável:** {info['iq_nome']}")
+                c_age1, c_age2 = st.columns([4, 1])
+                c_age1.write(f"📌 **Data:** {info['data']} | **Técnico:** {tec} | **IQ Resp:** {info['iq_nome']} (RE: {info['re_iq']})")
+                if perfil_usuario == 'GESTÃO' or str(info.get('re_iq')) == str(re_logado_str):
+                    if c_age2.button("🗑️ Remover", key=f"rm_dash_{tec}"):
+                        del st.session_state['agenda_matinal'][tec]
+                        salvar_agenda_no_sheets(info['re_iq'], st.session_state['agenda_matinal'])
+                        st.rerun()
 
         st.divider()
         
         # --- ACOMPANHAMENTO PENDENTE ---
         st.subheader(f"⚠️ Acompanhamento Pendente (Referência: {mes_acompanhamento or 'N/A'})")
-        st.write(f"*Marque as monitorias realizadas e clique no botão 'Salvar' para gravar no Sheets.*")
         
         if mes_acompanhamento:
             tecnicos_nao_cert = equipe_vigente[(equipe_vigente[mes_acompanhamento] == 'NÃO') & (equipe_vigente[f'ACOMPANHAMENTO_{mes_acompanhamento}'] != 'SIM')]
@@ -621,7 +624,6 @@ else:
                             
                             st.success(f"Monitorias de {tec_nome} salvas com sucesso!")
                             st.rerun()
-                        
                     st.divider()
         else:
             st.info("Crie abas de certificados mensais para habilitar o acompanhamento.")
@@ -637,7 +639,6 @@ else:
             mes_historico = st.selectbox("📅 Escolha o Mês para visualizar:", lista_meses, index=len(lista_meses)-1)
             
             col_re_hist = f"RE_IQ_{mes_historico}"
-            
             if perfil_usuario == 'GESTÃO':
                 if 're_alvo_str' in locals() and re_alvo_str:
                     base_historico = dados_completos[dados_completos[col_re_hist].astype(str) == str(re_alvo_str)]
@@ -717,18 +718,18 @@ else:
                     st.rerun()
             
             st.write("---")
-            st.write("**Sua Agenda de Matinais:**")
+            st.write("**Agenda de Matinais:**")
             agenda_do_usuario = {tec: info for tec, info in st.session_state['agenda_matinal'].items() if str(info.get('re_iq')) == str(re_logado_str) or perfil_usuario == 'GESTÃO'}
             
             if not agenda_do_usuario:
-                st.info("Nenhuma matinal agendada por você.")
+                st.info("Nenhuma matinal agendada.")
             else:
                 for tec, info in list(agenda_do_usuario.items()):
                     c1, c2 = st.columns([4, 1])
-                    c1.write(f"📌 **Data:** {info['data']} | **Técnico:** {tec} | **IQ:** {info['iq_nome']}")
-                    if c2.button("🗑️ Remover", key=f"rm_{tec}"):
+                    c1.write(f"📌 **Data:** {info['data']} | **Técnico:** {tec} | **IQ:** {info['iq_nome']} (RE: {info['re_iq']})")
+                    if c2.button("🗑️ Remover", key=f"rm_mat_{tec}"):
                         del st.session_state['agenda_matinal'][tec]
-                        salvar_agenda_no_sheets(re_logado_str, st.session_state['agenda_matinal'])
+                        salvar_agenda_no_sheets(info['re_iq'], st.session_state['agenda_matinal'])
                         st.rerun()
 
         with tab_executar:
@@ -841,7 +842,7 @@ else:
                             st.session_state['email_pronto'] = url_email
                             st.rerun()
 
-    # --- PÁGINA 4: VISTORIA DE INSTALAÇÃO (WHATSAPP E CÓDIGOS REAIS) ---
+    # --- PÁGINA 4: VISTORIA DE INSTALAÇÃO ---
     elif st.session_state['pagina_atual'] == "Instalacao":
         st.title("🛠️ Vistoria e Auditoria de Instalação em Campo")
         st.write("Auditoria baseada nos códigos oficiais da Totale. Registro de evidência e disparo para o WhatsApp (Grupo IQ).")
@@ -868,8 +869,6 @@ else:
                 st.info("⚠️ Marque abaixo as falhas encontradas na instalação, divididas por tópicos.")
                 
                 erros_encontrados = []
-                
-                # Divisão do checklist de instalação em Abas
                 tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
                     "🔌 Tap/Isolador", "🏠 DG/Apto", "👨‍🔧 PAQ", "🧵 Cabeamento", "📡 Medição", "📦 Materiais", "Outros"
                 ])
@@ -903,13 +902,9 @@ else:
                         tec_login = tec_row['login'].iloc[0] if not tec_row.empty else "N/A"
                         tec_re = tec_row['re'].iloc[0] if ('re' in tec_row.columns and not tec_row.empty) else tec_login
                         
-                        # Salva a foto no Cloudinary
                         link_foto = salvar_foto_no_cloudinary(foto_inst, tec_inst, "Evidencias_Instalacao")
-                        
-                        # Formata a string para salvar na planilha com barras
                         resumo_erros_sheets = " / ".join(erros_encontrados) if erros_encontrados else "Instalação sem falhas registradas."
                         
-                        # Grava na aba Vistoria_Instalacao
                         registrar_vistoria_instalacao_sheets(
                             re_iq=re_logado_str,
                             nome_iq=st.session_state['nome_iq'],
@@ -920,21 +915,68 @@ else:
                             link_foto=link_foto
                         )
                         
-                        # Formata cada erro em uma linha separada para o WhatsApp (\n)
                         if erros_encontrados:
                             linhas_erros = "\n".join([f"- {erro}" for erro in erros_encontrados])
                         else:
                             linhas_erros = "- Nenhuma falha encontrada (100% conforme)"
 
-                        # Mensagem formatada linha por linha para o WhatsApp
                         msg_whatsapp = f"*AUDITORIA DE INSTALAÇÃO - TOTALE*\n\n*RE do Técnico:* {tec_re}\n*Técnico:* {tec_inst}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Falhas Encontradas:*\n{linhas_erros}\n\n*Observações:* {obs_inst}\n\n*Evidência (Foto):*\n{link_foto}"
-                        
                         url_whatsapp = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_whatsapp)}"
                         
-                        # E-mail com a lista exata de destinatários de instalação
                         corpo_email = f"RELATÓRIO DE AUDITORIA DE INSTALAÇÃO\nRE: {tec_re}\nTécnico: {tec_inst}\nIQ: {st.session_state['nome_iq']}\n\nFALHAS ENCONTRADAS:\n{linhas_erros}\n\nOBSERVAÇÕES:\n{obs_inst}\n\nEVIDÊNCIA FOTO:\n{link_foto}"
                         url_email = f"mailto:{DESTINATARIOS_INSTALACAO}?subject=Auditoria de Instalacao - RE {tec_re} - {tec_inst}&body={urllib.parse.quote(corpo_email)}"
                         
                         st.session_state['zap_pronto'] = url_whatsapp
                         st.session_state['email_instalacao'] = url_email
                         st.rerun()
+
+    # --- PÁGINA 5: RELATÓRIOS E EXPORTAÇÃO PARA EXCEL ---
+    elif st.session_state['pagina_atual'] == "Relatorios":
+        st.title("📥 Relatórios e Exportação de Dados")
+        st.write("Baixe os relatórios completos de Vistorias Matinais e Auditorias de Instalação em formato Excel (.xlsx).")
+        
+        planilha_con = conectar_planilha()
+        
+        tab_exp1, tab_exp2 = st.tabs(["📊 Vistorias Matinais", "🛠️ Vistorias de Instalação"])
+        
+        with tab_exp1:
+            st.subheader("Relatório de Vistorias Matinais")
+            try:
+                ws_mat = planilha_con.worksheet("Vistorias")
+                df_mat = pd.DataFrame(ws_mat.get_all_records())
+            except:
+                df_mat = pd.DataFrame()
+                
+            if df_mat.empty:
+                st.info("Nenhum registro encontrado na aba Vistorias.")
+            else:
+                st.dataframe(df_mat, hide_index=True, use_container_width=True)
+                excel_mat = exportar_para_excel(df_mat, "vistorias_matinais.xlsx")
+                st.download_button(
+                    label="📥 Baixar Excel (Matinais)",
+                    data=excel_mat,
+                    file_name=f"Vistorias_Matinais_{datetime.now().strftime('%Y-%m-%d')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    type="primary"
+                )
+                
+        with tab_exp2:
+            st.subheader("Relatório de Auditorias de Instalação")
+            try:
+                ws_inst = planilha_con.worksheet("Vistoria_Instalacao")
+                df_inst = pd.DataFrame(ws_inst.get_all_records())
+            except:
+                df_inst = pd.DataFrame()
+                
+            if df_inst.empty:
+                st.info("Nenhum registro encontrado na aba Vistoria_Instalacao.")
+            else:
+                st.dataframe(df_inst, hide_index=True, use_container_width=True)
+                excel_inst = exportar_para_excel(df_inst, "vistorias_instalacao.xlsx")
+                st.download_button(
+                    label="📥 Baixar Excel (Instalação)",
+                    data=excel_inst,
+                    file_name=f"Vistorias_Instalacao_{datetime.now().strftime('%Y-%m-%d')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    type="primary"
+                )
