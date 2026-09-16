@@ -32,7 +32,7 @@ FALHAS_INSTALACAO = {
         "016G-Conexão em poste correto", "067G-Divisor na Rede"
     ],
     "DG/Apto": [
-        "017G-Identificação do cabo", "018G-Torque correto na conexão do DG", "019G-Preparação dos conectores no DG",
+        "017G-Identificação do cabo", "018G-Torque correto na conexão do DG", "019G-Preparação dos conectores do DG",
         "020M-Disposição do cabo (dentro do DG)", "021M-Roteamento do Cabo", "022M-Fixação do cabo"
     ],
     "PAQ": [
@@ -126,11 +126,8 @@ def alterar_senha_sheets(re_iq, nova_senha):
     try:
         planilha = conectar_planilha()
         ws = planilha.worksheet("Base_IQ")
-        registros = ws.get_all_records()
-        
-        col_re = -1
-        col_senha = -1
         cabecalhos = [str(c).strip().upper() for c in ws.row_values(1)]
+        col_re, col_senha = -1, -1
         
         for i, c in enumerate(cabecalhos):
             if 'RE' in c: col_re = i + 1
@@ -159,23 +156,26 @@ def configurar_cloudinary():
     except Exception as e:
         st.error(f"Erro nas configurações do Cloudinary nos segredos: {e}")
 
-def salvar_foto_no_cloudinary(uploaded_file, nome_tecnico, tipo_pasta):
+def salvar_fotos_no_cloudinary(uploaded_files, nome_tecnico, tipo_pasta):
+    links = []
     try:
         configurar_cloudinary()
-        data_hora_str = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        nome_limpo = "".join([c for c in nome_tecnico if c.isalnum() or c in (' ', '_')]).strip().replace(' ', '_')
-        public_id = f"{tipo_pasta}/{tipo_pasta}_{nome_limpo}_{data_hora_str}"
-        
-        resultado = cloudinary.uploader.upload(
-            uploaded_file,
-            public_id=public_id,
-            folder=tipo_pasta,
-            overwrite=True,
-            resource_type="image"
-        )
-        return resultado.get("secure_url")
+        for i, uploaded_file in enumerate(uploaded_files):
+            data_hora_str = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+            nome_limpo = "".join([c for c in nome_tecnico if c.isalnum() or c in (' ', '_')]).strip().replace(' ', '_')
+            public_id = f"{tipo_pasta}/{tipo_pasta}_{nome_limpo}_{data_hora_str}_{i+1}"
+            
+            resultado = cloudinary.uploader.upload(
+                uploaded_file,
+                public_id=public_id,
+                folder=tipo_pasta,
+                overwrite=True,
+                resource_type="image"
+            )
+            links.append(resultado.get("secure_url"))
+        return links
     except Exception as e:
-        return f"(ERRO CLOUDINARY: {e})"
+        return [f"(ERRO CLOUDINARY: {e})"]
 
 @st.cache_data(ttl=300)
 def carregar_dados():
@@ -340,34 +340,36 @@ def salvar_agenda_no_sheets(agenda_dict):
     except Exception as e:
         print(f"Erro ao salvar agenda: {e}")
 
-def registrar_vistoria_completa(re_iq, nome_iq, login_tec, nome_tec, tipo, irregulares, obs, link_foto):
+def registrar_vistoria_completa(re_iq, nome_iq, login_tec, nome_tec, tipo, irregulares, obs, links_fotos):
     try:
         planilha = conectar_planilha()
         try:
             ws = planilha.worksheet("Vistorias")
         except:
             ws = planilha.add_worksheet(title="Vistorias", rows=100, cols=15)
-            ws.append_row(["ID_Vistoria", "Data_Hora", "RE_IQ", "Nome_IQ", "Login_Tecnico", "Nome_Tecnico", "Tipo_Vistoria", "Itens_Irregulares", "Observacao", "Link_Foto", "Status"])
+            ws.append_row(["ID_Vistoria", "Data_Hora", "RE_IQ", "Nome_IQ", "Login_Tecnico", "Nome_Tecnico", "Tipo_Vistoria", "Itens_Irregulares", "Observacao", "Links_Fotos", "Status"])
             
         vistoria_id = str(uuid.uuid4())[:8].upper()
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        ws.append_row([vistoria_id, data_hora, str(re_iq), nome_iq, str(login_tec), nome_tec, tipo, irregulares, obs, link_foto, "Concluída"])
+        links_str = " | ".join(links_fotos)
+        ws.append_row([vistoria_id, data_hora, str(re_iq), nome_iq, str(login_tec), nome_tec, tipo, irregulares, obs, links_str, "Concluída"])
         st.cache_data.clear()
     except Exception as e:
         st.error(f"Erro ao gravar histórico de vistoria: {e}")
 
-def registrar_vistoria_instalacao_sheets(re_iq, nome_iq, login_tec, nome_tec, contrato, irregulares, obs, link_foto):
+def registrar_vistoria_instalacao_sheets(re_iq, nome_iq, login_tec, nome_tec, contrato, irregulares, obs, links_fotos):
     try:
         planilha = conectar_planilha()
         try:
             ws = planilha.worksheet("Vistoria_Instalacao")
         except:
             ws = planilha.add_worksheet(title="Vistoria_Instalacao", rows=100, cols=11)
-            ws.append_row(["ID_Vistoria", "Data_Hora", "RE_IQ", "Nome_IQ", "Login_Tecnico", "Nome_Tecnico", "Contrato", "Erros_Instalacao", "Observacao", "Link_Foto", "Status"])
+            ws.append_row(["ID_Vistoria", "Data_Hora", "RE_IQ", "Nome_IQ", "Login_Tecnico", "Nome_Tecnico", "Contrato", "Erros_Instalacao", "Observacao", "Links_Fotos", "Status"])
             
         vistoria_id = str(uuid.uuid4())[:8].upper()
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        ws.append_row([vistoria_id, data_hora, str(re_iq), nome_iq, str(login_tec), nome_tec, str(contrato), irregulares, obs, link_foto, "Registrada"])
+        links_str = " | ".join(links_fotos)
+        ws.append_row([vistoria_id, data_hora, str(re_iq), nome_iq, str(login_tec), nome_tec, str(contrato), irregulares, obs, links_str, "Registrada"])
         st.cache_data.clear()
     except Exception as e:
         st.error(f"Erro ao gravar vistoria de instalação: {e}")
@@ -454,7 +456,6 @@ if not st.session_state['logado']:
             st.session_state['nome_iq'] = iq_valido.iloc[0]['nome_iq']
             st.session_state['perfil'] = iq_valido.iloc[0]['PERFIL']
             
-            # Registra Log de Login
             registrar_log_acesso(re_input.strip(), iq_valido.iloc[0]['nome_iq'], "LOGIN", "Dashboard")
             st.rerun()
         else:
@@ -558,7 +559,7 @@ else:
             else:
                 sucesso, msg = alterar_senha_sheets(re_logado_str, nova_senha_1)
                 if sucesso:
-                    st.success("✅ Senha alterada com sucesso! Faça login novamente ou continue utilizando o sistema.")
+                    st.success("✅ Senha alterada com sucesso!")
                     st.cache_data.clear()
                 else:
                     st.error(f"Erro: {msg}")
@@ -656,7 +657,7 @@ else:
 
         st.divider()
         
-        # --- AGENDA DE MATINAIS (COM NOME DO IQ) ---
+        # --- AGENDA DE MATINAIS ---
         st.subheader("📅 Agenda de Matinais (Clique no nome para realizar a vistoria)")
         agenda_do_usuario = {tec: info for tec, info in st.session_state['agenda_matinal'].items() if str(info.get('re_iq')) == str(re_logado_str) or perfil_usuario == 'GESTÃO'}
         
@@ -926,20 +927,20 @@ else:
                                 if cv2_tab.checkbox(item, key=f"v2_{item}"): faltas.append(item)
 
                         st.divider()
-                        foto_upload = st.file_uploader("📸 Anexar Foto da Vistoria (Obrigatório)", type=['png', 'jpg'])
+                        fotos_upload = st.file_uploader("📸 Anexar Fotos da Vistoria (Múltiplas fotos permitidas)", type=['png', 'jpg'], accept_multiple_files=True)
                         obs_final = st.text_area("Observações da Tratativa:")
 
                         resumo_faltas = " / ".join(faltas) if faltas else "Todas as ferramentas e condições em conformidade."
                         
                         if st.button("Gravar Vistoria e Gerar E-mail", type="primary"):
-                            if not foto_upload:
-                                st.warning("⚠️ O envio da foto é obrigatório para comprovação.")
+                            if not fotos_upload:
+                                st.warning("⚠️ O envio de ao menos uma foto é obrigatório para comprovação.")
                             else:
                                 tec_row = equipe_vigente[equipe_vigente['nome'] == tec_atual]
                                 tec_login = tec_row['login'].iloc[0] if not tec_row.empty else "N/A"
                                 tec_re = tec_row['re'].iloc[0] if ('re' in tec_row.columns and not tec_row.empty) else tec_login
                                 
-                                link_foto = salvar_foto_no_cloudinary(foto_upload, tec_atual, "Evidencias_Matinal")
+                                links_fotos = salvar_fotos_no_cloudinary(fotos_upload, tec_atual, "Evidencias_Matinal")
                                 
                                 registrar_vistoria_completa(
                                     re_iq=re_logado_str,
@@ -949,7 +950,7 @@ else:
                                     tipo="Matinal",
                                     irregulares=resumo_faltas,
                                     obs=obs_final,
-                                    link_foto=link_foto
+                                    links_fotos=links_fotos
                                 )
                                 
                                 if aba_acompanhamento:
@@ -958,7 +959,8 @@ else:
                                 del st.session_state['agenda_matinal'][tec_atual]
                                 salvar_agenda_no_sheets(st.session_state['agenda_matinal'])
                                 
-                                corpo_email = f"RELATÓRIO DE MATINAL (IVM 2026)\nRE: {tec_re}\nTécnico: {tec_atual}\nIQ: {st.session_state['nome_iq']}\n\nITENS FALTANTES/IRREGULARES:\n- {resumo_faltas}\n\nOBSERVAÇÕES:\n{obs_final}\n\nEVIDÊNCIA FOTO:\n{link_foto}"
+                                fotos_txt = "\n".join(links_fotos)
+                                corpo_email = f"RELATÓRIO DE MATINAL (IVM 2026)\nRE: {tec_re}\nTécnico: {tec_atual}\nIQ: {st.session_state['nome_iq']}\n\nITENS FALTANTES/IRREGULARES:\n- {resumo_faltas}\n\nOBSERVAÇÕES:\n{obs_final}\n\nEVIDÊNCIAS FOTOS:\n{fotos_txt}"
                                 url_email = f"mailto:{DESTINATARIOS_MATINAL}?subject=Relatorio Matinal - RE {tec_re} - {tec_atual}&body={urllib.parse.quote(corpo_email)}"
                                 
                                 st.session_state['email_pronto'] = url_email
@@ -1018,12 +1020,12 @@ else:
                 
                 st.divider()
                 
-                foto_inst = st.file_uploader("📸 Anexar Foto da Instalação / Erro (Obrigatório)", type=['png', 'jpg'], key="foto_inst")
+                fotos_inst = st.file_uploader("📸 Anexar Fotos da Instalação / Erro (Múltiplas fotos permitidas)", type=['png', 'jpg'], accept_multiple_files=True, key="fotos_inst")
                 obs_inst = st.text_area("Observações da Tratativa:", key="obs_inst")
                 
                 if st.button("Gravar Auditoria e Gerar Disparos", type="primary"):
-                    if not foto_inst:
-                        st.warning("⚠️ O envio da foto é obrigatório para comprovar a auditoria.")
+                    if not fotos_inst:
+                        st.warning("⚠️ O envio de ao menos uma foto é obrigatório para comprovar a auditoria.")
                     elif not num_contrato.strip():
                         st.warning("⚠️ O número do contrato é obrigatório.")
                     else:
@@ -1031,7 +1033,7 @@ else:
                         tec_login = tec_row['login'].iloc[0] if not tec_row.empty else "N/A"
                         tec_re = tec_row['re'].iloc[0] if ('re' in tec_row.columns and not tec_row.empty) else tec_login
                         
-                        link_foto = salvar_foto_no_cloudinary(foto_inst, tec_inst, "Evidencias_Instalacao")
+                        links_fotos = salvar_fotos_no_cloudinary(fotos_inst, tec_inst, "Evidencias_Instalacao")
                         resumo_erros_sheets = " / ".join(erros_encontrados) if erros_encontrados else "Instalação sem falhas registradas."
                         
                         registrar_vistoria_instalacao_sheets(
@@ -1042,7 +1044,7 @@ else:
                             contrato=num_contrato,
                             irregulares=resumo_erros_sheets,
                             obs=obs_inst,
-                            link_foto=link_foto
+                            links_fotos=links_fotos
                         )
                         
                         if erros_encontrados:
@@ -1050,10 +1052,11 @@ else:
                         else:
                             linhas_erros = "- Nenhuma falha encontrada (100% conforme)"
 
-                        msg_whatsapp = f"*AUDITORIA DE INSTALAÇÃO - TOTALE*\n\n*Contrato:* {num_contrato}\n*RE do Técnico:* {tec_re}\n*Técnico:* {tec_inst}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Falhas Encontradas:*\n{linhas_erros}\n\n*Observações:* {obs_inst}\n\n*Evidência (Foto):*\n{link_foto}"
+                        fotos_txt = "\n".join(links_fotos)
+                        msg_whatsapp = f"*AUDITORIA DE INSTALAÇÃO - TOTALE*\n\n*Contrato:* {num_contrato}\n*RE do Técnico:* {tec_re}\n*Técnico:* {tec_inst}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Falhas Encontradas:*\n{linhas_erros}\n\n*Observações:* {obs_inst}\n\n*Evidências (Fotos):*\n{fotos_txt}"
                         url_whatsapp = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_whatsapp)}"
                         
-                        corpo_email = f"RELATÓRIO DE AUDITORIA DE INSTALAÇÃO\nContrato: {num_contrato}\nRE: {tec_re}\nTécnico: {tec_inst}\nIQ: {st.session_state['nome_iq']}\n\nFALHAS ENCONTRADAS:\n{linhas_erros}\n\nOBSERVAÇÕES:\n{obs_inst}\n\nEVIDÊNCIA FOTO:\n{link_foto}"
+                        corpo_email = f"RELATÓRIO DE AUDITORIA DE INSTALAÇÃO\nContrato: {num_contrato}\nRE: {tec_re}\nTécnico: {tec_inst}\nIQ: {st.session_state['nome_iq']}\n\nFALHAS ENCONTRADAS:\n{linhas_erros}\n\nOBSERVAÇÕES:\n{obs_inst}\n\nEVIDÊNCIAS FOTOS:\n{fotos_txt}"
                         url_email = f"mailto:{DESTINATARIOS_INSTALACAO}?subject=Auditoria - Contrato {num_contrato} - RE {tec_re} - {tec_inst}&body={urllib.parse.quote(corpo_email)}"
                         
                         st.session_state['zap_pronto'] = url_whatsapp
