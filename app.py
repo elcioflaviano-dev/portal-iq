@@ -15,7 +15,7 @@ import cloudinary
 import cloudinary.uploader
 
 # --- CONFIGURAÇÕES DE DESTINATÁRIOS E WHATSAPP ---
-DESTINATARIOS_MATINAL = "helifa.silva@totaletecnologia.com.br,alexandre.sousa@totaletecnologia.com.br,genilson.almeida@totaletecnologia.com.br,vania.ssousa@totaletecnologia.com.br,paulo.correia@totaletecnologia.com.br,richard.silva@totaletecnologia.com.br,ariel.dias@totaletecnologia.com.br,alexandre.gianechini@totaletecnologia.com.br"
+DESTINATARIOS_MATINAL = "helifa.silva@totaletecnologia.com.br,alexandre.sousa@totaletecnologia.com.br,genilson.almeida@totaletecnologia.com.br,vania.ssousa@totaletecnologia.com.br,elcio.nunes@totaletecnologia.com.br,denis.vick@totaletecnologia.com.br,paulo.correia@totaletecnologia.com.br,richard.silva@totaletecnologia.com.br,ariel.dias@totaletecnologia.com.br,alexandre.gianechini@totaletecnologia.com.br"
 DESTINATARIOS_INSTALACAO = "alexandre.sousa@totaletecnologia.com.br,genilson.almeida@totaletecnologia.com.br,vania.ssousa@totaletecnologia.com.br,elcio.nunes@totaletecnologia.com.br,denis.vick@totaletecnologia.com.br"
 
 WHATSAPP_GRUPO_ID = "5511993259361-1587731165@g.us"
@@ -32,7 +32,7 @@ FALHAS_INSTALACAO = {
         "016G-Conexão em poste correto", "067G-Divisor na Rede"
     ],
     "DG/Apto": [
-        "017G-Identificação do cabo", "018G-Torque correto na conexão do DG", "019G-Preparação dos conectores no DG",
+        "017G-Identificação do cabo", "018G-Torque correto na conexão do DG", "019G-Preparação dos conectores do DG",
         "020M-Disposição do cabo (dentro do DG)", "021M-Roteamento do Cabo", "022M-Fixação do cabo"
     ],
     "PAQ": [
@@ -114,7 +114,7 @@ ITENS_MATINAL = {
 }
 
 # --- 1. Configuração Inicial ---
-st.set_page_config(page_title="Portal IQ - Totale", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Portal IQ - TOTALE ABC", layout="wide", initial_sidebar_state="expanded")
 
 if 'logado' not in st.session_state: st.session_state['logado'] = False
 if 'pagina_atual' not in st.session_state: st.session_state['pagina_atual'] = "Dashboard"
@@ -138,7 +138,7 @@ st.markdown("""
     .metric-card-orange { background: linear-gradient(135deg, #f2994a 0%, #f2c94c 100%); }
     .metric-card-purple { background: linear-gradient(135deg, #654ea3 0%, #eaafc8 100%); }
     
-    .metric-card * { color: white !important; }
+    .metric-card-blue *, .metric-card-purple *, .metric-card-green *, .metric-card-orange * { color: white !important; }
     .metric-title { font-size: 14px; font-weight: 600; text-transform: uppercase; margin-bottom: 8px; opacity: 0.9; }
     .metric-value { font-size: 28px; font-weight: 700; margin-bottom: 5px; }
     .metric-sub { font-size: 12px; opacity: 0.85; }
@@ -517,7 +517,7 @@ if not st.session_state['logado']:
     with col_logo:
         if os.path.exists("novo-logo-totale.png"): st.image(Image.open("novo-logo-totale.png"), use_container_width=True)
             
-    st.title("Acesso Operacional - Totale")
+    st.title("Acesso Operacional - IQ TOTALE ABC")
     
     with st.form("form_login"):
         re_input = st.text_input("RE (Login)")
@@ -652,8 +652,8 @@ else:
 
         # --- CARREGAR E EXIBIR NOTAS DA MATINAL EM DESTAQUE ---
         df_res_mat = carregar_resultados_matinal()
-        nota_geral_val = "N/A"
-        nota_iq_val = "N/A"
+        nota_geral_val = "Aguardando lançamento"
+        nota_iq_val = "Aguardando lançamento"
 
         if not df_res_mat.empty:
             df_res_mat.columns = [str(c).strip().upper() for c in df_res_mat.columns]
@@ -1172,10 +1172,10 @@ else:
                             linhas_erros = "- Nenhuma falha encontrada (100% conforme)"
 
                         fotos_txt = "\n".join(links_fotos)
-                        msg_whatsapp = f"*AUDITORIA DE INSTALAÇÃO - TOTALE*\n\n*Contrato:* {num_contrato}\n*RE do Técnico:* {tec_re}\n*Técnico:* {tec_inst}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Falhas Encontradas:*\n{linhas_erros}\n\n*Observações:* {obs_inst}\n\n*Evidências (Fotos):*\n{fotos_txt}"
+                        msg_whatsapp = f"*AUDITORIA DE INSTALAÇÃO - TOTALE ABC*\n\n*Contrato:* {num_contrato}\n*RE do Técnico:* {tec_re}\n*Técnico:* {tec_inst}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Falhas Encontradas:*\n{linhas_erros}\n\n*Observações:* {obs_inst}\n\n*Evidências (Fotos):*\n{fotos_txt}"
                         url_whatsapp = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_whatsapp)}"
                         
-                        corpo_email = f"RELATÓRIO DE AUDITORIA DE INSTALAÇÃO\nContrato: {num_contrato}\nRE: {tec_re}\nTécnico: {tec_inst}\nIQ: {st.session_state['nome_iq']}\n\nFALHAS ENCONTRADAS:\n{linhas_erros}\n\nOBSERVAÇÕES:\n{obs_inst}\n\nEVIDÊNCIAS FOTOS:\n{fotos_txt}"
+                        corpo_email = f"RELATÓRIO DE AUDITORIA DE INSTALAÇÃO\nContrato: {num_contrato}\nRE: {tec_re}\nTécnico: {tec_inst}\nIQ: {st.session_state['nome_iq']}\n\nFALHAS ENCONTRADAS:\n{linhas_erros}\n\nOBSERVAÇÕES:\n{obs_inst}\n\nEVIDÊNCIA FOTO:\n{fotos_txt}"
                         url_email = f"mailto:{DESTINATARIOS_INSTALACAO}?subject=Auditoria - Contrato {num_contrato} - RE {tec_re} - {tec_inst}&body={urllib.parse.quote(corpo_email)}"
                         
                         st.session_state['zap_pronto'] = url_whatsapp
