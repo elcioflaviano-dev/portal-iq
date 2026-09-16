@@ -656,16 +656,25 @@ else:
         nota_iq_val = "Aguardando lançamento"
 
         if not df_res_mat.empty:
-            df_res_mat.columns = [str(c).strip().upper() for c in df_res_mat.columns]
-            if 'NOTA_GERAL' in df_res_mat.columns:
-                notas_g = pd.to_numeric(df_res_mat['NOTA_GERAL'], errors='coerce').dropna()
-                if not notas_g.empty: nota_geral_val = round(notas_g.iloc[-1], 2)
+            df_res_mat.columns = [str(c).strip() for c in df_res_mat.columns]
             
-            if 'RE_IQ' in df_res_mat.columns and 'NOTA_IQ' in df_res_mat.columns:
-                df_iq_log = df_res_mat[df_res_mat['RE_IQ'].astype(str).str.strip().str.replace('.0','') == re_logado_str]
+            # Procurar coluna Nota_Geral (independente de maiúsculas/minúsculas)
+            col_ng = next((c for c in df_res_mat.columns if c.upper() == 'NOTA_GERAL'), None)
+            if col_ng:
+                vals_g = df_res_mat[col_ng].dropna()
+                if not vals_g.empty:
+                    nota_geral_val = str(vals_g.iloc[-1])
+            
+            # Procurar colunas RE_IQ e Nota_IQ
+            col_re = next((c for c in df_res_mat.columns if c.upper() == 'RE_IQ'), None)
+            col_niq = next((c for c in df_res_mat.columns if c.upper() == 'NOTA_IQ'), None)
+            
+            if col_re and col_niq:
+                df_iq_log = df_res_mat[df_res_mat[col_re].astype(str).str.strip().str.replace('.0','') == re_logado_str]
                 if not df_iq_log.empty:
-                    notas_iq_f = pd.to_numeric(df_iq_log['NOTA_IQ'], errors='coerce').dropna()
-                    if not notas_iq_f.empty: nota_iq_val = round(notas_iq_f.iloc[-1], 2)
+                    vals_iq = df_iq_log[col_niq].dropna()
+                    if not vals_iq.empty:
+                        nota_iq_val = str(vals_iq.iloc[-1])
 
         st.markdown("### 📊 Resultado da Matinal (Destaque)")
         c_nota1, c_nota2 = st.columns(2)
