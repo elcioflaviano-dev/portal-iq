@@ -18,7 +18,7 @@ import cloudinary.uploader
 fuso_brasil = timezone(timedelta(hours=-3))
 
 # --- CONFIGURAÇÕES DE DESTINATÁRIOS E WHATSAPP ---
-DESTINATARIOS_MATINAL = "helifa.silva@totaletecnologia.com.br,alexandre.sousa@totaletecnologia.com.br,genilson.almeida@totaletecnologia.com.br,vania.ssousa@totaletecnologia.com.br,paulo.correia@totaletecnologia.com.br,richard.silva@totaletecnologia.com.br,ariel.dias@totaletecnologia.com.br,alexandre.gianechini@totaletecnologia.com.br"
+DESTINATARIOS_MATINAL = "helifa.silva@totaletecnologia.com.br,alexandre.sousa@totaletecnologia.com.br,genilson.almeida@totaletecnologia.com.br,vania.ssousa@totaletecnologia.com.br,elcio.nunes@totaletecnologia.com.br,denis.vick@totaletecnologia.com.br,paulo.correia@totaletecnologia.com.br,richard.silva@totaletecnologia.com.br,ariel.dias@totaletecnologia.com.br,alexandre.gianechini@totaletecnologia.com.br"
 DESTINATARIOS_INSTALACAO = "alexandre.sousa@totaletecnologia.com.br,genilson.almeida@totaletecnologia.com.br,vania.ssousa@totaletecnologia.com.br,elcio.nunes@totaletecnologia.com.br,denis.vick@totaletecnologia.com.br"
 
 WHATSAPP_GRUPO_ID = "5511993259361-1587731165@g.us"
@@ -117,7 +117,7 @@ ITENS_MATINAL = {
 }
 
 # --- 1. Configuração Inicial ---
-st.set_page_config(page_title="Portal IQ - Totale", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Portal IQ - TOTALE ABC", layout="wide", initial_sidebar_state="expanded")
 
 if 'logado' not in st.session_state: st.session_state['logado'] = False
 if 'pagina_atual' not in st.session_state: st.session_state['pagina_atual'] = "Dashboard"
@@ -262,20 +262,23 @@ def carregar_dados():
         st.error("Planilha do Google está vazia ou faltando as abas Base_IQ / Base_Tecnicos.")
         st.stop()
     
-    dados_iqs['re_iq'] = dados_iqs['re_iq'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
-    dados_iqs['senha'] = dados_iqs.get('senha', '').astype(str).str.strip()
-    dados_iqs['PERFIL'] = dados_iqs.get('PERFIL', 'IQ').astype(str).str.strip().str.upper()
+    # Normalizar nomes de colunas de Base_IQ para evitar problemas de maiúsculas/minúsculas
+    dados_iqs.columns = [str(c).strip() for c in dados_iqs.columns]
     
-    # Tratamento flexível para encontrar a coluna de Região
-    col_regiao_encontrada = 'REGIAO'
-    for c in dados_iqs.columns:
-        c_up = str(c).strip().upper()
-        if 'REG' in c_up or 'BASE' in c_up:
-            col_regiao_encontrada = c
-            break
-            
-    if col_regiao_encontrada in dados_iqs.columns:
-        dados_iqs['REGIAO_FINAL'] = dados_iqs[col_regiao_encontrada].astype(str).str.strip()
+    col_re_name = next((c for c in dados_iqs.columns if c.upper() == 'RE_IQ'), 're_iq')
+    col_senha_name = next((c for c in dados_iqs.columns if c.upper() == 'SENHA'), 'senha')
+    col_nome_name = next((c for c in dados_iqs.columns if c.upper() == 'NOME_IQ'), 'nome_iq')
+    col_perfil_name = next((c for c in dados_iqs.columns if c.upper() == 'PERFIL'), 'PERFIL')
+    
+    # Achar coluna de Região dinamicamente
+    col_reg_name = next((c for c in dados_iqs.columns if 'REG' in c.upper() or 'BASE' in c.upper()), None)
+    
+    dados_iqs['re_iq'] = dados_iqs[col_re_name].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+    dados_iqs['senha'] = dados_iqs.get(col_senha_name, '').astype(str).str.strip()
+    dados_iqs['PERFIL'] = dados_iqs.get(col_perfil_name, 'IQ').astype(str).str.strip().str.upper()
+    
+    if col_reg_name:
+        dados_iqs['REGIAO_FINAL'] = dados_iqs[col_reg_name].astype(str).str.strip()
     else:
         dados_iqs['REGIAO_FINAL'] = 'N/A'
     
@@ -537,7 +540,7 @@ if not st.session_state['logado']:
     with col_logo:
         if os.path.exists("novo-logo-totale.png"): st.image(Image.open("novo-logo-totale.png"), use_container_width=True)
             
-    st.title("Acesso Operacional - Totale")
+    st.title("Acesso Operacional - IQ TOTAL ABC")
     
     with st.form("form_login"):
         re_input = st.text_input("RE (Login)")
@@ -765,7 +768,7 @@ else:
         # CARD 2: HORAS DE MONITORIA
         with col2:
             st.markdown('<div class="metric-card-green">', unsafe_allow_html=True)
-            st.markdown('<div class="metric-title">⏱️ Horas de Monitoria</div>', unsafe_allow_html=True)
+            st.markdown('<div class="metric-title">⏱️ Horas de Monitoria RPPA</div>', unsafe_allow_html=True)
             
             if perfil_usuario == 'GESTÃO':
                 meta_input = st.number_input("Meta de Horas:", value=meta_alvo, step=1, key=f"meta_{re_alvo_horas}")
@@ -1232,7 +1235,7 @@ else:
                             linhas_erros = "- Nenhuma falha encontrada (100% conforme)"
 
                         fotos_txt = "\n".join(links_fotos)
-                        msg_whatsapp = f"*AUDITORIA DE INSTALAÇÃO - TOTALE*\n*ID da Vistoria:* {vistoria_inst_id}\n\n*Contrato:* {num_contrato}\n*RE do Técnico:* {tec_re}\n*Técnico:* {tec_inst}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Falhas Encontradas:*\n{linhas_erros}\n\n*Observações:* {obs_inst}\n\n*Evidências (Fotos):*\n{fotos_txt}"
+                        msg_whatsapp = f"*AUDITORIA DE INSTALAÇÃO - TOTALE ABC*\n*ID da Vistoria:* {vistoria_inst_id}\n\n*Contrato:* {num_contrato}\n*RE do Técnico:* {tec_re}\n*Técnico:* {tec_inst}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Falhas Encontradas:*\n{linhas_erros}\n\n*Observações:* {obs_inst}\n\n*Evidências (Fotos):*\n{fotos_txt}"
                         url_whatsapp = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_whatsapp)}"
                         
                         corpo_email = f"RELATÓRIO DE AUDITORIA DE INSTALAÇÃO\nID da Vistoria: {vistoria_inst_id}\nContrato: {num_contrato}\nRE: {tec_re}\nTécnico: {tec_inst}\nIQ: {st.session_state['nome_iq']}\n\nFALHAS ENCONTRADAS:\n{linhas_erros}\n\nOBSERVAÇÕES:\n{obs_inst}\n\nEVIDÊNCIA FOTO:\n{fotos_txt}"
