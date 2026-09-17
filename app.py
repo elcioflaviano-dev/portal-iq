@@ -262,7 +262,6 @@ def carregar_dados():
         st.error("Planilha do Google está vazia ou faltando as abas Base_IQ / Base_Tecnicos.")
         st.stop()
     
-    # Normalizar nomes de colunas de Base_IQ para evitar problemas de maiúsculas/minúsculas
     dados_iqs.columns = [str(c).strip() for c in dados_iqs.columns]
     
     col_re_name = next((c for c in dados_iqs.columns if c.upper() == 'RE_IQ'), 're_iq')
@@ -270,7 +269,6 @@ def carregar_dados():
     col_nome_name = next((c for c in dados_iqs.columns if c.upper() == 'NOME_IQ'), 'nome_iq')
     col_perfil_name = next((c for c in dados_iqs.columns if c.upper() == 'PERFIL'), 'PERFIL')
     
-    # Achar coluna de Região dinamicamente
     col_reg_name = next((c for c in dados_iqs.columns if 'REG' in c.upper() or 'BASE' in c.upper()), None)
     
     dados_iqs['re_iq'] = dados_iqs[col_re_name].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
@@ -540,7 +538,7 @@ if not st.session_state['logado']:
     with col_logo:
         if os.path.exists("novo-logo-totale.png"): st.image(Image.open("novo-logo-totale.png"), use_container_width=True)
             
-    st.title("Acesso Operacional - IQ TOTAL ABC")
+    st.title("Acesso Operacional - IQ TOTALE ABC")
     
     with st.form("form_login"):
         re_input = st.text_input("RE (Login)")
@@ -1174,7 +1172,7 @@ else:
             with col_tec:
                 tec_inst = st.selectbox("Selecione o Técnico Auditado:", ["Selecione..."] + dados_completos['nome'].tolist())
             with col_cont:
-                num_contrato = st.text_input("📄 Número do Contrato Vistoriado:")
+                num_contrato = st.text_input("📄 Número do Contrato Vistoriado *")
             
             if tec_inst != "Selecione...":
                 st.info("⚠️ Marque abaixo as falhas encontradas na instalação, divididas por tópicos.")
@@ -1206,10 +1204,10 @@ else:
                 obs_inst = st.text_area("Observações da Tratativa:", key="obs_inst")
                 
                 if st.button("Gravar Auditoria e Gerar Disparos", type="primary"):
-                    if not fotos_inst:
+                    if not num_contrato.strip():
+                        st.warning("⚠️ O número do contrato é obrigatório para realizar a vistoria.")
+                    elif not fotos_inst:
                         st.warning("⚠️ O envio de ao menos uma foto é obrigatório para comprovar a auditoria.")
-                    elif not num_contrato.strip():
-                        st.warning("⚠️ O número do contrato é obrigatório.")
                     else:
                         tec_row = dados_completos[dados_completos['nome'] == tec_inst]
                         tec_login = tec_row['login'].iloc[0] if not tec_row.empty else "N/A"
