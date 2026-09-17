@@ -9,6 +9,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime, timedelta, timezone
 import uuid
 import io
+import time
 
 # Importação do Cloudinary
 import cloudinary
@@ -68,7 +69,6 @@ FALHAS_INSTALACAO = {
     ]
 }
 
-# --- ITENS DA MATINAL (BASEADO NO FORMS) ---
 ITENS_MATINAL = {
     "🛠️ Ferramental": [
         "ALICATE CRIMPADOR RG59/58 (PRESSÃO)", "ALICATE CRIMPADOR RJ11/45", "ALICATE DE BICO RETO 6\"", 
@@ -148,17 +148,25 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. Conexão com Google Sheets e Configuração Cloudinary ---
+# --- 2. Conexão com Google Sheets (Com Proteção contra Erro 429) ---
 def conectar_planilha():
-    try:
-        creds_dict = json.loads(st.secrets["gcp_service_account"])
-        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-        client = gspread.authorize(creds)
-        return client.open("PORTAL IQ")
-    except Exception as e:
-        st.error(f"Erro ao conectar com o Google Sheets. Detalhe: {e}")
-        st.stop()
+    tentativas = 3
+    espera = 2
+    for tentativa in range(tentativas):
+        try:
+            creds_dict = json.loads(st.secrets["gcp_service_account"])
+            scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+            creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+            client = gspread.authorize(creds)
+            return client.open("PORTAL IQ")
+        except Exception as e:
+            if "429" in str(e) or "Quota exceeded" in str(e):
+                if tentativa < tentativas - 1:
+                    time.sleep(espera)
+                    espera *= 2  # Espera exponencial (2s, 4s, 8s)
+                    continue
+            st.error(f"Erro ao conectar com o Google Sheets devido a excesso de acessos simultâneos (Quota excedida). Tente novamente em instantes. Detalhe: {e}")
+            st.stop()
 
 def registrar_log_acesso(re_iq, nome_iq, acao, pagina):
     try:
@@ -197,6 +205,7 @@ def alterar_senha_sheets(re_iq, nova_senha):
     except Exception as e:
         return False, f"Erro ao atualizar senha: {e}"
 
+@st.cache_data(ttl=600)
 def carregar_resultados_matinal():
     try:
         planilha = conectar_planilha()
@@ -243,7 +252,7 @@ def salvar_fotos_no_cloudinary(uploaded_files, nome_tecnico, tipo_pasta):
     except Exception as e:
         return [f"(ERRO CLOUDINARY: {e})"]
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=600)
 def carregar_dados():
     planilha = conectar_planilha()
     
@@ -346,6 +355,7 @@ def carregar_dados():
 
     return dados_iqs, dados_completos, meses_info
 
+@st.cache_data(ttl=600)
 def carregar_controle_iq():
     try:
         planilha = conectar_planilha()
@@ -1055,7 +1065,6 @@ else:
                         renderizar_itens_matinal(ITENS_MATINAL["🛠️ Ferramental"], t_ferr)
                         renderizar_itens_matinal(ITENS_MATINAL["📡 GPON/Outros"], t_gpon)
                         
-                        # INCLUINDO OS ITENS OBRIGATÓRIOS NA ABA DE EPI/EPC PARA TICAR SE TEM
                         with t_epi:
                             cols_epi = st.columns(2)
                             itens_epi_base = ITENS_MATINAL["👷 EPI / EPC"]
@@ -1074,7 +1083,6 @@ else:
 
                         renderizar_itens_matinal(ITENS_MATINAL["🧹 Asseio"], t_asseio)
                         
-                        # INCLUINDO UNIFORMES NA ABA DE SISTEMAS OU ASSEIO PARA TICAR SE TEM
                         with t_sis:
                             cols_sis = st.columns(2)
                             itens_sis_base = ITENS_MATINAL["📱 Sistemas"]
