@@ -6,13 +6,16 @@ import urllib.parse
 import json
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import uuid
 import io
 
 # Importação do Cloudinary
 import cloudinary
 import cloudinary.uploader
+
+# --- FUSO HORÁRIO DO BRASIL (UTC-3) ---
+fuso_brasil = timezone(timedelta(hours=-3))
 
 # --- CONFIGURAÇÕES DE DESTINATÁRIOS E WHATSAPP ---
 DESTINATARIOS_MATINAL = "helifa.silva@totaletecnologia.com.br,alexandre.sousa@totaletecnologia.com.br,genilson.almeida@totaletecnologia.com.br,vania.ssousa@totaletecnologia.com.br,elcio.nunes@totaletecnologia.com.br,denis.vick@totaletecnologia.com.br,paulo.correia@totaletecnologia.com.br,richard.silva@totaletecnologia.com.br,ariel.dias@totaletecnologia.com.br,alexandre.gianechini@totaletecnologia.com.br"
@@ -32,7 +35,7 @@ FALHAS_INSTALACAO = {
         "016G-Conexão em poste correto", "067G-Divisor na Rede"
     ],
     "DG/Apto": [
-        "017G-Identificação do cabo", "018G-Torque correto na conexão do DG", "019G-Preparação dos conectores do DG",
+        "017G-Identificação do cabo", "018G-Torque correto na conexão do DG", "019G-Preparação dos conectores no DG",
         "020M-Disposição do cabo (dentro do DG)", "021M-Roteamento do Cabo", "022M-Fixação do cabo"
     ],
     "PAQ": [
@@ -114,7 +117,7 @@ ITENS_MATINAL = {
 }
 
 # --- 1. Configuração Inicial ---
-st.set_page_config(page_title="Portal IQ - TOTALE ABC", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Portal IQ - Totale ABC", layout="wide", initial_sidebar_state="expanded")
 
 if 'logado' not in st.session_state: st.session_state['logado'] = False
 if 'pagina_atual' not in st.session_state: st.session_state['pagina_atual'] = "Dashboard"
@@ -166,7 +169,7 @@ def registrar_log_acesso(re_iq, nome_iq, acao, pagina):
             ws = planilha.add_worksheet(title="Log_Acessos", rows=100, cols=6)
             ws.append_row(["Data_Hora", "RE_IQ", "Nome_IQ", "Acao", "Pagina"])
         
-        data_hora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        data_hora = datetime.now(fuso_brasil).strftime("%d/%m/%Y %H:%M:%S")
         ws.append_row([data_hora, str(re_iq), nome_iq, acao, pagina])
     except Exception as e:
         print(f"Erro ao registrar log: {e}")
@@ -224,7 +227,7 @@ def salvar_fotos_no_cloudinary(uploaded_files, nome_tecnico, tipo_pasta):
     try:
         configurar_cloudinary()
         for i, uploaded_file in enumerate(uploaded_files):
-            data_hora_str = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+            data_hora_str = datetime.now(fuso_brasil).strftime('%Y-%m-%d_%H-%M-%S')
             nome_limpo = "".join([c for c in nome_tecnico if c.isalnum() or c in (' ', '_')]).strip().replace(' ', '_')
             public_id = f"{tipo_pasta}/{tipo_pasta}_{nome_limpo}_{data_hora_str}_{i+1}"
             
@@ -262,6 +265,16 @@ def carregar_dados():
     dados_iqs['re_iq'] = dados_iqs['re_iq'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
     dados_iqs['senha'] = dados_iqs.get('senha', '').astype(str).str.strip()
     dados_iqs['PERFIL'] = dados_iqs.get('PERFIL', 'IQ').astype(str).str.strip().str.upper()
+    
+    # Garantir leitura da REGIAO
+    if 'REGIAO' not in dados_iqs.columns:
+        # Tenta achar coluna parecida se houver variação
+        reg_col = next((c for c in dados_iqs.columns if 'REG' in str(c).upper()), None)
+        if reg_col:
+            dados_iqs['REGIAO'] = dados_iqs[reg_col]
+        else:
+            dados_iqs['REGIAO'] = 'N/A'
+    dados_iqs['REGIAO'] = dados_iqs['REGIAO'].astype(str).str.strip()
     
     dados_tecnicos['login'] = dados_tecnicos.get('login', '').astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
     dados_tecnicos['re_iq_responsavel'] = dados_tecnicos.get('re_iq_responsavel', '').astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
@@ -418,7 +431,7 @@ def registrar_vistoria_completa(re_iq, nome_iq, login_tec, nome_tec, tipo, irreg
             ])
             
         vistoria_id = str(uuid.uuid4())[:8].upper()
-        data_hora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        data_hora = datetime.now(fuso_brasil).strftime("%d/%m/%Y %H:%M:%S")
         links_str = " | ".join(links_fotos)
         
         ws.append_row([
@@ -445,7 +458,7 @@ def registrar_vistoria_instalacao_sheets(re_iq, nome_iq, login_tec, nome_tec, co
             ws.append_row(["ID_Vistoria", "Data_Hora", "RE_IQ", "Nome_IQ", "Login_Tecnico", "Nome_Tecnico", "Contrato", "Erros_Instalacao", "Observacao", "Links_Fotos", "Status"])
             
         vistoria_id = str(uuid.uuid4())[:8].upper()
-        data_hora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        data_hora = datetime.now(fuso_brasil).strftime("%d/%m/%Y %H:%M:%S")
         links_str = " | ".join(links_fotos)
         ws.append_row([vistoria_id, data_hora, str(re_iq), nome_iq, str(login_tec), nome_tec, str(contrato), irregulares, obs, links_str, "Registrada"])
         st.cache_data.clear()
@@ -521,7 +534,7 @@ if not st.session_state['logado']:
     with col_logo:
         if os.path.exists("novo-logo-totale.png"): st.image(Image.open("novo-logo-totale.png"), use_container_width=True)
             
-    st.title("Acesso Operacional - IQ TOTALE ABC")
+    st.title("Acesso Operacional - IQI TOTALE ABC")
     
     with st.form("form_login"):
         re_input = st.text_input("RE (Login)")
@@ -535,6 +548,7 @@ if not st.session_state['logado']:
             st.session_state['re_usuario'] = re_input.strip()
             st.session_state['nome_iq'] = iq_valido.iloc[0]['nome_iq']
             st.session_state['perfil'] = iq_valido.iloc[0]['PERFIL']
+            st.session_state['regiao_iq'] = iq_valido.iloc[0].get('REGIAO', 'N/A')
             
             registrar_log_acesso(re_input.strip(), iq_valido.iloc[0]['nome_iq'], "LOGIN", "Dashboard")
             st.rerun()
@@ -580,6 +594,7 @@ else:
     with st.sidebar:
         if os.path.exists("novo-logo-totale.png"): st.image(Image.open("novo-logo-totale.png"), use_container_width=True)
         st.write(f"**Usuário:** {st.session_state['nome_iq']}")
+        st.write(f"**Região:** {st.session_state.get('regiao_iq', 'N/A')}")
         st.write(f"**Perfil:** {perfil_usuario}")
         st.divider()
         
@@ -678,7 +693,7 @@ else:
                     if not vals_iq.empty:
                         nota_iq_val = str(vals_iq.iloc[-1])
 
-        st.markdown("### 📊 Resultado da Matinal CLARO")
+        st.markdown("### 📊 Resultado da Matinal (Destaque)")
         c_nota1, c_nota2 = st.columns(2)
         with c_nota1:
             st.markdown('<div class="metric-card-blue">', unsafe_allow_html=True)
@@ -744,7 +759,7 @@ else:
                 st.markdown('<div class="metric-sub">Sem abas mensais</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
-        # CARD 2: HORAS DE MONITORIA RPPA
+        # CARD 2: HORAS DE MONITORIA
         with col2:
             st.markdown('<div class="metric-card-green">', unsafe_allow_html=True)
             st.markdown('<div class="metric-title">⏱️ Horas de Monitoria RPPA</div>', unsafe_allow_html=True)
@@ -765,7 +780,7 @@ else:
         # CARD 3: PENDENTES
         with col3:
             st.markdown('<div class="metric-card-orange">', unsafe_allow_html=True)
-            st.markdown('<div class="metric-title">⚠️ Monitoramento Pendente RPPA</div>', unsafe_allow_html=True)
+            st.markdown('<div class="metric-title">⚠️ Monitoramento Pendente</div>', unsafe_allow_html=True)
             
             if mes_acompanhamento:
                 pendentes_hoje = len(equipe_vigente[(equipe_vigente[mes_acompanhamento] == 'NÃO') & (equipe_vigente[f'ACOMPANHAMENTO_{mes_acompanhamento}'] != 'SIM')])
@@ -1252,7 +1267,7 @@ else:
                     st.download_button(
                         label="📥 Baixar Excel (Matinais)",
                         data=excel_mat,
-                        file_name=f"Vistorias_Matinal_{datetime.now().strftime('%Y-%m-%d')}.xlsx",
+                        file_name=f"Vistorias_Matinal_{datetime.now(fuso_brasil).strftime('%Y-%m-%d')}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         type="primary"
                     )
@@ -1273,7 +1288,7 @@ else:
                     st.download_button(
                         label="📥 Baixar Excel (Instalação)",
                         data=excel_inst,
-                        file_name=f"Vistorias_Instalacao_{datetime.now().strftime('%Y-%m-%d')}.xlsx",
+                        file_name=f"Vistorias_Instalacao_{datetime.now(fuso_brasil).strftime('%Y-%m-%d')}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         type="primary"
                     )
