@@ -11,9 +11,6 @@ import uuid
 import io
 import time
 
-# Importação para Google Calendar API
-from googleapiclient.discovery import build
-
 # Importação do Cloudinary
 import cloudinary
 import cloudinary.uploader
@@ -39,7 +36,7 @@ FALHAS_INSTALACAO = {
         "016G-Conexão em poste correto", "067G-Divisor na Rede"
     ],
     "DG/Apto": [
-        "017G-Identificação do cabo", "018G-Torque correto na conexão do DG", "019G-Preparação dos conectores do DG",
+        "017G-Identificação do cabo", "018G-Torque correto na conexão do DG", "019G-Preparação dos conectores no DG",
         "020M-Disposição do cabo (dentro do DG)", "021M-Roteamento do Cabo", "022M-Fixação do cabo"
     ],
     "PAQ": [
@@ -1009,7 +1006,6 @@ else:
                         msg_zap_tec = f"Olá *{tec_agendar}*,\n\nSua *Vistoria Matinal (IVM)* foi agendada pelo IQ *{st.session_state['nome_iq']}* para a data: *{data_agendada.strftime('%d/%m/%Y')}*.\n\nPor favor, mantenha seus EPIs, ferramentas e veículos organizados para a verificação."
                         url_zap_tec = f"https://api.whatsapp.com/send?phone={tel_tec}&text={urllib.parse.quote(msg_zap_tec)}"
                         
-                        # Link direto para adicionar ao Google Agenda (Google Calendar URL Generator)
                         gcal_date_str = data_agendada.strftime('%Y%m%d')
                         gcal_title = urllib.parse.quote(f"Vistoria Matinal (IVM) - {tec_agendar}")
                         gcal_details = urllib.parse.quote(f"Vistoria matinal agendada pelo IQ {st.session_state['nome_iq']} com o técnico {tec_agendar}.")
