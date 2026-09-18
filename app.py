@@ -36,7 +36,7 @@ FALHAS_INSTALACAO = {
         "016G-Conexão em poste correto", "067G-Divisor na Rede"
     ],
     "DG/Apto": [
-        "017G-Identificação do cabo", "018G-Torque correto na conexão do DG", "019G-Preparação dos conectores no DG",
+        "017G-Identificação do cabo", "018G-Torque correto na conexão do DG", "019G-Preparação dos conectores do DG",
         "020M-Disposição do cabo (dentro do DG)", "021M-Roteamento do Cabo", "022M-Fixação do cabo"
     ],
     "PAQ": [
@@ -117,7 +117,7 @@ ITENS_MATINAL = {
 }
 
 # --- 1. Configuração Inicial ---
-st.set_page_config(page_title="Portal IQ - TOTALE ABC", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Portal do IQ - TOTALE ABC", layout="wide", initial_sidebar_state="expanded")
 
 if 'logado' not in st.session_state: st.session_state['logado'] = False
 if 'pagina_atual' not in st.session_state: st.session_state['pagina_atual'] = "Dashboard"
@@ -1003,13 +1003,16 @@ else:
                         if not tec_row_info.empty and 'telefone_tec' in tec_row_info.columns:
                             tel_tec = str(tec_row_info.iloc[0]['telefone_tec']).strip()
                         
-                        msg_zap_tec = f"Olá *{tec_agendar}*,\n\nSua *Vistoria Matinal (IVM)* foi agendada pelo IQ *{st.session_state['nome_iq']}* para a data: *{data_agendada.strftime('%d/%m/%Y')}*.\n\nPor favor, mantenha seus EPIs, ferramentas e veículos organizados para a verificação."
+                        msg_zap_tec = f"Olá *{tec_agendar}*,\n\nSua *Vistoria Matinal (IVM)* foi agendada pelo IQ *{st.session_state['nome_iq']}* para a data: *{data_agendada.strftime('%d/%m/%Y')}* às *07:00* (Local: Base Totale).\n\nPor favor, *chegue cedo*, mantenha seus EPIs, ferramentas e veículos organizados para a verificação."
                         url_zap_tec = f"https://api.whatsapp.com/send?phone={tel_tec}&text={urllib.parse.quote(msg_zap_tec)}"
                         
-                        gcal_date_str = data_agendada.strftime('%Y%m%d')
+                        # Google Agenda configurado para 07:00 e Base Totale
+                        gcal_start = data_agendada.strftime('%Y%m%d') + 'T070000'
+                        gcal_end = data_agendada.strftime('%Y%m%d') + 'T080000'
                         gcal_title = urllib.parse.quote(f"Vistoria Matinal (IVM) - {tec_agendar}")
+                        gcal_location = urllib.parse.quote("Base Totale")
                         gcal_details = urllib.parse.quote(f"Vistoria matinal agendada pelo IQ {st.session_state['nome_iq']} com o técnico {tec_agendar}.")
-                        gcal_url = f"https://calendar.google.com/calendar/render?action=TEMPLATE&text={gcal_title}&dates={gcal_date_str}/{gcal_date_str}&details={gcal_details}"
+                        gcal_url = f"https://calendar.google.com/calendar/render?action=TEMPLATE&text={gcal_title}&dates={gcal_start}/{gcal_end}&location={gcal_location}&details={gcal_details}"
 
                         st.session_state['zap_agenda_pronto'] = url_zap_tec
                         st.session_state['gcal_link'] = gcal_url
