@@ -36,7 +36,7 @@ FALHAS_INSTALACAO = {
         "016G-Conexão em poste correto", "067G-Divisor na Rede"
     ],
     "DG/Apto": [
-        "017G-Identificação do cabo", "018G-Torque correto na conexão do DG", "019G-Preparação dos conectores no DG",
+        "017G-Identificação do cabo", "018G-Torque correto na conexão do DG", "019G-Preparação dos conectores do DG",
         "020M-Disposição do cabo (dentro do DG)", "021M-Roteamento do Cabo", "022M-Fixação do cabo"
     ],
     "PAQ": [
@@ -56,7 +56,7 @@ FALHAS_INSTALACAO = {
         "053G-Qualidade do sinal (Voz)", "055G-Danos causados na instalação", "095G-Instalação de Mini Isolator com Sleev",
         "096G-Preenchimento da Etiqueta WIFI ou O.S", "097G-Rede WIFI configurada/instalada"
     ],
-    "Medição de Sinal": [    
+    "Medição de Sinal": [
         "056M-Nivel correto do canal baixo", "057M-Nivel correto do canal alto", "058G-Nivel correto do TX",
         "059G-Nivel correto do RX", "060G-Qualidade do sinal - PS/QS/BER", "098G-WIFI - Técnico garantiu a cobertura em 80% dos cômodos",
         "099G-WIFI - Técnico orientou cliente sobre a cobertura do Wi-Fi (Obs. na OS)"
@@ -123,6 +123,7 @@ if 'logado' not in st.session_state: st.session_state['logado'] = False
 if 'pagina_atual' not in st.session_state: st.session_state['pagina_atual'] = "Dashboard"
 if 'email_pronto' not in st.session_state: st.session_state['email_pronto'] = None
 if 'zap_pronto' not in st.session_state: st.session_state['zap_pronto'] = None
+if 'zap_agenda_pronto' not in st.session_state: st.session_state['zap_agenda_pronto'] = None
 if 'tec_selecionado_atalho' not in st.session_state: st.session_state['tec_selecionado_atalho'] = None
 if 'aba_matinal_ativa' not in st.session_state: st.session_state['aba_matinal_ativa'] = 0
 
@@ -163,9 +164,9 @@ def conectar_planilha():
             if "429" in str(e) or "Quota exceeded" in str(e):
                 if tentativa < tentativas - 1:
                     time.sleep(espera)
-                    espera *= 2  # Espera exponencial (2s, 4s, 8s)
+                    espera *= 2
                     continue
-            st.error(f"Erro ao conectar com o Google Sheets devido a excesso de acessos simultâneos (Quota excedida). Tente novamente em instantes. Detalhe: {e}")
+            st.error(f"Erro ao conectar com o Google Sheets devido a excesso de acessos simultâneos. Tente novamente em instantes. Detalhe: {e}")
             st.stop()
 
 def registrar_log_acesso(re_iq, nome_iq, acao, pagina):
@@ -289,9 +290,17 @@ def carregar_dados():
     else:
         dados_iqs['REGIAO_FINAL'] = 'N/A'
     
+    dados_tecnicos.columns = [str(c).strip() for c in dados_tecnicos.columns]
     dados_tecnicos['login'] = dados_tecnicos.get('login', '').astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
     dados_tecnicos['re_iq_responsavel'] = dados_tecnicos.get('re_iq_responsavel', '').astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
     
+    # Identificar coluna de telefone/whatsapp do técnico dinamicamente se existir
+    col_tel = next((c for c in dados_tecnicos.columns if 'TEL' in c.upper() or 'CEL' in c.upper() or 'WPP' in c.upper() or 'ZAP' in c.upper() or 'WHATS' in c.upper()), None)
+    if col_tel:
+        dados_tecnicos['telefone_tec'] = dados_tecnicos[col_tel].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+    else:
+        dados_tecnicos['telefone_tec'] = ''
+
     colunas_remover = ['status_certificacao', 'Acompanhamento', 'Contrato', 'Data_Monitoramento', 'Observacao']
     dados_tecnicos = dados_tecnicos.drop(columns=[c for c in colunas_remover if c in dados_tecnicos.columns], errors='ignore')
 
@@ -548,7 +557,7 @@ if not st.session_state['logado']:
     with col_logo:
         if os.path.exists("novo-logo-totale.png"): st.image(Image.open("novo-logo-totale.png"), use_container_width=True)
             
-    st.title("Acesso Operacional - IQ TOTALE ABC")
+    st.title("Acesso Operacional - TOTALE ABC")
     
     with st.form("form_login"):
         re_input = st.text_input("RE (Login)")
@@ -707,7 +716,7 @@ else:
                     if not vals_iq.empty:
                         nota_iq_val = str(vals_iq.iloc[-1])
 
-        st.markdown("### 📊 Resultado da Matinal CLARO")
+        st.markdown("### 📊 Resultado da Matinal (Destaque)")
         c_nota1, c_nota2 = st.columns(2)
         with c_nota1:
             st.markdown('<div class="metric-card-blue">', unsafe_allow_html=True)
@@ -955,25 +964,43 @@ else:
         tab_agendar, tab_executar = st.tabs(["1. Agendar Téc", "2. Executar Vistoria (Checklist)"])
         
         with tab_agendar:
-            tipo_selecao_tec = st.radio("Selecione a base de técnicos para agendamento:", ["Minha Equipe", "Geral (Todos os Técnicos)"], horizontal=True)
-            lista_tecs_disponiveis = equipe_vigente['nome'].tolist() if tipo_selecao_tec == "Minha Equipe" else dados_completos['nome'].tolist()
-
-            col_a1, col_a2 = st.columns(2)
-            with col_a1:
-                tec_agendar = st.selectbox("Selecione o Técnico:", ["Selecione..."] + lista_tecs_disponiveis)
-            with col_a2:
-                data_agendada = st.date_input("Escolha o Dia:", value=None, format="DD/MM/YYYY")
-                
-            if st.button("Adicionar à Agenda", type="primary"):
-                if tec_agendar != "Selecione..." and data_agendada is not None:
-                    st.session_state['agenda_matinal'][tec_agendar] = {
-                        'data': data_agendada.strftime("%d/%m/%Y"),
-                        'iq_nome': st.session_state['nome_iq'],
-                        're_iq': re_logado_str
-                    }
-                    salvar_agenda_no_sheets(st.session_state['agenda_matinal'])
-                    st.success(f"Matinal agendada para {tec_agendar}!")
+            if st.session_state.get('zap_agenda_pronto'):
+                st.success("✅ Matinal agendada com sucesso!")
+                st.markdown(f'<a href="{st.session_state["zap_agenda_pronto"]}" target="_blank" style="display: inline-block; padding: 0.8em 1.5em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">💬 AVISAR TÉCNICO NO WHATSAPP</a>', unsafe_allow_html=True)
+                st.write("")
+                if st.button("🧹 Concluir e Agendar Outro"):
+                    st.session_state['zap_agenda_pronto'] = None
                     st.rerun()
+            else:
+                tipo_selecao_tec = st.radio("Selecione a base de técnicos para agendamento:", ["Minha Equipe", "Geral (Todos os Técnicos)"], horizontal=True)
+                lista_tecs_disponiveis = equipe_vigente['nome'].tolist() if tipo_selecao_tec == "Minha Equipe" else dados_completos['nome'].tolist()
+
+                col_a1, col_a2 = st.columns(2)
+                with col_a1:
+                    tec_agendar = st.selectbox("Selecione o Técnico:", ["Selecione..."] + lista_tecs_disponiveis)
+                with col_a2:
+                    data_agendada = st.date_input("Escolha o Dia:", value=None, format="DD/MM/YYYY")
+                    
+                if st.button("Adicionar à Agenda", type="primary"):
+                    if tec_agendar != "Selecione..." and data_agendada is not None:
+                        st.session_state['agenda_matinal'][tec_agendar] = {
+                            'data': data_agendada.strftime("%d/%m/%Y"),
+                            'iq_nome': st.session_state['nome_iq'],
+                            're_iq': re_logado_str
+                        }
+                        salvar_agenda_no_sheets(st.session_state['agenda_matinal'])
+                        
+                        # Buscar telefone do técnico se existir na base
+                        tec_row_info = dados_completos[dados_completos['nome'] == tec_agendar]
+                        tel_tec = ""
+                        if not tec_row_info.empty and 'telefone_tec' in tec_row_info.columns:
+                            tel_tec = str(tec_row_info.iloc[0]['telefone_tec']).strip()
+                        
+                        msg_zap_tec = f"Olá *{tec_agendar}*,\n\nSua *Vistoria Matinal (IVM)* foi agendada pelo IQ *{st.session_state['nome_iq']}* para a data: *{data_agendada.strftime('%d/%m/%Y')}*.\n\nPor favor, mantenha seus EPIs, ferramentas e veículos organizados para a verificação."
+                        url_zap_tec = f"https://api.whatsapp.com/send?phone={tel_tec}&text={urllib.parse.quote(msg_zap_tec)}"
+                        
+                        st.session_state['zap_agenda_pronto'] = url_zap_tec
+                        st.rerun()
             
             st.write("---")
             st.write("**Agenda de Matinais:**")
@@ -1147,7 +1174,7 @@ else:
                                 del st.session_state['agenda_matinal'][tec_atual]
                                 salvar_agenda_no_sheets(st.session_state['agenda_matinal'])
                                 
-                                fotos_txt = "\n".join(links_fotos)
+                                fotos_txt = "\n".join(links_fn for links_fn in links_fotos) if 'links_fotos' in locals() else ""
                                 corpo_email = f"RELATÓRIO DE MATINAL (IVM 2026)\nID da Vistoria: {vistoria_id}\nRE: {tec_re}\nTécnico: {tec_atual}\nIQ: {st.session_state['nome_iq']}\n\nLOTES, VALIDADES E TAMANHOS:\n- Lote Capacete: {lote_capacete}\n- Vencimento Carneira: {venc_carneira}\n- Lote Cinto: {lote_cinto}\n- Lote Talabarte: {lote_talabarte}\n- Lote Luva Pigmentada: {lote_luva_pig}\n- Lote Luva Vaqueta: {lote_luva_vaq}\n- Venc. Protetor Solar: {venc_protetor}\n- Tamanho Camisa: {tam_camisa}\n- Tamanho Calça: {tam_calca}\n- Tamanho Jaqueta: {tam_jaqueta}\n\nITENS FALTANTES/IRREGULARES:\n- {resumo_faltas}\n\nOBSERVAÇÕES:\n{obs_final}\n\nEVIDÊNCIAS FOTOS:\n{fotos_txt}"
                                 url_email = f"mailto:{DESTINATARIOS_MATINAL}?subject=Relatorio Matinal [ID {vistoria_id}] - RE {tec_re} - {tec_atual}&body={urllib.parse.quote(corpo_email)}"
                                 
