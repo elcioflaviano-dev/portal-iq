@@ -117,7 +117,7 @@ ITENS_MATINAL = {
 }
 
 # --- 1. Configuração Inicial ---
-st.set_page_config(page_title="Portal IQ - TOTALE ABC", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Portal do IQ - TOTALE ABC", layout="wide", initial_sidebar_state="expanded")
 
 if 'logado' not in st.session_state: st.session_state['logado'] = False
 if 'pagina_atual' not in st.session_state: st.session_state['pagina_atual'] = "Dashboard"
