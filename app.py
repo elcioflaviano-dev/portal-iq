@@ -11,6 +11,9 @@ import uuid
 import io
 import time
 
+# Importação para Google Calendar API
+from googleapiclient.discovery import build
+
 # Importação do Cloudinary
 import cloudinary
 import cloudinary.uploader
@@ -117,13 +120,14 @@ ITENS_MATINAL = {
 }
 
 # --- 1. Configuração Inicial ---
-st.set_page_config(page_title="Portal do IQ - TOTALE ABC", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Portal IQ - TOTALE ABC", layout="wide", initial_sidebar_state="expanded")
 
 if 'logado' not in st.session_state: st.session_state['logado'] = False
 if 'pagina_atual' not in st.session_state: st.session_state['pagina_atual'] = "Dashboard"
 if 'email_pronto' not in st.session_state: st.session_state['email_pronto'] = None
 if 'zap_pronto' not in st.session_state: st.session_state['zap_pronto'] = None
 if 'zap_agenda_pronto' not in st.session_state: st.session_state['zap_agenda_pronto'] = None
+if 'gcal_link' not in st.session_state: st.session_state['gcal_link'] = None
 if 'tec_selecionado_atalho' not in st.session_state: st.session_state['tec_selecionado_atalho'] = None
 if 'aba_matinal_ativa' not in st.session_state: st.session_state['aba_matinal_ativa'] = 0
 
@@ -294,7 +298,6 @@ def carregar_dados():
     dados_tecnicos['login'] = dados_tecnicos.get('login', '').astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
     dados_tecnicos['re_iq_responsavel'] = dados_tecnicos.get('re_iq_responsavel', '').astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
     
-    # Identificar coluna de telefone/whatsapp do técnico dinamicamente se existir
     col_tel = next((c for c in dados_tecnicos.columns if 'TEL' in c.upper() or 'CEL' in c.upper() or 'WPP' in c.upper() or 'ZAP' in c.upper() or 'WHATS' in c.upper()), None)
     if col_tel:
         dados_tecnicos['telefone_tec'] = dados_tecnicos[col_tel].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
@@ -557,7 +560,7 @@ if not st.session_state['logado']:
     with col_logo:
         if os.path.exists("novo-logo-totale.png"): st.image(Image.open("novo-logo-totale.png"), use_container_width=True)
             
-    st.title("Acesso Operacional - TOTALE ABC")
+    st.title("Acesso Operacional - IQ TOTALE ABC")
     
     with st.form("form_login"):
         re_input = st.text_input("RE (Login)")
@@ -966,10 +969,18 @@ else:
         with tab_agendar:
             if st.session_state.get('zap_agenda_pronto'):
                 st.success("✅ Matinal agendada com sucesso!")
-                st.markdown(f'<a href="{st.session_state["zap_agenda_pronto"]}" target="_blank" style="display: inline-block; padding: 0.8em 1.5em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">💬 AVISAR TÉCNICO NO WHATSAPP</a>', unsafe_allow_html=True)
+                
+                c_btn_zap, c_btn_gcal = st.columns(2)
+                with c_btn_zap:
+                    st.markdown(f'<a href="{st.session_state["zap_agenda_pronto"]}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 15px;">💬 AVISAR NO WHATSAPP</a>', unsafe_allow_html=True)
+                with c_btn_gcal:
+                    if st.session_state.get('gcal_link'):
+                        st.markdown(f'<a href="{st.session_state["gcal_link"]}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #4285F4; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 15px;">📅 ADICIONAR AO GOOGLE AGENDA</a>', unsafe_allow_html=True)
+                
                 st.write("")
                 if st.button("🧹 Concluir e Agendar Outro"):
                     st.session_state['zap_agenda_pronto'] = None
+                    st.session_state['gcal_link'] = None
                     st.rerun()
             else:
                 tipo_selecao_tec = st.radio("Selecione a base de técnicos para agendamento:", ["Minha Equipe", "Geral (Todos os Técnicos)"], horizontal=True)
@@ -990,16 +1001,22 @@ else:
                         }
                         salvar_agenda_no_sheets(st.session_state['agenda_matinal'])
                         
-                        # Buscar telefone do técnico se existir na base
                         tec_row_info = dados_completos[dados_completos['nome'] == tec_agendar]
                         tel_tec = ""
                         if not tec_row_info.empty and 'telefone_tec' in tec_row_info.columns:
                             tel_tec = str(tec_row_info.iloc[0]['telefone_tec']).strip()
                         
-                        msg_zap_tec = f"Olá *{tec_agendar}*,\n\nSua *Vistoria Matinal (IVM)* foi agendada pelo IQ *{st.session_state['nome_iq']}* para a data: *{data_agendada.strftime('%d/%m/%Y')}*.\n\nPor favor, *chegue cedo*, mantenha seus EPIs, ferramentas e veículos organizados para a verificação."
+                        msg_zap_tec = f"Olá *{tec_agendar}*,\n\nSua *Vistoria Matinal (IVM)* foi agendada pelo IQ *{st.session_state['nome_iq']}* para a data: *{data_agendada.strftime('%d/%m/%Y')}*.\n\nPor favor, mantenha seus EPIs, ferramentas e veículos organizados para a verificação."
                         url_zap_tec = f"https://api.whatsapp.com/send?phone={tel_tec}&text={urllib.parse.quote(msg_zap_tec)}"
                         
+                        # Link direto para adicionar ao Google Agenda (Google Calendar URL Generator)
+                        gcal_date_str = data_agendada.strftime('%Y%m%d')
+                        gcal_title = urllib.parse.quote(f"Vistoria Matinal (IVM) - {tec_agendar}")
+                        gcal_details = urllib.parse.quote(f"Vistoria matinal agendada pelo IQ {st.session_state['nome_iq']} com o técnico {tec_agendar}.")
+                        gcal_url = f"https://calendar.google.com/calendar/render?action=TEMPLATE&text={gcal_title}&dates={gcal_date_str}/{gcal_date_str}&details={gcal_details}"
+
                         st.session_state['zap_agenda_pronto'] = url_zap_tec
+                        st.session_state['gcal_link'] = gcal_url
                         st.rerun()
             
             st.write("---")
