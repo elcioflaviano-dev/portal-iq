@@ -996,7 +996,7 @@ else:
                         if not tec_row_info.empty and 'telefone_tec' in tec_row_info.columns:
                             tel_tec = str(tec_row_info.iloc[0]['telefone_tec']).strip()
                         
-                        msg_zap_tec = f"Olá *{tec_agendar}*,\n\nSua *Vistoria Matinal (IVM)* foi agendada pelo IQ *{st.session_state['nome_iq']}* para a data: *{data_agendada.strftime('%d/%m/%Y')}*.\n\nPor favor, <b>chegue cedo</b>, mantenha seus EPIs, ferramentas e veículos organizados para a verificação."
+                        msg_zap_tec = f"Olá *{tec_agendar}*,\n\nSua *Vistoria Matinal (IVM)* foi agendada pelo IQ *{st.session_state['nome_iq']}* para a data: *{data_agendada.strftime('%d/%m/%Y')}*.\n\nPor favor, *chegue cedo*, mantenha seus EPIs, ferramentas e veículos organizados para a verificação."
                         url_zap_tec = f"https://api.whatsapp.com/send?phone={tel_tec}&text={urllib.parse.quote(msg_zap_tec)}"
                         
                         st.session_state['zap_agenda_pronto'] = url_zap_tec
