@@ -56,7 +56,7 @@ FALHAS_INSTALACAO = {
         "053G-Qualidade do sinal (Voz)", "055G-Danos causados na instalação", "095G-Instalação de Mini Isolator com Sleev",
         "096G-Preenchimento da Etiqueta WIFI ou O.S", "097G-Rede WIFI configurada/instalada"
     ],
-    "Medição de Sinal": [
+    "Medição de Sinal": [    
         "056M-Nivel correto do canal baixo", "057M-Nivel correto do canal alto", "058G-Nivel correto do TX",
         "059G-Nivel correto do RX", "060G-Qualidade do sinal - PS/QS/BER", "098G-WIFI - Técnico garantiu a cobertura em 80% dos cômodos",
         "099G-WIFI - Técnico orientou cliente sobre a cobertura do Wi-Fi (Obs. na OS)"
