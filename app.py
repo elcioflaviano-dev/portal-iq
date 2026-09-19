@@ -182,7 +182,6 @@ def criar_evento_google_calendar(nome_tec, data_agendamento, nome_iq, email_tec=
         
         service = build('calendar', 'v3', credentials=credentials)
         
-        # Horário fixo: 07:00 às 08:00
         data_str = data_agendada.strftime('%Y-%m-%d')
         start_datetime = f"{data_str}T07:00:00-03:00"
         end_datetime = f"{data_str}T08:00:00-03:00"
@@ -209,7 +208,6 @@ def criar_evento_google_calendar(nome_tec, data_agendamento, nome_iq, email_tec=
             },
         }
         
-        # Insere na agenda principal da conta de serviço ou ID primário configurado
         calendar_id = 'primary'
         service.events().insert(calendarId=calendar_id, body=event, sendUpdates='all' if email_tec else 'none').execute()
         return True
@@ -360,7 +358,6 @@ def carregar_dados():
     else:
         dados_tecnicos['telefone_tec'] = '5511994524040'
 
-    # Identificar coluna de e-mail do técnico se houver
     col_email = next((c for c in dados_tecnicos.columns if 'MAIL' in c.upper() or 'CORREIO' in c.upper()), None)
     if col_email:
         dados_tecnicos['email_tec'] = dados_tecnicos[col_email].astype(str).str.strip()
@@ -1073,7 +1070,6 @@ else:
                             if 'email_tec' in tec_row_info.columns:
                                 email_tec = str(tec_row_info.iloc[0]['email_tec']).strip()
                         
-                        # Inserção automática no Google Calendar
                         sucesso_gcal = criar_evento_google_calendar(
                             nome_tec=tec_agendar,
                             data_agendamento=data_agendada,
@@ -1308,8 +1304,7 @@ else:
                         cols = st.columns(2)
                         for i, item in enumerate(lista_itens):
                             col_atual = cols[i % 2]
-                            if col_atual.checkbox(item, key=f"inst_{item[:4]}_{i}
-"):
+                            if col_atual.checkbox(item, key=f"inst_{item[:4]}_{i}"):
                                 erros_encontrados.append(item)
 
                 renderizar_colunas_checklist(FALHAS_INSTALACAO["Tap/Isolador/Emenda"], tab1)
