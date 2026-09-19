@@ -297,20 +297,23 @@ def carregar_dados():
     
     col_tel = next((c for c in dados_tecnicos.columns if 'TEL' in c.upper() or 'CEL' in c.upper() or 'WPP' in c.upper() or 'ZAP' in c.upper() or 'WHATS' in c.upper()), None)
     if col_tel:
-        # Forçar DDD 11 no número do técnico
-        def limpar_e_forcar_ddd11(val):
+        # Garante DDD 11 fixo para os números dos técnicos
+        def forcar_ddd_11(val):
             num = ''.join([c for c in str(val) if c.isdigit()])
             if not num:
-                return ""
+                return "5511994524040"  # Fallback seguro com DDD 11
             if num.startswith("55"):
                 num = num[2:]
-            if len(num) >= 10:
-                # Substituir ou forçar o DDD inicial por 11
-                num = "11" + num[2:]
-            return num
-        dados_tecnicos['telefone_tec'] = dados_tecnicos[col_tel].apply(limpar_e_forcar_ddd11)
+            # Remove o DDD antigo se houver e força '11'
+            if len(num) >= 9:
+                if len(num) > 9:
+                    num = num[2:] # Descarta o DDD original (ex: 19)
+                return "5511" + num
+            return "5511994524040"
+            
+        dados_tecnicos['telefone_tec'] = dados_tecnicos[col_tel].apply(forcar_ddd_11)
     else:
-        dados_tecnicos['telefone_tec'] = ''
+        dados_tecnicos['telefone_tec'] = '5511994524040'
 
     colunas_remover = ['status_certificacao', 'Acompanhamento', 'Contrato', 'Data_Monitoramento', 'Observacao']
     dados_tecnicos = dados_tecnicos.drop(columns=[c for c in colunas_remover if c in dados_tecnicos.columns], errors='ignore')
@@ -1014,13 +1017,13 @@ else:
                         if not tec_row_info.empty and 'telefone_tec' in tec_row_info.columns:
                             tel_tec = str(tec_row_info.iloc[0]['telefone_tec']).strip()
                         
-                        msg_zap_tec = f"Olá *{tec_agendar}*,\n\nSua *Vistoria Matinal (IVM)* foi agendada pelo IQ *{st.session_state['nome_iq']}* para a data: *{data_agendada.strftime('%d/%m/%Y')}* às *07:00* (Local: Base Totale).\n\nPor favor, *chegue cedo*, mantenha seus EPIs, ferramentas e veículos organizados para a verificação."
+                        msg_zap_tec = f"Olá *{tec_agendar}*,\n\nSua *Vistoria Matinal (IVM)* foi agendada pelo IQ *{st.session_state['nome_iq']}* para a data: *{data_agendada.strftime('%d/%m/%Y')}* às *07:00* (Local: Base TOTALE ABC).\n\nPor favor, *chegue cedo*, mantenha seus EPIs, ferramentas e veículos organizados para a verificação."
                         url_zap_tec = f"https://api.whatsapp.com/send?phone={tel_tec}&text={urllib.parse.quote(msg_zap_tec)}"
                         
                         gcal_start = data_agendada.strftime('%Y%m%d') + 'T070000'
                         gcal_end = data_agendada.strftime('%Y%m%d') + 'T080000'
                         gcal_title = urllib.parse.quote(f"Vistoria Matinal (IVM) - {tec_agendar}")
-                        gcal_location = urllib.parse.quote("Base Totale")
+                        gcal_location = urllib.parse.quote("Base TOATALE ABC")
                         gcal_details = urllib.parse.quote(f"Vistoria matinal agendada pelo IQ {st.session_state['nome_iq']} com o técnico {tec_agendar}.")
                         gcal_url = f"https://calendar.google.com/calendar/render?action=TEMPLATE&text={gcal_title}&dates={gcal_start}/{gcal_end}&location={gcal_location}&details={gcal_details}"
 
@@ -1201,7 +1204,7 @@ else:
                                 salvar_agenda_no_sheets(st.session_state['agenda_matinal'])
                                 
                                 fotos_txt = "\n".join(links_fn for links_fn in links_fotos) if 'links_fotos' in locals() else ""
-                                corpo_email = f"RELATÓRIO DE MATINAL (IVM 2026)\nID da Vistoria: {vistoria_id}\nRE: {tec_re}\nTécnico: {tec_atual}\nIQ: {st.session_state['nome_iq']}\n\nLOTES, VALIDADES E TAMANHOS:\n- Lote Capacete: {lote_capacete}\n- Vencimento Carneira: {venc_carneira}\n- Lote Cinto: {lote_cinto}\n- Lote Talabarte: {lote_talabarte}\n- Lote Luva Pigmentada: {lote_luva_pig}\n- Lote Luva Vaqueta: {lote_luva_vaq}\n- Venc. Protetor Solar: {venc_protetor}\n- Tamanho Camisa: {tam_camisa}\n- Tamanho Calça: {tam_calca}\n- Tamanho Jaqueta: {tam_jaqueta}\n\nITENS FALTANTES/IRREGULARES:\n- {resumo_faltas}\n\nOBSERVAÇÕES:\n{obs_final}\n\nEVIDÊNCIA FOTO:\n{fotos_txt}"
+                                corpo_email = f"RELATÓRIO DE MATINAL (IVM 2026)\nID da Vistoria: {vistoria_id}\nRE: {tec_re}\nTécnico: {tec_atual}\nIQ: {st.session_state['nome_iq']}\n\nLOTES, VALIDADES E TAMANHOS:\n- Lote Capacete: {lote_capacete}\n- Vencimento Carneira: {venc_carneira}\n- Lote Cinto: {lote_cinto}\n- Lote Talabarte: {lote_talabarte}\n- Lote Luva Pigmentada: {lote_luva_pig}\n- Lote Luva Vaqueta: {lote_luva_vaq}\n- Venc. Protetor Solar: {venc_protetor}\n- Tamanho Camisa: {tam_camisa}\n- Tamanho Calça: {tam_calca}\n- Tamanho Jaqueta: {tam_jaqueta}\n\nITENS FALTANTES/IRREGULARES:\n- {resumo_faltas}\n\nOBSERVAÇÕES:\n{obs_final}\n\nEVIDÊNCIAS FOTOS:\n{fotos_txt}"
                                 url_email = f"mailto:{DESTINATARIOS_MATINAL}?subject=Relatorio Matinal [ID {vistoria_id}] - RE {tec_re} - {tec_atual}&body={urllib.parse.quote(corpo_email)}"
                                 
                                 st.session_state['email_pronto'] = url_email
@@ -1294,7 +1297,7 @@ else:
                             linhas_erros = "- Nenhuma falha encontrada (100% conforme)"
 
                         fotos_txt = "\n".join(links_fotos)
-                        msg_whatsapp = f"*AUDITORIA DE INSTALAÇÃO - TOTALE*\n*ID da Vistoria:* {vistoria_inst_id}\n\n*Contrato:* {num_contrato}\n*RE do Técnico:* {tec_re}\n*Técnico:* {tec_inst}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Falhas Encontradas:*\n{linhas_erros}\n\n*Observações:* {obs_inst}\n\n*Evidências (Fotos):*\n{fotos_txt}"
+                        msg_whatsapp = f"*AUDITORIA DE INSTALAÇÃO - TOTALE ABC*\n*ID da Vistoria:* {vistoria_inst_id}\n\n*Contrato:* {num_contrato}\n*RE do Técnico:* {tec_re}\n*Técnico:* {tec_inst}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Falhas Encontradas:*\n{linhas_erros}\n\n*Observações:* {obs_inst}\n\n*Evidências (Fotos):*\n{fotos_txt}"
                         url_whatsapp = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_whatsapp)}"
                         
                         corpo_email = f"RELATÓRIO DE AUDITORIA DE INSTALAÇÃO\nID da Vistoria: {vistoria_inst_id}\nContrato: {num_contrato}\nRE: {tec_re}\nTécnico: {tec_inst}\nIQ: {st.session_state['nome_iq']}\n\nFALHAS ENCONTRADAS:\n{linhas_erros}\n\nOBSERVAÇÕES:\n{obs_inst}\n\nEVIDÊNCIA FOTO:\n{fotos_txt}"
