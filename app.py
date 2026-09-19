@@ -11,6 +11,10 @@ import uuid
 import io
 import time
 
+# Importação para Google Calendar API
+from googleapiclient.discovery import build
+from google.oauth2 import service_account
+
 # Importação do Cloudinary
 import cloudinary
 import cloudinary.uploader
@@ -36,7 +40,7 @@ FALHAS_INSTALACAO = {
         "016G-Conexão em poste correto", "067G-Divisor na Rede"
     ],
     "DG/Apto": [
-        "017G-Identificação do cabo", "018G-Torque correto na conexão do DG", "019G-Preparação dos conectores do DG",
+        "017G-Identificação do cabo", "018G-Torque correto na conexão do DG", "019G-Preparação dos conectores no DG",
         "020M-Disposição do cabo (dentro do DG)", "021M-Roteamento do Cabo", "022M-Fixação do cabo"
     ],
     "PAQ": [
@@ -124,7 +128,7 @@ if 'pagina_atual' not in st.session_state: st.session_state['pagina_atual'] = "D
 if 'email_pronto' not in st.session_state: st.session_state['email_pronto'] = None
 if 'zap_pronto' not in st.session_state: st.session_state['zap_pronto'] = None
 if 'zap_agenda_pronto' not in st.session_state: st.session_state['zap_agenda_pronto'] = None
-if 'gcal_link' not in st.session_state: st.session_state['gcal_link'] = None
+if 'gcal_status' not in st.session_state: st.session_state['gcal_status'] = None
 if 'tec_selecionado_atalho' not in st.session_state: st.session_state['tec_selecionado_atalho'] = None
 if 'aba_matinal_ativa' not in st.session_state: st.session_state['aba_matinal_ativa'] = 0
 
@@ -150,7 +154,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. Conexão com Google Sheets (Com Proteção contra Erro 429) ---
+# --- 2. Conexão com Google Sheets e Google Calendar ---
 def conectar_planilha():
     tentativas = 3
     espera = 2
@@ -167,8 +171,51 @@ def conectar_planilha():
                     time.sleep(espera)
                     espera *= 2
                     continue
-            st.error(f"Erro ao conectar com o Google Sheets devido a excesso de acessos simultâneos. Tente novamente em instantes. Detalhe: {e}")
+            st.error(f"Erro ao conectar com o Google Sheets. Detalhe: {e}")
             st.stop()
+
+def criar_evento_google_calendar(nome_tec, data_agendamento, nome_iq, email_tec=""):
+    try:
+        creds_dict = json.loads(st.secrets["gcp_service_account"])
+        scopes = ["https://www.googleapis.com/auth/calendar"]
+        credentials = service_account.Credentials.from_service_account_info(creds_dict, scopes=scopes)
+        
+        service = build('calendar', 'v3', credentials=credentials)
+        
+        # Horário fixo: 07:00 às 08:00
+        data_str = data_agendada.strftime('%Y-%m-%d')
+        start_datetime = f"{data_str}T07:00:00-03:00"
+        end_datetime = f"{data_str}T08:00:00-03:00"
+        
+        event = {
+            'summary': f'Vistoria Matinal (IVM) - {nome_tec}',
+            'location': 'Base TOTALE ABC',
+            'description': f'Vistoria matinal agendada pelo IQ {nome_iq} com o técnico {nome_tec}.',
+            'start': {
+                'dateTime': start_datetime,
+                'timeZone': 'America/Sao_Paulo',
+            },
+            'end': {
+                'dateTime': end_datetime,
+                'timeZone': 'America/Sao_Paulo',
+            },
+            'attendees': [{'email': email_tec}] if email_tec and "@" in email_tec else [],
+            'reminders': {
+                'useDefault': False,
+                'overrides': [
+                    {'method': 'popup', 'minutes': 30},
+                    {'method': 'email', 'minutes': 60},
+                ],
+            },
+        }
+        
+        # Insere na agenda principal da conta de serviço ou ID primário configurado
+        calendar_id = 'primary'
+        service.events().insert(calendarId=calendar_id, body=event, sendUpdates='all' if email_tec else 'none').execute()
+        return True
+    except Exception as e:
+        print(f"Erro ao inserir no Google Calendar: {e}")
+        return False
 
 def registrar_log_acesso(re_iq, nome_iq, acao, pagina):
     try:
@@ -297,23 +344,28 @@ def carregar_dados():
     
     col_tel = next((c for c in dados_tecnicos.columns if 'TEL' in c.upper() or 'CEL' in c.upper() or 'WPP' in c.upper() or 'ZAP' in c.upper() or 'WHATS' in c.upper()), None)
     if col_tel:
-        # Garante DDD 11 fixo para os números dos técnicos
         def forcar_ddd_11(val):
             num = ''.join([c for c in str(val) if c.isdigit()])
             if not num:
-                return "5511994524040"  # Fallback seguro com DDD 11
+                return "5511994524040"
             if num.startswith("55"):
                 num = num[2:]
-            # Remove o DDD antigo se houver e força '11'
             if len(num) >= 9:
                 if len(num) > 9:
-                    num = num[2:] # Descarta o DDD original (ex: 19)
+                    num = num[2:]
                 return "5511" + num
             return "5511994524040"
             
         dados_tecnicos['telefone_tec'] = dados_tecnicos[col_tel].apply(forcar_ddd_11)
     else:
         dados_tecnicos['telefone_tec'] = '5511994524040'
+
+    # Identificar coluna de e-mail do técnico se houver
+    col_email = next((c for c in dados_tecnicos.columns if 'MAIL' in c.upper() or 'CORREIO' in c.upper()), None)
+    if col_email:
+        dados_tecnicos['email_tec'] = dados_tecnicos[col_email].astype(str).str.strip()
+    else:
+        dados_tecnicos['email_tec'] = ''
 
     colunas_remover = ['status_certificacao', 'Acompanhamento', 'Contrato', 'Data_Monitoramento', 'Observacao']
     dados_tecnicos = dados_tecnicos.drop(columns=[c for c in colunas_remover if c in dados_tecnicos.columns], errors='ignore')
@@ -979,19 +1031,19 @@ else:
         
         with tab_agendar:
             if st.session_state.get('zap_agenda_pronto'):
-                st.success("✅ Matinal agendada com sucesso!")
+                st.success("✅ Matinal agendada e inserida na Google Agenda automaticamente!")
                 
-                c_btn_zap, c_btn_gcal = st.columns(2)
-                with c_btn_zap:
-                    st.markdown(f'<a href="{st.session_state["zap_agenda_pronto"]}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 15px;">💬 AVISAR NO WHATSAPP</a>', unsafe_allow_html=True)
-                with c_btn_gcal:
-                    if st.session_state.get('gcal_link'):
-                        st.markdown(f'<a href="{st.session_state["gcal_link"]}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #4285F4; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 15px;">📅 ADICIONAR AO GOOGLE AGENDA</a>', unsafe_allow_html=True)
+                if st.session_state.get('gcal_status'):
+                    st.info("📅 Evento criado com sucesso na Google Agenda principal!")
+                else:
+                    st.warning("⚠️ O evento foi agendado, mas verifique se a conta de serviço possui permissão na agenda.")
+
+                st.markdown(f'<a href="{st.session_state["zap_agenda_pronto"]}" target="_blank" style="display: inline-block; padding: 0.8em 1.5em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 15px;">💬 AVISAR NO WHATSAPP</a>', unsafe_allow_html=True)
                 
                 st.write("")
                 if st.button("🧹 Concluir e Agendar Outro"):
                     st.session_state['zap_agenda_pronto'] = None
-                    st.session_state['gcal_link'] = None
+                    st.session_state['gcal_status'] = None
                     st.rerun()
             else:
                 tipo_selecao_tec = st.radio("Selecione a base de técnicos para agendamento:", ["Minha Equipe", "Geral (Todos os Técnicos)"], horizontal=True)
@@ -1013,22 +1065,27 @@ else:
                         salvar_agenda_no_sheets(st.session_state['agenda_matinal'])
                         
                         tec_row_info = dados_completos[dados_completos['nome'] == tec_agendar]
-                        tel_tec = ""
-                        if not tec_row_info.empty and 'telefone_tec' in tec_row_info.columns:
-                            tel_tec = str(tec_row_info.iloc[0]['telefone_tec']).strip()
+                        tel_tec = "5511994524040"
+                        email_tec = ""
+                        if not tec_row_info.empty:
+                            if 'telefone_tec' in tec_row_info.columns and str(tec_row_info.iloc[0]['telefone_tec']).strip():
+                                tel_tec = str(tec_row_info.iloc[0]['telefone_tec']).strip()
+                            if 'email_tec' in tec_row_info.columns:
+                                email_tec = str(tec_row_info.iloc[0]['email_tec']).strip()
                         
+                        # Inserção automática no Google Calendar
+                        sucesso_gcal = criar_evento_google_calendar(
+                            nome_tec=tec_agendar,
+                            data_agendamento=data_agendada,
+                            nome_iq=st.session_state['nome_iq'],
+                            email_tec=email_tec
+                        )
+
                         msg_zap_tec = f"Olá *{tec_agendar}*,\n\nSua *Vistoria Matinal (IVM)* foi agendada pelo IQ *{st.session_state['nome_iq']}* para a data: *{data_agendada.strftime('%d/%m/%Y')}* às *07:00* (Local: Base TOTALE ABC).\n\nPor favor, *chegue cedo*, mantenha seus EPIs, ferramentas e veículos organizados para a verificação."
                         url_zap_tec = f"https://api.whatsapp.com/send?phone={tel_tec}&text={urllib.parse.quote(msg_zap_tec)}"
-                        
-                        gcal_start = data_agendada.strftime('%Y%m%d') + 'T070000'
-                        gcal_end = data_agendada.strftime('%Y%m%d') + 'T080000'
-                        gcal_title = urllib.parse.quote(f"Vistoria Matinal (IVM) - {tec_agendar}")
-                        gcal_location = urllib.parse.quote("Base TOATALE ABC")
-                        gcal_details = urllib.parse.quote(f"Vistoria matinal agendada pelo IQ {st.session_state['nome_iq']} com o técnico {tec_agendar}.")
-                        gcal_url = f"https://calendar.google.com/calendar/render?action=TEMPLATE&text={gcal_title}&dates={gcal_start}/{gcal_end}&location={gcal_location}&details={gcal_details}"
 
                         st.session_state['zap_agenda_pronto'] = url_zap_tec
-                        st.session_state['gcal_link'] = gcal_url
+                        st.session_state['gcal_status'] = sucesso_gcal
                         st.rerun()
             
             st.write("---")
@@ -1251,7 +1308,8 @@ else:
                         cols = st.columns(2)
                         for i, item in enumerate(lista_itens):
                             col_atual = cols[i % 2]
-                            if col_atual.checkbox(item, key=f"inst_{item[:4]}_{i}"):
+                            if col_atual.checkbox(item, key=f"inst_{item[:4]}_{i}
+"):
                                 erros_encontrados.append(item)
 
                 renderizar_colunas_checklist(FALHAS_INSTALACAO["Tap/Isolador/Emenda"], tab1)
