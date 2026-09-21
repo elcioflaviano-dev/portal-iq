@@ -40,7 +40,7 @@ FALHAS_INSTALACAO = {
         "016G-Conexão em poste correto", "067G-Divisor na Rede"
     ],
     "DG/Apto": [
-        "017G-Identificação do cabo", "018G-Torque correto na conexão do DG", "019G-Preparação dos conectores no DG",
+        "017G-Identificação do cabo", "018G-Torque correto na conexão do DG", "019G-Preparação dos conectores do DG",
         "020M-Disposição do cabo (dentro do DG)", "021M-Roteamento do Cabo", "022M-Fixação do cabo"
     ],
     "PAQ": [
@@ -508,10 +508,10 @@ def registrar_vistoria_completa(re_iq, nome_iq, login_tec, nome_tec, tipo, irreg
         try:
             ws = planilha.worksheet("Vistorias_Matinal")
         except:
-            ws = planilha.add_worksheet(title="Vistorias_Matinal", rows=100, cols=21)
+            ws = planilha.add_worksheet(title="Vistorias_Matinal", rows=100, cols=22)
             ws.append_row([
                 "ID_Vistoria", "Data_Hora", "RE_IQ", "Nome_IQ", "Login_Tecnico", "Nome_Tecnico", 
-                "Tipo_Vistoria", "Itens_Irregulares", "Lote_Capacete", "Venc_Carneira", "Lote_Cinto", 
+                "Tipo_Vistoria", "Itens_Irregulares", "Placa_Veiculo", "Lote_Capacete", "Venc_Carneira", "Lote_Cinto", 
                 "Lote_Talabarte", "Lote_Luva_Pig", "Lote_Luva_Vaq", "Venc_Protetor_Solar", 
                 "Tam_Camisa", "Tam_Calca", "Tam_Jaqueta", "Observacao", "Links_Fotos", "Status"
             ])
@@ -522,7 +522,7 @@ def registrar_vistoria_completa(re_iq, nome_iq, login_tec, nome_tec, tipo, irreg
         
         ws.append_row([
             vistoria_id, data_hora, str(re_iq), nome_iq, str(login_tec), nome_tec, tipo, irregulares,
-            extra_info.get('lote_capacete', ''), extra_info.get('venc_carneira', ''), extra_info.get('lote_cinto', ''),
+            extra_info.get('placa_veiculo', ''), extra_info.get('lote_capacete', ''), extra_info.get('venc_carneira', ''), extra_info.get('lote_cinto', ''),
             extra_info.get('lote_talabarte', ''), extra_info.get('lote_luva_pig', ''),
             extra_info.get('lote_luva_vaq', ''), extra_info.get('venc_protetor', ''),
             extra_info.get('tam_camisa', ''), extra_info.get('tam_calca', ''),
@@ -1028,19 +1028,19 @@ else:
         
         with tab_agendar:
             if st.session_state.get('zap_agenda_pronto'):
-                st.success("✅ Matinal agendada e inserida na Google Agenda automaticamente!")
+                st.success("✅ Matinal agendada com sucesso!")
                 
-                if st.session_state.get('gcal_status'):
-                    st.info("📅 Evento criado com sucesso na Google Agenda principal!")
-                else:
-                    st.warning("⚠️ O evento foi agendado, mas verifique se a conta de serviço possui permissão na agenda.")
-
-                st.markdown(f'<a href="{st.session_state["zap_agenda_pronto"]}" target="_blank" style="display: inline-block; padding: 0.8em 1.5em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 15px;">💬 AVISAR NO WHATSAPP</a>', unsafe_allow_html=True)
+                c_btn_zap, c_btn_gcal = st.columns(2)
+                with c_btn_zap:
+                    st.markdown(f'<a href="{st.session_state["zap_agenda_pronto"]}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 15px;">💬 AVISAR NO WHATSAPP</a>', unsafe_allow_html=True)
+                with c_btn_gcal:
+                    if st.session_state.get('gcal_link'):
+                        st.markdown(f'<a href="{st.session_state["gcal_link"]}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #4285F4; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 15px;">📅 ADICIONAR AO GOOGLE AGENDA</a>', unsafe_allow_html=True)
                 
                 st.write("")
                 if st.button("🧹 Concluir e Agendar Outro"):
                     st.session_state['zap_agenda_pronto'] = None
-                    st.session_state['gcal_status'] = None
+                    st.session_state['gcal_link'] = None
                     st.rerun()
             else:
                 tipo_selecao_tec = st.radio("Selecione a base de técnicos para agendamento:", ["Minha Equipe", "Geral (Todos os Técnicos)"], horizontal=True)
@@ -1063,25 +1063,21 @@ else:
                         
                         tec_row_info = dados_completos[dados_completos['nome'] == tec_agendar]
                         tel_tec = "5511994524040"
-                        email_tec = ""
-                        if not tec_row_info.empty:
-                            if 'telefone_tec' in tec_row_info.columns and str(tec_row_info.iloc[0]['telefone_tec']).strip():
-                                tel_tec = str(tec_row_info.iloc[0]['telefone_tec']).strip()
-                            if 'email_tec' in tec_row_info.columns:
-                                email_tec = str(tec_row_info.iloc[0]['email_tec']).strip()
+                        if not tec_row_info.empty and 'telefone_tec' in tec_row_info.columns and str(tec_row_info.iloc[0]['telefone_tec']).strip():
+                            tel_tec = str(tec_row_info.iloc[0]['telefone_tec']).strip()
                         
-                        sucesso_gcal = criar_evento_google_calendar(
-                            nome_tec=tec_agendar,
-                            data_agendamento=data_agendada,
-                            nome_iq=st.session_state['nome_iq'],
-                            email_tec=email_tec
-                        )
-
                         msg_zap_tec = f"Olá *{tec_agendar}*,\n\nSua *Vistoria Matinal (IVM)* foi agendada pelo IQ *{st.session_state['nome_iq']}* para a data: *{data_agendada.strftime('%d/%m/%Y')}* às *07:00* (Local: Base TOTALE ABC).\n\nPor favor, *chegue cedo*, mantenha seus EPIs, ferramentas e veículos organizados para a verificação."
                         url_zap_tec = f"https://api.whatsapp.com/send?phone={tel_tec}&text={urllib.parse.quote(msg_zap_tec)}"
+                        
+                        gcal_start = data_agendada.strftime('%Y%m%d') + 'T070000'
+                        gcal_end = data_agendada.strftime('%Y%m%d') + 'T080000'
+                        gcal_title = urllib.parse.quote(f"Vistoria Matinal (IVM) - {tec_agendar}")
+                        gcal_location = urllib.parse.quote("Base TOTALE ABC")
+                        gcal_details = urllib.parse.quote(f"Vistoria matinal agendada pelo IQ {st.session_state['nome_iq']} com o técnico {tec_agendar}.")
+                        gcal_url = f"https://calendar.google.com/calendar/render?action=TEMPLATE&text={gcal_title}&dates={gcal_start}/{gcal_end}&location={gcal_location}&details={gcal_details}"
 
                         st.session_state['zap_agenda_pronto'] = url_zap_tec
-                        st.session_state['gcal_status'] = sucesso_gcal
+                        st.session_state['gcal_link'] = gcal_url
                         st.rerun()
             
             st.write("---")
@@ -1132,27 +1128,32 @@ else:
                     if tec_atual != "Selecione...":
                         st.info(f"⚠️ Assinale abaixo os itens que estão **FALTANDO** ou **IRREGULARES** para **{tec_atual}** ({data_selecionada_exec}).")
                         
-                        # CAMPOS OBRIGATÓRIOS (LOTES, VALIDADES E TAMANHOS)
-                        st.markdown("### 🏷️ Informações de Lotes, Validades e Tamanhos (Preenchimento Obrigatório)")
-                        col_l1, col_l2, col_l3 = st.columns(3)
-                        with col_l1:
+                        # CAMPOS OBRIGATÓRIOS (PLACA, LOTES, VALIDADES E TAMANHOS)
+                        st.markdown("### 🏷️ Informações de Veículo, Lotes, Validades e Tamanhos (Preenchimento Obrigatório)")
+                        col_p1, col_l1, col_l2 = st.columns(3)
+                        with col_p1:
+                            placa_veiculo = st.text_input("Placa do Veículo *")
                             lote_capacete = st.text_input("Lote Capacete *")
+                        with col_l1:
                             venc_carneira = st.text_input("Vencimento Carneira *")
-                        with col_l2:
                             lote_cinto = st.text_input("Lote Cinto *")
+                        with col_l2:
                             lote_talabarte = st.text_input("Lote Talabarte *")
-                        with col_l3:
                             lote_luva_pig = st.text_input("Lote Luva Pigmentada *")
-                            lote_luva_vaq = st.text_input("Lote Luva Vaqueta *")
 
                         st.write("")
-                        col_l4, col_t1, col_t2, col_t3 = st.columns(4)
+                        col_l3, col_l4, col_t1, col_t2 = st.columns(4)
+                        with col_l3:
+                            lote_luva_vaq = st.text_input("Lote Luva Vaqueta *")
                         with col_l4:
                             venc_protetor = st.text_input("Vencimento Protetor Solar *")
                         with col_t1:
                             tam_camisa = st.text_input("Tamanho Uniforme | CAMISA *")
                         with col_t2:
                             tam_calca = st.text_input("Tamanho Uniforme | CALÇA *")
+
+                        st.write("")
+                        col_t3, _, _ = st.columns(3)
                         with col_t3:
                             tam_jaqueta = st.text_input("Tamanho Uniforme | JAQUETA *")
 
@@ -1216,8 +1217,8 @@ else:
                         if st.button("Gravar Vistoria e Gerar E-mail", type="primary"):
                             if not fotos_upload:
                                 st.warning("⚠️ O envio de ao menos uma foto é obrigatório para comprovação.")
-                            elif not (lote_capacete.strip() and venc_carneira.strip() and lote_cinto.strip() and lote_talabarte.strip() and lote_luva_pig.strip() and lote_luva_vaq.strip() and venc_protetor.strip() and tam_camisa.strip() and tam_calca.strip() and tam_jaqueta.strip()):
-                                st.warning("⚠️ Todos os campos de Lotes, Validades e Tamanhos de Uniformes são obrigatórios.")
+                            elif not (placa_veiculo.strip() and lote_capacete.strip() and venc_carneira.strip() and lote_cinto.strip() and lote_talabarte.strip() and lote_luva_pig.strip() and lote_luva_vaq.strip() and venc_protetor.strip() and tam_camisa.strip() and tam_calca.strip() and tam_jaqueta.strip()):
+                                st.warning("⚠️ Todos os campos de Placa do Veículo, Lotes, Validades e Tamanhos de Uniformes são obrigatórios.")
                             else:
                                 tec_row = equipe_vigente[equipe_vigente['nome'] == tec_atual]
                                 tec_login = tec_row['login'].iloc[0] if not tec_row.empty else "N/A"
@@ -1226,6 +1227,7 @@ else:
                                 links_fotos = salvar_fotos_no_cloudinary(fotos_upload, tec_atual, "Evidencias_Matinal")
                                 
                                 extra_info = {
+                                    'placa_veiculo': placa_veiculo,
                                     'lote_capacete': lote_capacete,
                                     'venc_carneira': venc_carneira,
                                     'lote_cinto': lote_cinto,
@@ -1257,108 +1259,12 @@ else:
                                 salvar_agenda_no_sheets(st.session_state['agenda_matinal'])
                                 
                                 fotos_txt = "\n".join(links_fn for links_fn in links_fotos) if 'links_fotos' in locals() else ""
-                                corpo_email = f"RELATÓRIO DE MATINAL (IVM 2026)\nID da Vistoria: {vistoria_id}\nRE: {tec_re}\nTécnico: {tec_atual}\nIQ: {st.session_state['nome_iq']}\n\nLOTES, VALIDADES E TAMANHOS:\n- Lote Capacete: {lote_capacete}\n- Vencimento Carneira: {venc_carneira}\n- Lote Cinto: {lote_cinto}\n- Lote Talabarte: {lote_talabarte}\n- Lote Luva Pigmentada: {lote_luva_pig}\n- Lote Luva Vaqueta: {lote_luva_vaq}\n- Venc. Protetor Solar: {venc_protetor}\n- Tamanho Camisa: {tam_camisa}\n- Tamanho Calça: {tam_calca}\n- Tamanho Jaqueta: {tam_jaqueta}\n\nITENS FALTANTES/IRREGULARES:\n- {resumo_faltas}\n\nOBSERVAÇÕES:\n{obs_final}\n\nEVIDÊNCIAS FOTOS:\n{fotos_txt}"
+                                corpo_email = f"RELATÓRIO DE MATINAL (IVM 2026)\nID da Vistoria: {vistoria_id}\nRE: {tec_re}\nTécnico: {tec_atual}\nIQ: {st.session_state['nome_iq']}\n\nVEÍCULOS, LOTES, VALIDADES E TAMANHOS:\n- Placa do Veículo: {placa_veiculo}\n- Lote Capacete: {lote_capacete}\n- Vencimento Carneira: {venc_carneira}\n- Lote Cinto: {lote_cinto}\n- Lote Talabarte: {lote_talabarte}\n- Lote Luva Pigmentada: {lote_luva_pig}\n- Lote Luva Vaqueta: {lote_luva_vaq}\n- Venc. Protetor Solar: {venc_protetor}\n- Tamanho Camisa: {tam_camisa}\n- Tamanho Calça: {tam_calca}\n- Tamanho Jaqueta: {tam_jaqueta}\n\nITENS FALTANTES/IRREGULARES:\n- {resumo_faltas}\n\nOBSERVAÇÕES:\n{obs_final}\n\nEVIDÊNCIAS FOTOS:\n{fotos_txt}"
                                 url_email = f"mailto:{DESTINATARIOS_MATINAL}?subject=Relatorio Matinal [ID {vistoria_id}] - RE {tec_re} - {tec_atual}&body={urllib.parse.quote(corpo_email)}"
                                 
                                 st.session_state['email_pronto'] = url_email
                                 st.session_state['tec_selecionado_atalho'] = None
                                 st.rerun()
-
-    # --- PÁGINA 4: VISTORIA DE INSTALAÇÃO ---
-    elif st.session_state['pagina_atual'] == "Instalacao":
-        st.title("🛠️ Vistoria e Auditoria de Instalação em Campo")
-        st.write("Auditoria baseada nos códigos oficiais da Totale. Registro de evidência e disparo para o WhatsApp (Grupo IQ).")
-        
-        if st.session_state['zap_pronto']:
-            st.success("✅ Vistoria de Instalação gravada com sucesso!")
-            
-            c_zap, c_email = st.columns(2)
-            with c_zap:
-                st.markdown(f'<a href="{st.session_state["zap_pronto"]}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">💬 ENVIAR NO WHATSAPP (GRUPO IQ)</a>', unsafe_allow_html=True)
-            with c_email:
-                if st.session_state.get('email_instalacao'):
-                    st.markdown(f'<a href="{st.session_state["email_instalacao"]}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #007BFF; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">📩 ENVIAR POR E-MAIL (GESTÃO)</a>', unsafe_allow_html=True)
-            
-            st.write("")
-            if st.button("🧹 Realizar Nova Vistoria de Instalação"):
-                st.session_state['zap_pronto'] = None
-                st.session_state['email_instalacao'] = None
-                st.rerun()
-        else:
-            col_tec, col_cont = st.columns(2)
-            with col_tec:
-                tec_inst = st.selectbox("Selecione o Técnico Auditado:", ["Selecione..."] + dados_completos['nome'].tolist())
-            with col_cont:
-                num_contrato = st.text_input("📄 Número do Contrato Vistoriado *")
-            
-            if tec_inst != "Selecione...":
-                st.info("⚠️ Marque abaixo as falhas encontradas na instalação, divididas por tópicos.")
-                
-                erros_encontrados = []
-                tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-                    "🔌 Tap/Isolador", "🏠 DG/Apto", "👨‍🔧 PAQ", "🧵 Cabeamento", "📡 Medição", "📦 Materiais", "Outros"
-                ])
-                
-                def renderizar_colunas_checklist(lista_itens, aba):
-                    with aba:
-                        cols = st.columns(2)
-                        for i, item in enumerate(lista_itens):
-                            col_atual = cols[i % 2]
-                            if col_atual.checkbox(item, key=f"inst_{item[:4]}_{i}"):
-                                erros_encontrados.append(item)
-
-                renderizar_colunas_checklist(FALHAS_INSTALACAO["Tap/Isolador/Emenda"], tab1)
-                renderizar_colunas_checklist(FALHAS_INSTALACAO["DG/Apto"], tab2)
-                renderizar_colunas_checklist(FALHAS_INSTALACAO["PAQ"], tab3)
-                renderizar_colunas_checklist(FALHAS_INSTALACAO["Cabeamento Interior"], tab4)
-                renderizar_colunas_checklist(FALHAS_INSTALACAO["Medição de Sinal"], tab5)
-                renderizar_colunas_checklist(FALHAS_INSTALACAO["Divergência de Materiais"], tab6)
-                renderizar_colunas_checklist(FALHAS_INSTALACAO["Outros"], tab7)
-                
-                st.divider()
-                
-                fotos_inst = st.file_uploader("📸 Anexar Fotos da Instalação / Erro (Múltiplas fotos permitidas)", type=['png', 'jpg'], accept_multiple_files=True, key="fotos_inst")
-                obs_inst = st.text_area("Observações da Tratativa:", key="obs_inst")
-                
-                if st.button("Gravar Auditoria e Gerar Disparos", type="primary"):
-                    if not num_contrato.strip():
-                        st.warning("⚠️ O número do contrato é obrigatório para realizar a vistoria.")
-                    elif not fotos_inst:
-                        st.warning("⚠️ O envio de ao menos uma foto é obrigatório para comprovar a auditoria.")
-                    else:
-                        tec_row = dados_completos[dados_completos['nome'] == tec_inst]
-                        tec_login = tec_row['login'].iloc[0] if not tec_row.empty else "N/A"
-                        tec_re = tec_row['re'].iloc[0] if ('re' in tec_row.columns and not tec_row.empty) else tec_login
-                        
-                        links_fotos = salvar_fotos_no_cloudinary(fotos_inst, tec_inst, "Evidencias_Instalacao")
-                        resumo_erros_sheets = " / ".join(erros_encontrados) if erros_encontrados else "Instalação sem falhas registradas."
-                        
-                        vistoria_inst_id = registrar_vistoria_instalacao_sheets(
-                            re_iq=re_logado_str,
-                            nome_iq=st.session_state['nome_iq'],
-                            login_tec=tec_login,
-                            nome_tec=tec_inst,
-                            contrato=num_contrato,
-                            irregulares=resumo_erros_sheets,
-                            obs=obs_inst,
-                            links_fotos=links_fotos
-                        )
-                        
-                        if erros_encontrados:
-                            linhas_erros = "\n".join([f"- {erro}" for erro in erros_encontrados])
-                        else:
-                            linhas_erros = "- Nenhuma falha encontrada (100% conforme)"
-
-                        fotos_txt = "\n".join(links_fotos)
-                        msg_whatsapp = f"*AUDITORIA DE INSTALAÇÃO - TOTALE ABC*\n*ID da Vistoria:* {vistoria_inst_id}\n\n*Contrato:* {num_contrato}\n*RE do Técnico:* {tec_re}\n*Técnico:* {tec_inst}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Falhas Encontradas:*\n{linhas_erros}\n\n*Observações:* {obs_inst}\n\n*Evidências (Fotos):*\n{fotos_txt}"
-                        url_whatsapp = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_whatsapp)}"
-                        
-                        corpo_email = f"RELATÓRIO DE AUDITORIA DE INSTALAÇÃO\nID da Vistoria: {vistoria_inst_id}\nContrato: {num_contrato}\nRE: {tec_re}\nTécnico: {tec_inst}\nIQ: {st.session_state['nome_iq']}\n\nFALHAS ENCONTRADAS:\n{linhas_erros}\n\nOBSERVAÇÕES:\n{obs_inst}\n\nEVIDÊNCIA FOTO:\n{fotos_txt}"
-                        url_email = f"mailto:{DESTINATARIOS_INSTALACAO}?subject=Auditoria [ID {vistoria_inst_id}] - Contrato {num_contrato} - RE {tec_re} - {tec_inst}&body={urllib.parse.quote(corpo_email)}"
-                        
-                        st.session_state['zap_pronto'] = url_whatsapp
-                        st.session_state['email_instalacao'] = url_email
-                        st.rerun()
 
     # --- PÁGINA 5: RELATÓRIOS E EXPORTAÇÃO (EXCLUSIVO PARA GESTÃO) ---
     elif st.session_state['pagina_atual'] == "Relatorios":
