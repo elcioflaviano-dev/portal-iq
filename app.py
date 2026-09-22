@@ -339,9 +339,11 @@ def carregar_dados():
         dados_iqs['REGIAO_FINAL'] = 'N/A'
     
     dados_tecnicos.columns = [str(c).strip() for c in dados_tecnicos.columns]
-    dados_tecnicos['login'] = dados_tecnicos.get('login', '').astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
     
-    # Removemos a coluna re_iq_responsavel estática da Base_Tecnicos para evitar conflito com o mês
+    # Identificar coluna de login (aceita 'login', 'LOGIN_AGOSTO', etc.)
+    col_login_tec = next((c for c in dados_tecnicos.columns if 'LOGIN' in c.upper()), 'login')
+    dados_tecnicos['login'] = dados_tecnicos[col_login_tec].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+    
     dados_tecnicos = dados_tecnicos.drop(columns=['re_iq_responsavel'], errors='ignore')
     
     col_tel = next((c for c in dados_tecnicos.columns if 'TEL' in c.upper() or 'CEL' in c.upper() or 'WPP' in c.upper() or 'ZAP' in c.upper() or 'WHATS' in c.upper()), None)
@@ -375,57 +377,50 @@ def carregar_dados():
     todas_abas = [ws.title for ws in planilha.worksheets()]
     
     meses_info = []
-    if "Certificados" in todas_abas:
-        df_cert = ler_aba("Certificados")
-        if not df_cert.empty:
-            df_cert.columns = [str(c).strip().upper() for c in df_cert.columns]
-            if 'LOGIN' in df_cert.columns:
-                df_cert['LOGIN'] = df_cert['LOGIN'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
-                dados_completos = pd.merge(dados_completos, df_cert, left_on='login', right_on='LOGIN', how='left')
-                if 'LOGIN' in dados_completos.columns: dados_completos = dados_completos.drop(columns=['LOGIN'])
-        meses_info = [{'nome_aba': 'Certificados', 'mes_nome': 'JULHO'}, {'nome_aba': 'Certificados', 'mes_nome': 'AGOSTO'}, {'nome_aba': 'Certificados', 'mes_nome': 'SETEMBRO'}]
-    else:
-        abas_meses = [aba for aba in todas_abas if aba not in ['Base_IQ', 'Base_Tecnicos', 'Controle_IQ', 'Agenda_Matinal', 'Vistorias_Matinal', 'Vistoria_Instalacao', 'Log_Acessos', 'Resultado_Matinal']]
+    abas_meses = [aba for aba in todas_abas if aba not in ['Base_IQ', 'Base_Tecnicos', 'Controle_IQ', 'Agenda_Matinal', 'Vistorias_Matinal', 'Vistoria_Instalacao', 'Log_Acessos', 'Resultado_Matinal']]
 
-        for aba in abas_meses:
-            df_mes = ler_aba(aba)
-            if not df_mes.empty:
-                mes_nome = aba.upper().replace('CERTIFICADO', '').replace('_', ' ').strip()
-                if not mes_nome: mes_nome = aba.upper()
+    for aba in abas_meses:
+        df_mes = ler_aba(aba)
+        if not df_mes.empty:
+            mes_nome = aba.upper().replace('CERTIFICADO', '').replace('_', ' ').strip()
+            if not mes_nome: mes_nome = aba.upper()
+            
+            colunas_novas = {}
+            for c in df_mes.columns:
+                c_up = str(c).strip().upper()
+                if 'LOGIN' in c_up: colunas_novas[c] = 'LOGIN'
+                elif 'RE' in c_up and 'IQ' in c_up: colunas_novas[c] = f're_iq_responsavel_{mes_nome}'
+                elif 'ACOMPANHAMENTO' in c_up: colunas_novas[c] = f'ACOMPANHAMENTO_{mes_nome}'
+                elif c_up in ['MONIT_1', 'M1']: colunas_novas[c] = f'MONIT_1_{mes_nome}'
+                elif c_up in ['MONIT_2', 'M2']: colunas_novas[c] = f'MONIT_2_{mes_nome}'
+                elif c_up in ['MONIT_3', 'M3']: colunas_novas[c] = f'MONIT_3_{mes_nome}'
+                else:
+                    if mes_nome in c_up or c_up in mes_nome:
+                        colunas_novas[c] = mes_nome
+            
+            df_mes = df_mes.rename(columns=colunas_novas)
+            
+            if 'LOGIN' in df_mes.columns:
+                df_mes['LOGIN'] = df_mes['LOGIN'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+                col_re_mes_alvo = f're_iq_responsavel_{mes_nome}'
+                if col_re_mes_alvo in df_mes.columns:
+                    df_mes[col_re_mes_alvo] = df_mes[col_re_mes_alvo].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
                 
-                colunas_novas = {}
-                for c in df_mes.columns:
-                    c_up = str(c).strip().upper()
-                    if 'LOGIN' in c_up: colunas_novas[c] = 'LOGIN'
-                    elif 'RE' in c_up and 'IQ' in c_up: colunas_novas[c] = f're_iq_responsavel_{mes_nome}'
-                    elif 'ACOMPANHAMENTO' in c_up: colunas_novas[c] = f'ACOMPANHAMENTO_{mes_nome}'
-                    elif c_up in ['MONIT_1', 'M1']: colunas_novas[c] = f'MONIT_1_{mes_nome}'
-                    elif c_up in ['MONIT_2', 'M2']: colunas_novas[c] = f'MONIT_2_{mes_nome}'
-                    elif c_up in ['MONIT_3', 'M3']: colunas_novas[c] = f'MONIT_3_{mes_nome}'
-                    else:
-                        if mes_nome in c_up or c_up in mes_nome:
-                            colunas_novas[c] = mes_nome
+                if mes_nome not in df_mes.columns: df_mes[mes_nome] = 'NÃO'
+                if f'ACOMPANHAMENTO_{mes_nome}' not in df_mes.columns: df_mes[f'ACOMPANHAMENTO_{mes_nome}'] = 'NÃO'
+                if f'MONIT_1_{mes_nome}' not in df_mes.columns: df_mes[f'MONIT_1_{mes_nome}'] = 'NÃO'
+                if f'MONIT_2_{mes_nome}' not in df_mes.columns: df_mes[f'MONIT_2_{mes_nome}'] = 'NÃO'
+                if f'MONIT_3_{mes_nome}' not in df_mes.columns: df_mes[f'MONIT_3_{mes_nome}'] = 'NÃO'
                 
-                df_mes = df_mes.rename(columns=colunas_novas)
+                df_mes[mes_nome] = df_mes[mes_nome].fillna('NÃO').astype(str).str.strip().str.upper()
+                df_mes[f'ACOMPANHAMENTO_{mes_nome}'] = df_mes[f'ACOMPANHAMENTO_{mes_nome}'].fillna('NÃO').astype(str).str.strip().str.upper()
                 
-                if 'LOGIN' in df_mes.columns:
-                    df_mes['LOGIN'] = df_mes['LOGIN'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
-                    col_re_mes_alvo = f're_iq_responsavel_{mes_nome}'
-                    if col_re_mes_alvo in df_mes.columns:
-                        df_mes[col_re_mes_alvo] = df_mes[col_re_mes_alvo].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
-                    
-                    if mes_nome not in df_mes.columns: df_mes[mes_nome] = 'NÃO'
-                    if f'ACOMPANHAMENTO_{mes_nome}' not in df_mes.columns: df_mes[f'ACOMPANHAMENTO_{mes_nome}'] = 'NÃO'
-                    if f'MONIT_1_{mes_nome}' not in df_mes.columns: df_mes[f'MONIT_1_{mes_nome}'] = 'NÃO'
-                    if f'MONIT_2_{mes_nome}' not in df_mes.columns: df_mes[f'MONIT_2_{mes_nome}'] = 'NÃO'
-                    if f'MONIT_3_{mes_nome}' not in df_mes.columns: df_mes[f'MONIT_3_{mes_nome}'] = 'NÃO'
-                    
-                    df_mes[mes_nome] = df_mes[mes_nome].fillna('NÃO').astype(str).str.strip().str.upper()
-                    df_mes[f'ACOMPANHAMENTO_{mes_nome}'] = df_mes[f'ACOMPANHAMENTO_{mes_nome}'].fillna('NÃO').astype(str).str.strip().str.upper()
-                    
-                    dados_completos = pd.merge(dados_completos, df_mes, left_on='login', right_on='LOGIN', how='left')
-                    if 'LOGIN' in dados_completos.columns: dados_completos = dados_completos.drop(columns=['LOGIN'])
-                    meses_info.append({'nome_aba': aba, 'mes_nome': mes_nome})
+                dados_completos = pd.merge(dados_completos, df_mes, left_on='login', right_on='LOGIN', how='left')
+                if 'LOGIN' in dados_completos.columns: dados_completos = dados_completos.drop(columns=['LOGIN'])
+                meses_info.append({'nome_aba': aba, 'mes_nome': mes_nome})
+
+    if not meses_info:
+        meses_info = [{'nome_aba': 'Base_Tecnicos', 'mes_nome': 'AGOSTO'}]
 
     dados_completos = dados_completos.fillna('')
     dados_completos = dados_completos.replace(['nan', 'None', 'NaN'], '')
@@ -663,7 +658,7 @@ else:
             try: realizado_atual = int(filtro_h.iloc[0]['REALIZADO_HORAS']) if filtro_h.iloc[0]['REALIZADO_HORAS'] != '' else 0
             except: pass
 
-    # Definir coluna de RE do IQ de acordo com o mês vigente ou selecionado
+    # Definir coluna de RE do IQ de acordo com o mês vigente ou selecionado (ex: AGOSTO)
     col_re_iq_mes_atual = f're_iq_responsavel_{mes_vigente}' if mes_vigente else None
 
     # Gestão vs IQ
