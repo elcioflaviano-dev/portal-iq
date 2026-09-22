@@ -339,8 +339,6 @@ def carregar_dados():
         dados_iqs['REGIAO_FINAL'] = 'N/A'
     
     dados_tecnicos.columns = [str(c).strip() for c in dados_tecnicos.columns]
-    
-    # Identificar coluna de login (aceita 'login', 'LOGIN_AGOSTO', etc.)
     col_login_tec = next((c for c in dados_tecnicos.columns if 'LOGIN' in c.upper()), 'login')
     dados_tecnicos['login'] = dados_tecnicos[col_login_tec].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
     
@@ -658,10 +656,10 @@ else:
             try: realizado_atual = int(filtro_h.iloc[0]['REALIZADO_HORAS']) if filtro_h.iloc[0]['REALIZADO_HORAS'] != '' else 0
             except: pass
 
-    # Definir coluna de RE do IQ de acordo com o mês vigente ou selecionado (ex: AGOSTO)
-    col_re_iq_mes_atual = f're_iq_responsavel_{mes_vigente}' if mes_vigente else None
+    # Definir coluna de RE do IQ para o mês de acompanhamento atual (ex: AGOSTO)
+    col_re_iq_mes_acomp = f're_iq_responsavel_{mes_acompanhamento}' if mes_acompanhamento else None
 
-    # Gestão vs IQ
+    # Gestão vs IQ (Filtro rigoroso por perfil)
     if perfil_usuario == 'GESTÃO':
         st.sidebar.divider()
         st.sidebar.subheader("🎛️ Filtro de Gestão")
@@ -675,16 +673,17 @@ else:
             re_alvo_str = None
         else:
             re_alvo_str = iq_selecionado.split(" - ")[0].strip()
-            if col_re_iq_mes_atual and col_re_iq_mes_atual in dados_completos.columns:
-                equipe_vigente = dados_completos[dados_completos[col_re_iq_mes_atual].astype(str) == re_alvo_str]
+            if col_re_iq_mes_acomp and col_re_iq_mes_acomp in dados_completos.columns:
+                equipe_vigente = dados_completos[dados_completos[col_re_iq_mes_acomp].astype(str).str.replace('.0', '') == str(re_alvo_str)]
             else:
                 equipe_vigente = dados_completos
     else:
         re_alvo_str = re_logado_str
-        if col_re_iq_mes_atual and col_re_iq_mes_atual in dados_completos.columns:
-            equipe_vigente = dados_completos[dados_completos[col_re_iq_mes_atual].astype(str) == re_logado_str]
+        # Garante que o IQ comum veja APENAS os técnicos vinculados a ele no mês de referência
+        if col_re_iq_mes_acomp and col_re_iq_mes_acomp in dados_completos.columns:
+            equipe_vigente = dados_completos[dados_completos[col_re_iq_mes_acomp].astype(str).str.replace('.0', '') == str(re_logado_str)]
         else:
-            equipe_vigente = dados_completos
+            equipe_vigente = pd.DataFrame()
 
     with st.sidebar:
         if os.path.exists("novo-logo-totale.png"): st.image(Image.open("novo-logo-totale.png"), use_container_width=True)
@@ -833,7 +832,7 @@ else:
                 else:
                     target_re = re_alvo_str if perfil_usuario == 'GESTÃO' else re_logado_str
                     if col_re_mes in dados_completos.columns:
-                        base_calc_mes = dados_completos[dados_completos[col_re_mes].astype(str) == target_re]
+                        base_calc_mes = dados_completos[dados_completos[col_re_mes].astype(str).str.replace('.0', '') == str(target_re)]
                     else:
                         base_calc_mes = pd.DataFrame()
                 
@@ -982,7 +981,7 @@ else:
                     base_historico = dados_completos
             else:
                 if col_re_hist in dados_completos.columns:
-                    base_historico = dados_completos[dados_completos[col_re_hist].astype(str) == re_logado_str]
+                    base_historico = dados_completos[dados_completos[col_re_hist].astype(str).str.replace('.0', '') == str(re_logado_str)]
                 else:
                     base_historico = pd.DataFrame()
 
