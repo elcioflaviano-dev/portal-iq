@@ -154,10 +154,10 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. Conexão com Google Sheets e Google Calendar ---
+# --- 2. Conexão com Google Sheets e Google Calendar (Proteção Avançada contra Erro 429) ---
 def conectar_planilha():
-    tentativas = 3
-    espera = 2
+    tentativas = 5
+    espera = 3
     for tentativa in range(tentativas):
         try:
             creds_dict = json.loads(st.secrets["gcp_service_account"])
@@ -169,10 +169,12 @@ def conectar_planilha():
             if "429" in str(e) or "Quota exceeded" in str(e):
                 if tentativa < tentativas - 1:
                     time.sleep(espera)
-                    espera *= 2
+                    espera *= 2  # Aumenta o tempo de espera exponencialmente (3s, 6s, 12s...)
                     continue
-            st.error(f"Erro ao conectar com o Google Sheets. Detalhe: {e}")
-            st.stop()
+            if tentativa == tentativas - 1:
+                st.error("Servidor ocupado devido a acessos simultâneos (Erro 429). Aguarde alguns segundos e tente novamente.")
+                st.stop()
+            time.sleep(2)
 
 def criar_evento_google_calendar(nome_tec, data_agendamento, nome_iq, email_tec=""):
     try:
@@ -252,7 +254,7 @@ def alterar_senha_sheets(re_iq, nova_senha):
     except Exception as e:
         return False, f"Erro ao atualizar senha: {e}"
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=300)
 def carregar_resultados_matinal():
     try:
         planilha = conectar_planilha()
@@ -299,7 +301,7 @@ def salvar_fotos_no_cloudinary(uploaded_files, nome_tecnico, tipo_pasta):
     except Exception as e:
         return [f"(ERRO CLOUDINARY: {e})"]
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=300)
 def carregar_dados():
     planilha = conectar_planilha()
     
@@ -427,7 +429,7 @@ def carregar_dados():
 
     return dados_iqs, dados_completos, meses_info
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=300)
 def carregar_controle_iq():
     try:
         planilha = conectar_planilha()
