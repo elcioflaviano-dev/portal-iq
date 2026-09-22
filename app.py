@@ -169,7 +169,7 @@ def conectar_planilha():
             if "429" in str(e) or "Quota exceeded" in str(e):
                 if tentativa < tentativas - 1:
                     time.sleep(espera)
-                    espera *= 2  # Aumenta o tempo de espera exponencialmente (3s, 6s, 12s...)
+                    espera *= 2
                     continue
             if tentativa == tentativas - 1:
                 st.error("Servidor ocupado devido a acessos simultâneos (Erro 429). Aguarde alguns segundos e tente novamente.")
@@ -340,7 +340,9 @@ def carregar_dados():
     
     dados_tecnicos.columns = [str(c).strip() for c in dados_tecnicos.columns]
     dados_tecnicos['login'] = dados_tecnicos.get('login', '').astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
-    dados_tecnicos['re_iq_responsavel'] = dados_tecnicos.get('re_iq_responsavel', '').astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+    
+    # Removemos a coluna re_iq_responsavel estática da Base_Tecnicos para evitar conflito com o mês
+    dados_tecnicos = dados_tecnicos.drop(columns=['re_iq_responsavel'], errors='ignore')
     
     col_tel = next((c for c in dados_tecnicos.columns if 'TEL' in c.upper() or 'CEL' in c.upper() or 'WPP' in c.upper() or 'ZAP' in c.upper() or 'WHATS' in c.upper()), None)
     if col_tel:
@@ -372,6 +374,7 @@ def carregar_dados():
     dados_completos = dados_tecnicos.copy()
     todas_abas = [ws.title for ws in planilha.worksheets()]
     
+    meses_info = []
     if "Certificados" in todas_abas:
         df_cert = ler_aba("Certificados")
         if not df_cert.empty:
@@ -383,7 +386,6 @@ def carregar_dados():
         meses_info = [{'nome_aba': 'Certificados', 'mes_nome': 'JULHO'}, {'nome_aba': 'Certificados', 'mes_nome': 'AGOSTO'}, {'nome_aba': 'Certificados', 'mes_nome': 'SETEMBRO'}]
     else:
         abas_meses = [aba for aba in todas_abas if aba not in ['Base_IQ', 'Base_Tecnicos', 'Controle_IQ', 'Agenda_Matinal', 'Vistorias_Matinal', 'Vistoria_Instalacao', 'Log_Acessos', 'Resultado_Matinal']]
-        meses_info = []
 
         for aba in abas_meses:
             df_mes = ler_aba(aba)
@@ -395,7 +397,7 @@ def carregar_dados():
                 for c in df_mes.columns:
                     c_up = str(c).strip().upper()
                     if 'LOGIN' in c_up: colunas_novas[c] = 'LOGIN'
-                    elif 'RE' in c_up and 'IQ' in c_up: colunas_novas[c] = f'RE_IQ_{mes_nome}'
+                    elif 'RE' in c_up and 'IQ' in c_up: colunas_novas[c] = f're_iq_responsavel_{mes_nome}'
                     elif 'ACOMPANHAMENTO' in c_up: colunas_novas[c] = f'ACOMPANHAMENTO_{mes_nome}'
                     elif c_up in ['MONIT_1', 'M1']: colunas_novas[c] = f'MONIT_1_{mes_nome}'
                     elif c_up in ['MONIT_2', 'M2']: colunas_novas[c] = f'MONIT_2_{mes_nome}'
@@ -408,8 +410,9 @@ def carregar_dados():
                 
                 if 'LOGIN' in df_mes.columns:
                     df_mes['LOGIN'] = df_mes['LOGIN'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
-                    if f'RE_IQ_{mes_nome}' in df_mes.columns:
-                        df_mes[f'RE_IQ_{mes_nome}'] = df_mes[f'RE_IQ_{mes_nome}'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+                    col_re_mes_alvo = f're_iq_responsavel_{mes_nome}'
+                    if col_re_mes_alvo in df_mes.columns:
+                        df_mes[col_re_mes_alvo] = df_mes[col_re_mes_alvo].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
                     
                     if mes_nome not in df_mes.columns: df_mes[mes_nome] = 'NÃO'
                     if f'ACOMPANHAMENTO_{mes_nome}' not in df_mes.columns: df_mes[f'ACOMPANHAMENTO_{mes_nome}'] = 'NÃO'
@@ -660,6 +663,9 @@ else:
             try: realizado_atual = int(filtro_h.iloc[0]['REALIZADO_HORAS']) if filtro_h.iloc[0]['REALIZADO_HORAS'] != '' else 0
             except: pass
 
+    # Definir coluna de RE do IQ de acordo com o mês vigente ou selecionado
+    col_re_iq_mes_atual = f're_iq_responsavel_{mes_vigente}' if mes_vigente else None
+
     # Gestão vs IQ
     if perfil_usuario == 'GESTÃO':
         st.sidebar.divider()
@@ -674,10 +680,16 @@ else:
             re_alvo_str = None
         else:
             re_alvo_str = iq_selecionado.split(" - ")[0].strip()
-            equipe_vigente = dados_completos[dados_completos['re_iq_responsavel'] == re_alvo_str]
+            if col_re_iq_mes_atual and col_re_iq_mes_atual in dados_completos.columns:
+                equipe_vigente = dados_completos[dados_completos[col_re_iq_mes_atual].astype(str) == re_alvo_str]
+            else:
+                equipe_vigente = dados_completos
     else:
-        equipe_vigente = dados_completos[dados_completos['re_iq_responsavel'] == re_logado_str]
         re_alvo_str = re_logado_str
+        if col_re_iq_mes_atual and col_re_iq_mes_atual in dados_completos.columns:
+            equipe_vigente = dados_completos[dados_completos[col_re_iq_mes_atual].astype(str) == re_logado_str]
+        else:
+            equipe_vigente = dados_completos
 
     with st.sidebar:
         if os.path.exists("novo-logo-totale.png"): st.image(Image.open("novo-logo-totale.png"), use_container_width=True)
@@ -820,7 +832,7 @@ else:
                 lista_meses = [m['mes_nome'] for m in meses_info]
                 mes_selecionado = st.selectbox("Selecione o Mês:", lista_meses, index=len(lista_meses)-1, key="sel_mes_card")
                 
-                col_re_mes = f"RE_IQ_{mes_selecionado}"
+                col_re_mes = f"re_iq_responsavel_{mes_selecionado}"
                 if perfil_usuario == 'GESTÃO' and (not locals().get('re_alvo_str') or re_alvo_str is None):
                     base_calc_mes = dados_completos
                 else:
@@ -918,10 +930,11 @@ else:
                 for index, row in tecnicos_nao_cert.iterrows():
                     tec_login = row['login']
                     tec_nome = row['nome']
-                    iq_resp = row['re_iq_responsavel']
+                    col_re_mes_acomp = f're_iq_responsavel_{mes_acompanhamento}'
+                    iq_resp = row.get(col_re_mes_acomp, '')
                     
                     nome_iq_resp = iq_resp
-                    match_iq = dados_iqs[dados_iqs['re_iq'] == iq_resp]
+                    match_iq = dados_iqs[dados_iqs['re_iq'] == str(iq_resp)]
                     if not match_iq.empty: nome_iq_resp = match_iq.iloc[0]['nome_iq']
 
                     m1_val = str(row.get(f'MONIT_1_{mes_acompanhamento}', '')).upper() == 'SIM'
@@ -966,7 +979,7 @@ else:
             lista_meses = [m['mes_nome'] for m in meses_info]
             mes_historico = st.selectbox("📅 Escolha o Mês para visualizar:", lista_meses, index=len(lista_meses)-1)
             
-            col_re_hist = f"RE_IQ_{mes_historico}"
+            col_re_hist = f"re_iq_responsavel_{mes_historico}"
             if perfil_usuario == 'GESTÃO':
                 if 're_alvo_str' in locals() and re_alvo_str:
                     base_historico = dados_completos[dados_completos[col_re_hist].astype(str) == str(re_alvo_str)]
@@ -991,7 +1004,7 @@ else:
                 st.write("")
 
                 colunas_exibir = ['login', 'nome', mes_historico]
-                if f"RE_IQ_{mes_historico}" in base_historico.columns: colunas_exibir.append(f"RE_IQ_{mes_historico}")
+                if col_re_hist in base_historico.columns: colunas_exibir.append(col_re_hist)
                 if f"MONIT_1_{mes_historico}" in base_historico.columns: colunas_exibir.append(f"MONIT_1_{mes_historico}")
                 if f"MONIT_2_{mes_historico}" in base_historico.columns: colunas_exibir.append(f"MONIT_2_{mes_historico}")
                 if f"MONIT_3_{mes_historico}" in base_historico.columns: colunas_exibir.append(f"MONIT_3_{mes_historico}")
@@ -1015,7 +1028,7 @@ else:
                     'login': 'Login', 
                     'nome': 'Nome do Técnico',
                     mes_historico: 'Status Certificação',
-                    f"RE_IQ_{mes_historico}": 'RE do IQ (Mês)',
+                    col_re_hist: 'RE do IQ (Mês)',
                     'Contagem_Monitorias': 'Monitoria Concluída?'
                 }
                 df_exibir = df_exibir.rename(columns=renomear_cols)
