@@ -40,7 +40,7 @@ FALHAS_INSTALACAO = {
         "016G-Conexão em poste correto", "067G-Divisor na Rede"
     ],
     "DG/Apto": [
-        "017G-Identificação do cabo", "018G-Torque correto na conexão do DG", "019G-Preparação dos conectores no DG",
+        "017G-Identificação do cabo", "018G-Torque correto na conexão do DG", "019G-Preparação dos conectores do DG",
         "020M-Disposição do cabo (dentro do DG)", "021M-Roteamento do Cabo", "022M-Fixação do cabo"
     ],
     "PAQ": [
@@ -793,7 +793,6 @@ else:
         nota_iq_val = "Aguardando lançamento"
         nome_iq_nota_exibir = st.session_state["nome_iq"]
 
-        # Se for GESTÃO e houver um RE alvo selecionado no filtro lateral, busca o nome e nota dele
         re_para_nota = re_logado_str
         if perfil_usuario == 'GESTÃO' and 're_alvo_str' in locals() and re_alvo_str:
             re_para_nota = re_alvo_str
