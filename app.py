@@ -40,7 +40,7 @@ FALHAS_INSTALACAO = {
         "016G-Conexão em poste correto", "067G-Divisor na Rede"
     ],
     "DG/Apto": [
-        "017G-Identificação do cabo", "018G-Torque correto na conexão do DG", "019G-Preparação dos conectores do DG",
+        "017G-Identificação do cabo", "018G-Torque correto na conexão do DG", "019G-Preparação dos conectores no DG",
         "020M-Disposição do cabo (dentro do DG)", "021M-Roteamento do Cabo", "022M-Fixação do cabo"
     ],
     "PAQ": [
@@ -922,7 +922,7 @@ else:
 
         st.divider()
 
-        # --- AGENDA DE MATINAIS (SUBIU PARA ACIMA DA MONITORIA/ACOMPANHAMENTO) ---
+        # --- AGENDA DE MATINAIS ---
         st.subheader("📅 Agenda de Matinais (Clique no nome para realizar a vistoria)")
         agenda_do_usuario = {tec: info for tec, info in st.session_state['agenda_matinal'].items() if str(info.get('re_iq')) == str(re_logado_str) or perfil_usuario == 'GESTÃO'}
         
@@ -947,23 +947,32 @@ else:
 
         st.divider()
         
-        # --- ACOMPANHAMENTO PENDENTE ---
+        # --- ACOMPANHAMENTO PENDENTE COM SELETOR DE IQ ---
         st.subheader(f"⚠️ Acompanhamento Pendente (Referência: {mes_acompanhamento or 'N/A'})")
 
-        # --- SEÇÃO EXCLUSIVA DE GESTÃO: ATRIBUIR TÉCNICO A IQ (LOGO ABAIXO DO TÍTULO DE ACOMPANHAMENTO) ---
+        # Menu para selecionar qual IQ visualizar nas monitorias ticadas
+        lista_iqs_monitoria = dados_iqs[dados_iqs['PERFIL'] != 'GESTÃO'][['re_iq', 'nome_iq']].drop_duplicates()
+        opcoes_iq_monit = [f"{row['re_iq']} - {row['nome_iq']}" for _, row in lista_iqs_monitoria.iterrows()]
+        
+        if perfil_usuario == 'GESTÃO':
+            iq_escolhido_monit_str = st.selectbox("🔍 Filtrar monitorias pelo IQ:", opcoes_iq_monit, key="sel_iq_monit")
+            re_iq_monit_alvo = iq_escolhido_monit_str.split(" - ")[0].strip()
+        else:
+            re_iq_monit_alvo = re_logado_str
+            st.write(f"**Visualizando sua equipe:** {st.session_state['nome_iq']}")
+
+        # --- SEÇÃO EXCLUSIVA DE GESTÃO: ATRIBUIR TÉCNICO A IQ ---
         if perfil_usuario == 'GESTÃO':
             with st.expander("🛠️ [Gestão] Atribuir / Adicionar Técnico a um IQ por Mês"):
                 st.write("Selecione o técnico e para qual IQ ele deve ser direcionado no mês de referência.")
                 lista_todos_tecnicos = dados_completos['nome'].tolist() if 'nome' in dados_completos.columns else []
-                lista_iqs_disponiveis = dados_iqs[dados_iqs['PERFIL'] != 'GESTÃO'][['re_iq', 'nome_iq']].drop_duplicates()
-                opcoes_iq_gestao = [f"{row['re_iq']} - {row['nome_iq']}" for _, row in lista_iqs_disponiveis.iterrows()]
                 
                 with st.form("form_atribuir_tec"):
                     c_att1, c_att2, c_att3 = st.columns(3)
                     with c_att1:
                         tec_escolhido = st.selectbox("Técnico:", lista_todos_tecnicos)
                     with c_att2:
-                        iq_escolhido_str = st.selectbox("Novo IQ Responsável:", opcoes_iq_gestao)
+                        iq_escolhido_str = st.selectbox("Novo IQ Responsável:", opcoes_iq_monit, key="sel_iq_atrib")
                     with c_att3:
                         mes_atribuicao = st.selectbox("Mês de Referência:", [m['mes_nome'] for m in meses_info], index=len(meses_info)-1)
                         
@@ -985,15 +994,20 @@ else:
                                 st.error(f"Erro: {msg_atrib}")
 
         if mes_acompanhamento:
-            tecnicos_nao_cert = equipe_vigente[(equipe_vigente[mes_acompanhamento] == 'NÃO') & (equipe_vigente[f'ACOMPANHAMENTO_{mes_acompanhamento}'] != 'SIM')]
+            col_re_mes_acomp = f're_iq_responsavel_{mes_acompanhamento}'
+            if col_re_mes_acomp in dados_completos.columns:
+                equipe_filtrada_iq = dados_completos[dados_completos[col_re_mes_acomp].astype(str).str.replace('.0', '') == str(re_iq_monit_alvo)]
+            else:
+                equipe_filtrada_iq = pd.DataFrame()
+
+            tecnicos_nao_cert = equipe_filtrada_iq[(equipe_filtrada_iq[mes_acompanhamento] == 'NÃO') & (equipe_filtrada_iq[f'ACOMPANHAMENTO_{mes_acompanhamento}'] != 'SIM')]
             
             if tecnicos_nao_cert.empty:
-                st.success(f"Todos os técnicos pendentes de {mes_acompanhamento} já concluíram as monitorias.")
+                st.success(f"Nenhum técnico pendente para este IQ no mês de {mes_acompanhamento}.")
             else:
                 for index, row in tecnicos_nao_cert.iterrows():
                     tec_login = row['login']
                     tec_nome = row['nome']
-                    col_re_mes_acomp = f're_iq_responsavel_{mes_acompanhamento}'
                     iq_resp = row.get(col_re_mes_acomp, '')
                     
                     nome_iq_resp = iq_resp
