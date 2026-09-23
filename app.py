@@ -828,20 +828,8 @@ else:
 
         st.divider()
 
-        # --- CONTROLE DE HORAS DE MONITORIA COM SELETOR PARA GESTÃO ---
-        st.markdown('<div class="metric-card-green">', unsafe_allow_html=True)
-        st.markdown('<div class="metric-title">⏱️ Horas de Monitoria RPPA</div>', unsafe_allow_html=True)
-
-        if perfil_usuario == 'GESTÃO':
-            lista_iqs_horas = dados_iqs[dados_iqs['PERFIL'] != 'GESTÃO'][['re_iq', 'nome_iq']].drop_duplicates()
-            opcoes_iq_horas = [f"{row['re_iq']} - {row['nome_iq']}" for _, row in lista_iqs_horas.iterrows()]
-            
-            iq_escolhido_horas_str = st.selectbox("Selecione o IQ para gerenciar horas:", opcoes_iq_horas, key="sel_iq_horas")
-            re_alvo_horas = iq_escolhido_horas_str.split(" - ")[0].strip()
-        else:
-            re_alvo_horas = re_logado_str
-
-        # Buscar dados de horas para o RE alvo
+        re_alvo_horas = re_alvo_str if (perfil_usuario == 'GESTÃO' and re_alvo_str) else re_logado_str
+        
         meta_alvo, realizado_alvo = 60, "0"
         if not df_ctrl.empty and 'RE_IQ' in df_ctrl.columns:
             f_h = df_ctrl[df_ctrl['RE_IQ'].astype(str).str.strip().str.replace('.0','') == str(re_alvo_horas)]
@@ -851,7 +839,24 @@ else:
                 val_real = f_h.iloc[0]['REALIZADO_HORAS']
                 realizado_alvo = str(val_real) if val_real != '' else "0"
 
+        st.markdown('<div class="metric-card-green">', unsafe_allow_html=True)
+        st.markdown('<div class="metric-title">⏱️ Horas de Monitoria RPPA</div>', unsafe_allow_html=True)
+
         if perfil_usuario == 'GESTÃO':
+            lista_iqs_horas = dados_iqs[dados_iqs['PERFIL'] != 'GESTÃO'][['re_iq', 'nome_iq']].drop_duplicates()
+            opcoes_iq_horas = [f"{row['re_iq']} - {row['nome_iq']}" for _, row in lista_iqs_horas.iterrows()]
+            
+            iq_escolhido_horas_str = st.selectbox("Selecione o IQ para gerenciar horas:", opcoes_iq_horas, key="sel_iq_horas")
+            re_alvo_horas = iq_escolhido_horas_str.split(" - ")[0].strip()
+            
+            if not df_ctrl.empty and 'RE_IQ' in df_ctrl.columns:
+                f_h = df_ctrl[df_ctrl['RE_IQ'].astype(str).str.strip().str.replace('.0','') == str(re_alvo_horas)]
+                if not f_h.empty:
+                    try: meta_alvo = int(f_h.iloc[0]['META_HORAS']) if f_h.iloc[0]['META_HORAS'] != '' else 60
+                    except: pass
+                    val_real = f_h.iloc[0]['REALIZADO_HORAS']
+                    realizado_alvo = str(val_real) if val_real != '' else "0"
+
             meta_input = st.number_input("Meta de Horas:", value=meta_alvo, step=1, key=f"meta_{re_alvo_horas}")
             st.markdown(f'<div class="metric-value" style="font-size:24px; margin-top:5px;">Realizado atual: {realizado_alvo}</div>', unsafe_allow_html=True)
             novo_real = st.text_input("Atualizar Realizado (HH:MM:SS ou número):", value=str(realizado_alvo), key=f"real_txt_{re_alvo_horas}")
@@ -916,7 +921,10 @@ else:
             st.markdown('</div>', unsafe_allow_html=True)
 
         st.divider()
+        
+        st.subheader(f"⚠️ Acompanhamento Pendente (Referência: {mes_acompanhamento or 'N/A'})")
 
+        # --- SEÇÃO EXCLUSIVA DE GESTÃO: ATRIBUIR TÉCNICO A IQ (LOGO ABAIXO DO TÍTULO) ---
         if perfil_usuario == 'GESTÃO':
             with st.expander("🛠️ [Gestão] Atribuir / Adicionar Técnico a um IQ por Mês"):
                 st.write("Selecione o técnico e para qual IQ ele deve ser direcionado no mês de referência.")
@@ -950,34 +958,6 @@ else:
                             else:
                                 st.error(f"Erro: {msg_atrib}")
 
-        st.divider()
-        
-        st.subheader("📅 Agenda de Matinais (Clique no nome para realizar a vistoria)")
-        agenda_do_usuario = {tec: info for tec, info in st.session_state['agenda_matinal'].items() if str(info.get('re_iq')) == str(re_logado_str) or perfil_usuario == 'GESTÃO'}
-        
-        if not agenda_do_usuario:
-            st.info("Sua agenda está vazia. Vá na aba 'Agendamento de Matinal' para adicionar.")
-        else:
-            for tec, info in list(agenda_do_usuario.items()):
-                c_dash1, c_dash2, c_dash3 = st.columns([3, 2, 1])
-                c_dash1.write(f"📌 **Data:** {info['data']} | **IQ:** {info['iq_nome']}")
-                
-                if c_dash2.button(f"👤 {tec}", key=f"btn_link_{tec}", help="Clique para ir direto à execução"):
-                    st.session_state['tec_selecionado_atalho'] = tec
-                    st.session_state['pagina_atual'] = "Matinal"
-                    st.session_state['aba_matinal_ativa'] = 1
-                    st.rerun()
-                    
-                if perfil_usuario == 'GESTÃO' or str(info.get('re_iq')) == str(re_logado_str):
-                    if c_dash3.button("🗑️ Remover", key=f"rm_dash_{tec}"):
-                        del st.session_state['agenda_matinal'][tec]
-                        salvar_agenda_no_sheets(st.session_state['agenda_matinal'])
-                        st.rerun()
-
-        st.divider()
-        
-        st.subheader(f"⚠️ Acompanhamento Pendente (Referência: {mes_acompanhamento or 'N/A'})")
-        
         if mes_acompanhamento:
             tecnicos_nao_cert = equipe_vigente[(equipe_vigente[mes_acompanhamento] == 'NÃO') & (equipe_vigente[f'ACOMPANHAMENTO_{mes_acompanhamento}'] != 'SIM')]
             
@@ -1025,6 +1005,30 @@ else:
                     st.divider()
         else:
             st.info("Crie abas de certificados mensais para habilitar o acompanhamento.")
+
+        st.divider()
+        
+        st.subheader("📅 Agenda de Matinais (Clique no nome para realizar a vistoria)")
+        agenda_do_usuario = {tec: info for tec, info in st.session_state['agenda_matinal'].items() if str(info.get('re_iq')) == str(re_logado_str) or perfil_usuario == 'GESTÃO'}
+        
+        if not agenda_do_usuario:
+            st.info("Sua agenda está vazia. Vá na aba 'Agendamento de Matinal' para adicionar.")
+        else:
+            for tec, info in list(agenda_do_usuario.items()):
+                c_dash1, c_dash2, c_dash3 = st.columns([3, 2, 1])
+                c_dash1.write(f"📌 **Data:** {info['data']} | **IQ:** {info['iq_nome']}")
+                
+                if c_dash2.button(f"👤 {tec}", key=f"btn_link_{tec}", help="Clique para ir direto à execução"):
+                    st.session_state['tec_selecionado_atalho'] = tec
+                    st.session_state['pagina_atual'] = "Matinal"
+                    st.session_state['aba_matinal_ativa'] = 1
+                    st.rerun()
+                    
+                if perfil_usuario == 'GESTÃO' or str(info.get('re_iq')) == str(re_logado_str):
+                    if c_dash3.button("🗑️ Remover", key=f"rm_dash_{tec}"):
+                        del st.session_state['agenda_matinal'][tec]
+                        salvar_agenda_no_sheets(st.session_state['agenda_matinal'])
+                        st.rerun()
 
     # --- PÁGINA 2: HISTÓRICO DE CERTIFICADOS ---
     elif st.session_state['pagina_atual'] == "Historico":
