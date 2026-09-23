@@ -684,15 +684,6 @@ else:
     if 'agenda_matinal' not in st.session_state:
         st.session_state['agenda_matinal'] = carregar_agenda_matinal_sheets()
 
-    meta_atual, realizado_atual = 60, "0"
-    if not df_ctrl.empty and 'RE_IQ' in df_ctrl.columns:
-        filtro_h = df_ctrl[df_ctrl['RE_IQ'].astype(str).str.strip().str.replace('.0','') == re_logado_str]
-        if not filtro_h.empty:
-            try: meta_atual = int(filtro_h.iloc[0]['META_HORAS']) if filtro_h.iloc[0]['META_HORAS'] != '' else 60
-            except: pass
-            val_real = filtro_h.iloc[0]['REALIZADO_HORAS']
-            realizado_atual = str(val_real) if val_real != '' else "0"
-
     col_re_iq_mes_acomp = f're_iq_responsavel_{mes_acompanhamento}' if mes_acompanhamento else None
 
     if perfil_usuario == 'GESTÃO':
@@ -837,18 +828,44 @@ else:
 
         st.divider()
 
-        re_alvo_horas = re_alvo_str if (perfil_usuario == 'GESTÃO' and re_alvo_str) else re_logado_str
-        
-        meta_alvo, realizado_alvo = meta_atual, realizado_atual
-        if perfil_usuario == 'GESTÃO' and re_alvo_str and not df_ctrl.empty:
-            f_alvo = df_ctrl[df_ctrl['RE_IQ'].astype(str).str.strip().str.replace('.0','') == str(re_alvo_str)]
-            if not f_alvo.empty:
-                try: meta_alvo = int(f_alvo.iloc[0]['META_HORAS']) if f_alvo.iloc[0]['META_HORAS'] != '' else 60
+        # --- CONTROLE DE HORAS DE MONITORIA COM SELETOR PARA GESTÃO ---
+        st.markdown('<div class="metric-card-green">', unsafe_allow_html=True)
+        st.markdown('<div class="metric-title">⏱️ Horas de Monitoria RPPA</div>', unsafe_allow_html=True)
+
+        if perfil_usuario == 'GESTÃO':
+            lista_iqs_horas = dados_iqs[dados_iqs['PERFIL'] != 'GESTÃO'][['re_iq', 'nome_iq']].drop_duplicates()
+            opcoes_iq_horas = [f"{row['re_iq']} - {row['nome_iq']}" for _, row in lista_iqs_horas.iterrows()]
+            
+            iq_escolhido_horas_str = st.selectbox("Selecione o IQ para gerenciar horas:", opcoes_iq_horas, key="sel_iq_horas")
+            re_alvo_horas = iq_escolhido_horas_str.split(" - ")[0].strip()
+        else:
+            re_alvo_horas = re_logado_str
+
+        # Buscar dados de horas para o RE alvo
+        meta_alvo, realizado_alvo = 60, "0"
+        if not df_ctrl.empty and 'RE_IQ' in df_ctrl.columns:
+            f_h = df_ctrl[df_ctrl['RE_IQ'].astype(str).str.strip().str.replace('.0','') == str(re_alvo_horas)]
+            if not f_h.empty:
+                try: meta_alvo = int(f_h.iloc[0]['META_HORAS']) if f_h.iloc[0]['META_HORAS'] != '' else 60
                 except: pass
-                val_real = f_alvo.iloc[0]['REALIZADO_HORAS']
+                val_real = f_h.iloc[0]['REALIZADO_HORAS']
                 realizado_alvo = str(val_real) if val_real != '' else "0"
 
-        col1, col2, col3 = st.columns(3)
+        if perfil_usuario == 'GESTÃO':
+            meta_input = st.number_input("Meta de Horas:", value=meta_alvo, step=1, key=f"meta_{re_alvo_horas}")
+            st.markdown(f'<div class="metric-value" style="font-size:24px; margin-top:5px;">Realizado atual: {realizado_alvo}</div>', unsafe_allow_html=True)
+            novo_real = st.text_input("Atualizar Realizado (HH:MM:SS ou número):", value=str(realizado_alvo), key=f"real_txt_{re_alvo_horas}")
+            
+            if meta_input != meta_alvo or novo_real != str(realizado_alvo):
+                salvar_horas_no_sheets(re_alvo_horas, meta_input, novo_real)
+                st.rerun()
+        else:
+            st.markdown(f'<div class="metric-value">Meta: {meta_alvo}h</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-value" style="font-size:20px; margin-top:5px;">Realizado: {realizado_alvo}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-sub">Controle individual de horas</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        col1, col2 = st.columns(2)
         
         with col1:
             st.markdown('<div class="metric-card-blue">', unsafe_allow_html=True)
@@ -886,24 +903,6 @@ else:
             st.markdown('</div>', unsafe_allow_html=True)
 
         with col2:
-            st.markdown('<div class="metric-card-green">', unsafe_allow_html=True)
-            st.markdown('<div class="metric-title">⏱️ Horas de Monitoria RPPA</div>', unsafe_allow_html=True)
-            
-            if perfil_usuario == 'GESTÃO':
-                meta_input = st.number_input("Meta de Horas:", value=meta_alvo, step=1, key=f"meta_{re_alvo_horas}")
-                st.markdown(f'<div class="metric-value" style="font-size:24px; margin-top:5px;">Realizado: {realizado_alvo}</div>', unsafe_allow_html=True)
-                
-                novo_real = st.text_input("Atualizar Realizado (HH:MM:SS):", value=str(realizado_alvo), key=f"real_txt_{re_alvo_horas}")
-                if meta_input != meta_alvo or novo_real != str(realizado_alvo):
-                    salvar_horas_no_sheets(re_alvo_horas, meta_input, novo_real)
-                    st.rerun()
-            else:
-                st.markdown(f'<div class="metric-value">Meta: {meta_alvo}h</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="metric-value" style="font-size:20px; margin-top:5px;">Realizado: {realizado_alvo}</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="metric-sub">Controle individual de horas</div>', unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        with col3:
             st.markdown('<div class="metric-card-orange">', unsafe_allow_html=True)
             st.markdown('<div class="metric-title">⚠️ Monitoramento Pendente</div>', unsafe_allow_html=True)
             
@@ -920,7 +919,7 @@ else:
 
         if perfil_usuario == 'GESTÃO':
             with st.expander("🛠️ [Gestão] Atribuir / Adicionar Técnico a um IQ por Mês"):
-                st.write("Selecione o técnico e para qual IQ he deve ser direcionado no mês de referência.")
+                st.write("Selecione o técnico e para qual IQ ele deve ser direcionado no mês de referência.")
                 lista_todos_tecnicos = dados_completos['nome'].tolist() if 'nome' in dados_completos.columns else []
                 lista_iqs_disponiveis = dados_iqs[dados_iqs['PERFIL'] != 'GESTÃO'][['re_iq', 'nome_iq']].drop_duplicates()
                 opcoes_iq_gestao = [f"{row['re_iq']} - {row['nome_iq']}" for _, row in lista_iqs_disponiveis.iterrows()]
@@ -1045,7 +1044,7 @@ else:
                     base_historico = dados_completos
             else:
                 if col_re_hist in dados_completos.columns:
-                    base_historico = dados_completos[dados_completos[col_re_hist].astype(str).str.replace('.0', '') == str(re_logado_str)]
+                    base_historico = dados_completos[dados_completos[col_re_hist].astype(str) == str(re_logado_str)]
                 else:
                     base_historico = pd.DataFrame()
 
@@ -1337,102 +1336,6 @@ else:
                                 st.session_state['email_pronto'] = url_email
                                 st.session_state['tec_selecionado_atalho'] = None
                                 st.rerun()
-
-    # --- PÁGINA 4: VISTORIA DE INSTALAÇÃO ---
-    elif st.session_state['pagina_atual'] == "Instalacao":
-        st.title("🛠️ Vistoria e Auditoria de Instalação em Campo")
-        st.write("Auditoria baseada nos códigos oficiais da Totale. Registro de evidência e disparo para o WhatsApp (Grupo IQ).")
-        
-        if st.session_state['zap_pronto']:
-            st.success("✅ Vistoria de Instalação gravada com sucesso!")
-            
-            c_zap, c_email = st.columns(2)
-            with c_zap:
-                st.markdown(f'<a href="{st.session_state["zap_pronto"]}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">💬 ENVIAR NO WHATSAPP (GRUPO IQ)</a>', unsafe_allow_html=True)
-            with c_email:
-                if st.session_state.get('email_instalacao'):
-                    st.markdown(f'<a href="{st.session_state["email_instalacao"]}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #007BFF; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">📩 ENVIAR POR E-MAIL (GESTÃO)</a>', unsafe_allow_html=True)
-            
-            st.write("")
-            if st.button("🧹 Realizar Nova Vistoria de Instalação"):
-                st.session_state['zap_pronto'] = None
-                st.session_state['email_instalacao'] = None
-                st.rerun()
-        else:
-            col_tec, col_cont = st.columns(2)
-            with col_tec:
-                tec_inst = st.selectbox("Selecione o Técnico Auditado:", ["Selecione..."] + dados_completos['nome'].tolist())
-            with col_cont:
-                num_contrato = st.text_input("📄 Número do Contrato Vistoriado *")
-            
-            if tec_inst != "Selecione...":
-                st.info("⚠️ Marque abaixo as falhas encontradas na instalação, divididas por tópicos.")
-                
-                erros_encontrados = []
-                tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-                    "🔌 Tap/Isolador", "🏠 DG/Apto", "👨‍🔧 PAQ", "🧵 Cabeamento", "📡 Medição", "📦 Materiais", "Outros"
-                ])
-                
-                def renderizar_colunas_checklist(lista_itens, aba):
-                    with aba:
-                        cols = st.columns(2)
-                        for i, item in enumerate(lista_itens):
-                            col_atual = cols[i % 2]
-                            if col_atual.checkbox(item, key=f"inst_{item[:4]}_{i}"):
-                                erros_encontrados.append(item)
-
-                renderizar_colunas_checklist(FALHAS_INSTALACAO["Tap/Isolador/Emenda"], tab1)
-                renderizar_colunas_checklist(FALHAS_INSTALACAO["DG/Apto"], tab2)
-                renderizar_colunas_checklist(FALHAS_INSTALACAO["PAQ"], tab3)
-                renderizar_colunas_checklist(FALHAS_INSTALACAO["Cabeamento Interior"], tab4)
-                renderizar_colunas_checklist(FALHAS_INSTALACAO["Medição de Sinal"], tab5)
-                renderizar_colunas_checklist(FALHAS_INSTALACAO["Divergência de Materiais"], tab6)
-                renderizar_colunas_checklist(FALHAS_INSTALACAO["Outros"], tab7)
-                
-                st.divider()
-                
-                fotos_inst = st.file_uploader("📸 Anexar Fotos da Instalação / Erro (Múltiplas fotos permitidas)", type=['png', 'jpg'], accept_multiple_files=True, key="fotos_inst")
-                obs_inst = st.text_area("Observações da Tratativa:", key="obs_inst")
-                
-                if st.button("Gravar Auditoria e Gerar Disparos", type="primary"):
-                    if not num_contrato.strip():
-                        st.warning("⚠️ O número do contrato é obrigatório para realizar a vistoria.")
-                    elif not fotos_inst:
-                        st.warning("⚠️ O envio de ao menos uma foto é obrigatório para comprovar a auditoria.")
-                    else:
-                        tec_row = dados_completos[dados_completos['nome'] == tec_inst]
-                        tec_login = tec_row['login'].iloc[0] if not tec_row.empty else "N/A"
-                        tec_re = tec_row['re'].iloc[0] if ('re' in tec_row.columns and not tec_row.empty) else tec_login
-                        
-                        links_fotos = salvar_fotos_no_cloudinary(fotos_inst, tec_inst, "Evidencias_Instalacao")
-                        resumo_erros_sheets = " / ".join(erros_encontrados) if erros_encontrados else "Instalação sem falhas registradas."
-                        
-                        vistoria_inst_id = registrar_vistoria_instalacao_sheets(
-                            re_iq=re_logado_str,
-                            nome_iq=st.session_state['nome_iq'],
-                            login_tec=tec_login,
-                            nome_tec=tec_inst,
-                            contrato=num_contrato,
-                            irregulares=resumo_erros_sheets,
-                            obs=obs_inst,
-                            links_fotos=links_fotos
-                        )
-                        
-                        if erros_encontrados:
-                            linhas_erros = "\n".join([f"- {erro}" for erro in erros_encontrados])
-                        else:
-                            linhas_erros = "- Nenhuma falha encontrada (100% conforme)"
-
-                        fotos_txt = "\n".join(links_fotos)
-                        msg_whatsapp = f"*AUDITORIA DE INSTALAÇÃO - TOTALE ABC*\n*ID da Vistoria:* {vistoria_inst_id}\n\n*Contrato:* {num_contrato}\n*RE do Técnico:* {tec_re}\n*Técnico:* {tec_inst}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Falhas Encontradas:*\n{linhas_erros}\n\n*Observações:* {obs_inst}\n\n*Evidências (Fotos):*\n{fotos_txt}"
-                        url_whatsapp = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_whatsapp)}"
-                        
-                        corpo_email = f"RELATÓRIO DE AUDITORIA DE INSTALAÇÃO\nID da Vistoria: {vistoria_inst_id}\nContrato: {num_contrato}\nRE: {tec_re}\nTécnico: {tec_inst}\nIQ: {st.session_state['nome_iq']}\n\nFALHAS ENCONTRADAS:\n{linhas_erros}\n\nOBSERVAÇÕES:\n{obs_inst}\n\nEVIDÊNCIA FOTO:\n{fotos_txt}"
-                        url_email = f"mailto:{DESTINATARIOS_INSTALACAO}?subject=Auditoria [ID {vistoria_inst_id}] - Contrato {num_contrato} - RE {tec_re} - {tec_inst}&body={urllib.parse.quote(corpo_email)}"
-                        
-                        st.session_state['zap_pronto'] = url_whatsapp
-                        st.session_state['email_instalacao'] = url_email
-                        st.rerun()
 
     # --- PÁGINA 5: RELATÓRIOS E EXPORTAÇÃO (EXCLUSIVO PARA GESTÃO) ---
     elif st.session_state['pagina_atual'] == "Relatorios":
