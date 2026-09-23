@@ -925,7 +925,7 @@ else:
 
         st.divider()
 
-        # --- AGENDA DE MATINAIS (FILTRADA PELO IQ DO MENU LATERAL) ---
+        # --- AGENDA DE MATINAIS (FILTRADA PELO FILTRO LATERAL) ---
         st.subheader("📅 Agenda de Matinais (Clique no nome para realizar a vistoria)")
         
         re_alvo_agenda = re_alvo_str if (perfil_usuario == 'GESTÃO' and re_alvo_str) else re_logado_str
@@ -952,7 +952,7 @@ else:
 
         st.divider()
         
-        # --- ACOMPANHAMENTO PENDENTE FILTRADO PELO MENU LATERAL ---
+        # --- ACOMPANHAMENTO PENDENTE FILTRADO PELO FILTRO LATERAL ---
         st.subheader(f"⚠️ Acompanhamento Pendente (Referência: {mes_acompanhamento or 'N/A'})")
 
         # --- SEÇÃO EXCLUSIVA DE GESTÃO: ATRIBUIR TÉCNICO A IQ ---
@@ -1351,6 +1351,102 @@ else:
                                 st.session_state['email_pronto'] = url_email
                                 st.session_state['tec_selecionado_atalho'] = None
                                 st.rerun()
+
+    # --- PÁGINA 4: VISTORIA DE INSTALAÇÃO ---
+    elif st.session_state['pagina_atual'] == "Instalacao":
+        st.title("🛠️ Vistoria e Auditoria de Instalação em Campo")
+        st.write("Auditoria baseada nos códigos oficiais da Totale. Registro de evidência e disparo para o WhatsApp (Grupo IQ).")
+        
+        if st.session_state['zap_pronto']:
+            st.success("✅ Vistoria de Instalação gravada com sucesso!")
+            
+            c_zap, c_email = st.columns(2)
+            with c_zap:
+                st.markdown(f'<a href="{st.session_state["zap_pronto"]}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">💬 ENVIAR NO WHATSAPP (GRUPO IQ)</a>', unsafe_allow_html=True)
+            with c_email:
+                if st.session_state.get('email_instalacao'):
+                    st.markdown(f'<a href="{st.session_state["email_instalacao"]}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #007BFF; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">📩 ENVIAR POR E-MAIL (GESTÃO)</a>', unsafe_allow_html=True)
+            
+            st.write("")
+            if st.button("🧹 Realizar Nova Vistoria de Instalação"):
+                st.session_state['zap_pronto'] = None
+                st.session_state['email_instalacao'] = None
+                st.rerun()
+        else:
+            col_tec, col_cont = st.columns(2)
+            with col_tec:
+                tec_inst = st.selectbox("Selecione o Técnico Auditado:", ["Selecione..."] + dados_completos['nome'].tolist())
+            with col_cont:
+                num_contrato = st.text_input("📄 Número do Contrato Vistoriado *")
+            
+            if tec_inst != "Selecione...":
+                st.info("⚠️ Marque abaixo as falhas encontradas na instalação, divididas por tópicos.")
+                
+                erros_encontrados = []
+                tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+                    "🔌 Tap/Isolador", "🏠 DG/Apto", "👨‍🔧 PAQ", "🧵 Cabeamento", "📡 Medição", "📦 Materiais", "Outros"
+                ])
+                
+                def renderizar_colunas_checklist(lista_itens, aba):
+                    with aba:
+                        cols = st.columns(2)
+                        for i, item in enumerate(lista_itens):
+                            col_atual = cols[i % 2]
+                            if col_atual.checkbox(item, key=f"inst_{item[:4]}_{i}"):
+                                erros_encontrados.append(item)
+
+                renderizar_colunas_checklist(FALHAS_INSTALACAO["Tap/Isolador/Emenda"], tab1)
+                renderizar_colunas_checklist(FALHAS_INSTALACAO["DG/Apto"], tab2)
+                renderizar_colunas_checklist(FALHAS_INSTALACAO["PAQ"], tab3)
+                renderizar_colunas_checklist(FALHAS_INSTALACAO["Cabeamento Interior"], tab4)
+                renderizar_colunas_checklist(FALHAS_INSTALACAO["Medição de Sinal"], tab5)
+                renderizar_colunas_checklist(FALHAS_INSTALACAO["Divergência de Materiais"], tab6)
+                renderizar_colunas_checklist(FALHAS_INSTALACAO["Outros"], tab7)
+                
+                st.divider()
+                
+                fotos_inst = st.file_uploader("📸 Anexar Fotos da Instalação / Erro (Múltiplas fotos permitidas)", type=['png', 'jpg'], accept_multiple_files=True, key="fotos_inst")
+                obs_inst = st.text_area("Observações da Tratativa:", key="obs_inst")
+                
+                if st.button("Gravar Auditoria e Gerar Disparos", type="primary"):
+                    if not num_contrato.strip():
+                        st.warning("⚠️ O número do contrato é obrigatório para realizar a vistoria.")
+                    elif not fotos_inst:
+                        st.warning("⚠️ O envio de ao menos uma foto é obrigatório para comprovar a auditoria.")
+                    else:
+                        tec_row = dados_completos[dados_completos['nome'] == tec_inst]
+                        tec_login = tec_row['login'].iloc[0] if not tec_row.empty else "N/A"
+                        tec_re = tec_row['re'].iloc[0] if ('re' in tec_row.columns and not tec_row.empty) else tec_login
+                        
+                        links_fotos = salvar_fotos_no_cloudinary(fotos_inst, tec_inst, "Evidencias_Instalacao")
+                        resumo_erros_sheets = " / ".join(erros_encontrados) if erros_encontrados else "Instalação sem falhas registradas."
+                        
+                        vistoria_inst_id = registrar_vistoria_instalacao_sheets(
+                            re_iq=re_logado_str,
+                            nome_iq=st.session_state['nome_iq'],
+                            login_tec=tec_login,
+                            nome_tec=tec_inst,
+                            contrato=num_contrato,
+                            irregulares=resumo_erros_sheets,
+                            obs=obs_inst,
+                            links_fotos=links_fotos
+                        )
+                        
+                        if erros_encontrados:
+                            linhas_erros = "\n".join([f"- {erro}" for erro in erros_encontrados])
+                        else:
+                            linhas_erros = "- Nenhuma falha encontrada (100% conforme)"
+
+                        fotos_txt = "\n".join(links_fotos)
+                        msg_whatsapp = f"*AUDITORIA DE INSTALAÇÃO - TOTALE ABC*\n*ID da Vistoria:* {vistoria_inst_id}\n\n*Contrato:* {num_contrato}\n*RE do Técnico:* {tec_re}\n*Técnico:* {tec_inst}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Falhas Encontradas:*\n{linhas_erros}\n\n*Observações:* {obs_inst}\n\n*Evidências (Fotos):*\n{fotos_txt}"
+                        url_whatsapp = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_whatsapp)}"
+                        
+                        corpo_email = f"RELATÓRIO DE AUDITORIA DE INSTALAÇÃO\nID da Vistoria: {vistoria_inst_id}\nContrato: {num_contrato}\nRE: {tec_re}\nTécnico: {tec_inst}\nIQ: {st.session_state['nome_iq']}\n\nFALHAS ENCONTRADAS:\n{linhas_erros}\n\nOBSERVAÇÕES:\n{obs_inst}\n\nEVIDÊNCIA FOTO:\n{fotos_txt}"
+                        url_email = f"mailto:{DESTINATARIOS_INSTALACAO}?subject=Auditoria [ID {vistoria_inst_id}] - Contrato {num_contrato} - RE {tec_re} - {tec_inst}&body={urllib.parse.quote(corpo_email)}"
+                        
+                        st.session_state['zap_pronto'] = url_whatsapp
+                        st.session_state['email_instalacao'] = url_email
+                        st.rerun()
 
     # --- PÁGINA 5: RELATÓRIOS E EXPORTAÇÃO (EXCLUSIVO PARA GESTÃO) ---
     elif st.session_state['pagina_atual'] == "Relatorios":
