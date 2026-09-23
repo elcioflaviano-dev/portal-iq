@@ -921,10 +921,36 @@ else:
             st.markdown('</div>', unsafe_allow_html=True)
 
         st.divider()
+
+        # --- AGENDA DE MATINAIS (SUBIU PARA ACIMA DA MONITORIA/ACOMPANHAMENTO) ---
+        st.subheader("📅 Agenda de Matinais (Clique no nome para realizar a vistoria)")
+        agenda_do_usuario = {tec: info for tec, info in st.session_state['agenda_matinal'].items() if str(info.get('re_iq')) == str(re_logado_str) or perfil_usuario == 'GESTÃO'}
         
+        if not agenda_do_usuario:
+            st.info("Sua agenda está vazia. Vá na aba 'Agendamento de Matinal' para adicionar.")
+        else:
+            for tec, info in list(agenda_do_usuario.items()):
+                c_dash1, c_dash2, c_dash3 = st.columns([3, 2, 1])
+                c_dash1.write(f"📌 **Data:** {info['data']} | **IQ:** {info['iq_nome']}")
+                
+                if c_dash2.button(f"👤 {tec}", key=f"btn_link_{tec}", help="Clique para ir direto à execução"):
+                    st.session_state['tec_selecionado_atalho'] = tec
+                    st.session_state['pagina_atual'] = "Matinal"
+                    st.session_state['aba_matinal_ativa'] = 1
+                    st.rerun()
+                    
+                if perfil_usuario == 'GESTÃO' or str(info.get('re_iq')) == str(re_logado_str):
+                    if c_dash3.button("🗑️ Remover", key=f"rm_dash_{tec}"):
+                        del st.session_state['agenda_matinal'][tec]
+                        salvar_agenda_no_sheets(st.session_state['agenda_matinal'])
+                        st.rerun()
+
+        st.divider()
+        
+        # --- ACOMPANHAMENTO PENDENTE ---
         st.subheader(f"⚠️ Acompanhamento Pendente (Referência: {mes_acompanhamento or 'N/A'})")
 
-        # --- SEÇÃO EXCLUSIVA DE GESTÃO: ATRIBUIR TÉCNICO A IQ (LOGO ABAIXO DO TÍTULO) ---
+        # --- SEÇÃO EXCLUSIVA DE GESTÃO: ATRIBUIR TÉCNICO A IQ (LOGO ABAIXO DO TÍTULO DE ACOMPANHAMENTO) ---
         if perfil_usuario == 'GESTÃO':
             with st.expander("🛠️ [Gestão] Atribuir / Adicionar Técnico a um IQ por Mês"):
                 st.write("Selecione o técnico e para qual IQ ele deve ser direcionado no mês de referência.")
@@ -1005,30 +1031,6 @@ else:
                     st.divider()
         else:
             st.info("Crie abas de certificados mensais para habilitar o acompanhamento.")
-
-        st.divider()
-        
-        st.subheader("📅 Agenda de Matinais (Clique no nome para realizar a vistoria)")
-        agenda_do_usuario = {tec: info for tec, info in st.session_state['agenda_matinal'].items() if str(info.get('re_iq')) == str(re_logado_str) or perfil_usuario == 'GESTÃO'}
-        
-        if not agenda_do_usuario:
-            st.info("Sua agenda está vazia. Vá na aba 'Agendamento de Matinal' para adicionar.")
-        else:
-            for tec, info in list(agenda_do_usuario.items()):
-                c_dash1, c_dash2, c_dash3 = st.columns([3, 2, 1])
-                c_dash1.write(f"📌 **Data:** {info['data']} | **IQ:** {info['iq_nome']}")
-                
-                if c_dash2.button(f"👤 {tec}", key=f"btn_link_{tec}", help="Clique para ir direto à execução"):
-                    st.session_state['tec_selecionado_atalho'] = tec
-                    st.session_state['pagina_atual'] = "Matinal"
-                    st.session_state['aba_matinal_ativa'] = 1
-                    st.rerun()
-                    
-                if perfil_usuario == 'GESTÃO' or str(info.get('re_iq')) == str(re_logado_str):
-                    if c_dash3.button("🗑️ Remover", key=f"rm_dash_{tec}"):
-                        del st.session_state['agenda_matinal'][tec]
-                        salvar_agenda_no_sheets(st.session_state['agenda_matinal'])
-                        st.rerun()
 
     # --- PÁGINA 2: HISTÓRICO DE CERTIFICADOS ---
     elif st.session_state['pagina_atual'] == "Historico":
