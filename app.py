@@ -686,6 +686,7 @@ else:
 
     col_re_iq_mes_acomp = f're_iq_responsavel_{mes_acompanhamento}' if mes_acompanhamento else None
 
+    # --- FILTRO LATERAL ÚNICO E GLOBAL ---
     if perfil_usuario == 'GESTÃO':
         st.sidebar.divider()
         st.sidebar.subheader("🎛️ Filtro de Gestão")
@@ -814,21 +815,14 @@ else:
             col_re = next((c for c in df_res_mat.columns if c.upper() == 'RE_IQ'), None)
             col_niq = next((c for c in df_res_mat.columns if c.upper() == 'NOTA_IQ'), None)
             
-            if col_re and col_niq and perfil_usuario != 'GESTÃO':
-                df_iq_log = df_res_mat[df_res_mat[col_re].astype(str).str.strip().str.replace('.0','') == re_logado_str]
-                if not df_iq_log.empty:
-                    vals_iq = df_iq_log[col_niq].dropna()
-                    if not vals_iq.empty:
-                        nota_iq_val = str(vals_iq.iloc[-1])
-            elif col_re and col_niq and perfil_usuario == 'GESTÃO':
-                if 're_alvo_str' in locals() and re_alvo_str:
-                    df_iq_log = df_res_mat[df_res_mat[col_re].astype(str).str.strip().str.replace('.0','') == re_alvo_str]
+            if col_re and col_niq:
+                target_re_nota = re_alvo_str if (perfil_usuario == 'GESTÃO' and re_alvo_str) else re_logado_str
+                if target_re_nota:
+                    df_iq_log = df_res_mat[df_res_mat[col_re].astype(str).str.strip().str.replace('.0','') == str(target_re_nota)]
                     if not df_iq_log.empty:
                         vals_iq = df_iq_log[col_niq].dropna()
                         if not vals_iq.empty:
                             nota_iq_val = str(vals_iq.iloc[-1])
-                else:
-                    nota_iq_val = "Selecione um IQ no filtro"
 
         st.markdown("### 📊 Resultado da Matinal CLARO")
         c_nota1, c_nota2 = st.columns(2)
@@ -847,10 +841,11 @@ else:
 
         st.divider()
 
-        re_alvo_horas = re_alvo_str if (perfil_usuario == 'GESTÃO' and re_alvo_str) else re_logado_str
+        # --- HORAS DE MONITORIA RPPA (CONTROLADAS PELO FILTRO LATERAL) ---
+        re_alvo_horas = re_alvo_str if (perfil_usuario == 'GESTÃO' and re_alvo_str) else (re_logado_str if perfil_usuario != 'GESTÃO' else None)
         
         meta_alvo, realizado_alvo = 60, "0"
-        if not df_ctrl.empty and 'RE_IQ' in df_ctrl.columns:
+        if not df_ctrl.empty and 'RE_IQ' in df_ctrl.columns and re_alvo_horas:
             f_h = df_ctrl[df_ctrl['RE_IQ'].astype(str).str.strip().str.replace('.0','') == str(re_alvo_horas)]
             if not f_h.empty:
                 try: meta_alvo = int(f_h.iloc[0]['META_HORAS']) if f_h.iloc[0]['META_HORAS'] != '' else 60
@@ -861,32 +856,21 @@ else:
         st.markdown('<div class="metric-card-green">', unsafe_allow_html=True)
         st.markdown('<div class="metric-title">⏱️ Horas de Monitoria RPPA</div>', unsafe_allow_html=True)
 
-        if perfil_usuario == 'GESTÃO':
-            lista_iqs_horas = dados_iqs[dados_iqs['PERFIL'] != 'GESTÃO'][['re_iq', 'nome_iq']].drop_duplicates()
-            opcoes_iq_horas = [f"{row['re_iq']} - {row['nome_iq']}" for _, row in lista_iqs_horas.iterrows()]
-            
-            iq_escolhido_horas_str = st.selectbox("Selecione o IQ para gerenciar horas:", opcoes_iq_horas, key="sel_iq_horas")
-            re_alvo_horas = iq_escolhido_horas_str.split(" - ")[0].strip()
-            
-            if not df_ctrl.empty and 'RE_IQ' in df_ctrl.columns:
-                f_h = df_ctrl[df_ctrl['RE_IQ'].astype(str).str.strip().str.replace('.0','') == str(re_alvo_horas)]
-                if not f_h.empty:
-                    try: meta_alvo = int(f_h.iloc[0]['META_HORAS']) if f_h.iloc[0]['META_HORAS'] != '' else 60
-                    except: pass
-                    val_real = f_h.iloc[0]['REALIZADO_HORAS']
-                    realizado_alvo = str(val_real) if val_real != '' else "0"
-
-            meta_input = st.number_input("Meta de Horas:", value=meta_alvo, step=1, key=f"meta_{re_alvo_horas}")
-            st.markdown(f'<div class="metric-value" style="font-size:24px; margin-top:5px;">Realizado atual: {realizado_alvo}</div>', unsafe_allow_html=True)
-            novo_real = st.text_input("Atualizar Realizado (HH:MM:SS ou número):", value=str(realizado_alvo), key=f"real_txt_{re_alvo_horas}")
-            
-            if meta_input != meta_alvo or novo_real != str(realizado_alvo):
-                salvar_horas_no_sheets(re_alvo_horas, meta_input, novo_real)
-                st.rerun()
+        if perfil_usuario == 'GESTÃO' and not re_alvo_str:
+            st.info("ℹ️ Selecione um IQ específico no menu lateral esquerdo para gerenciar as horas de monitoria.")
         else:
-            st.markdown(f'<div class="metric-value">Meta: {meta_alvo}h</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="metric-value" style="font-size:20px; margin-top:5px;">Realizado: {realizado_alvo}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="metric-sub">Controle individual de horas</div>', unsafe_allow_html=True)
+            if perfil_usuario == 'GESTÃO':
+                meta_input = st.number_input("Meta de Horas:", value=meta_alvo, step=1, key=f"meta_{re_alvo_horas}")
+                st.markdown(f'<div class="metric-value" style="font-size:24px; margin-top:5px;">Realizado atual: {realizado_alvo}</div>', unsafe_allow_html=True)
+                novo_real = st.text_input("Atualizar Realizado (HH:MM:SS ou número):", value=str(realizado_alvo), key=f"real_txt_{re_alvo_horas}")
+                
+                if meta_input != meta_alvo or novo_real != str(realizado_alvo):
+                    salvar_horas_no_sheets(re_alvo_horas, meta_input, novo_real)
+                    st.rerun()
+            else:
+                st.markdown(f'<div class="metric-value">Meta: {meta_alvo}h</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="metric-value" style="font-size:20px; margin-top:5px;">Realizado: {realizado_alvo}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="metric-sub">Controle individual de horas</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
         col1, col2 = st.columns(2)
@@ -966,18 +950,11 @@ else:
 
         st.divider()
         
-        # --- ACOMPANHAMENTO PENDENTE COM SELETOR DE IQ ---
+        # --- ACOMPANHAMENTO PENDENTE FILTRADO PELO MENU LATERAL ---
         st.subheader(f"⚠️ Acompanhamento Pendente (Referência: {mes_acompanhamento or 'N/A'})")
 
-        lista_iqs_monitoria = dados_iqs[dados_iqs['PERFIL'] != 'GESTÃO'][['re_iq', 'nome_iq']].drop_duplicates()
-        opcoes_iq_monit = [f"{row['re_iq']} - {row['nome_iq']}" for _, row in lista_iqs_monitoria.iterrows()]
-        
-        if perfil_usuario == 'GESTÃO':
-            iq_escolhido_monit_str = st.selectbox("🔍 Filtrar monitorias pelo IQ:", opcoes_iq_monit, key="sel_iq_monit")
-            re_iq_monit_alvo = iq_escolhido_monit_str.split(" - ")[0].strip()
-        else:
-            re_iq_monit_alvo = re_logado_str
-            st.write(f"**Visualizando sua equipe:** {st.session_state['nome_iq']}")
+        lista_iqs_disponiveis = dados_iqs[dados_iqs['PERFIL'] != 'GESTÃO'][['re_iq', 'nome_iq']].drop_duplicates()
+        opcoes_iq_gestao = [f"{row['re_iq']} - {row['nome_iq']}" for _, row in lista_iqs_disponiveis.iterrows()]
 
         # --- SEÇÃO EXCLUSIVA DE GESTÃO: ATRIBUIR TÉCNICO A IQ ---
         if perfil_usuario == 'GESTÃO':
@@ -990,7 +967,7 @@ else:
                     with c_att1:
                         tec_escolhido = st.selectbox("Técnico:", lista_todos_tecnicos)
                     with c_att2:
-                        iq_escolhido_str = st.selectbox("Novo IQ Responsável:", opcoes_iq_monit, key="sel_iq_atrib")
+                        iq_escolhido_str = st.selectbox("Novo IQ Responsável:", opcoes_iq_gestao)
                     with c_att3:
                         mes_atribuicao = st.selectbox("Mês de Referência:", [m['mes_nome'] for m in meses_info], index=len(meses_info)-1)
                         
@@ -1012,20 +989,19 @@ else:
                                 st.error(f"Erro: {msg_atrib}")
 
         if mes_acompanhamento:
-            col_re_mes_acomp = f're_iq_responsavel_{mes_acompanhamento}'
-            if col_re_mes_acomp in dados_completos.columns:
-                equipe_filtrada_iq = dados_completos[dados_completos[col_re_mes_acomp].astype(str).str.replace('.0', '') == str(re_iq_monit_alvo)]
+            if perfil_usuario == 'GESTÃO' and not re_alvo_str:
+                st.info("ℹ️ Selecione um IQ específico no menu lateral esquerdo para visualizar e gerenciar as monitorias pendentes da equipe.")
+                tecnicos_nao_cert = pd.DataFrame()
             else:
-                equipe_filtrada_iq = pd.DataFrame()
-
-            tecnicos_nao_cert = equipe_filtrada_iq[(equipe_filtrada_iq[mes_acompanhamento] == 'NÃO') & (equipe_filtrada_iq[f'ACOMPANHAMENTO_{mes_acompanhamento}'] != 'SIM')]
+                tecnicos_nao_cert = equipe_vigente[(equipe_vigente[mes_acompanhamento] == 'NÃO') & (equipe_vigente[f'ACOMPANHAMENTO_{mes_acompanhamento}'] != 'SIM')]
             
             if tecnicos_nao_cert.empty:
-                st.success(f"Nenhum técnico pendente para este IQ no mês de {mes_acompanhamento}.")
+                st.success(f"Nenhum técnico pendente encontrado para o filtro selecionado no mês de {mes_acompanhamento}.")
             else:
                 for index, row in tecnicos_nao_cert.iterrows():
                     tec_login = row['login']
                     tec_nome = row['nome']
+                    col_re_mes_acomp = f're_iq_responsavel_{mes_acompanhamento}'
                     iq_resp = row.get(col_re_mes_acomp, '')
                     
                     nome_iq_resp = iq_resp
