@@ -500,6 +500,47 @@ def salvar_agenda_no_sheets(agenda_dict):
     except Exception as e:
         print(f"Erro ao salvar agenda: {e}")
 
+def atribuir_tecnico_a_iq(nome_aba, login_tecnico, re_iq_novo, mes_nome):
+    try:
+        planilha = conectar_planilha()
+        ws = planilha.worksheet(nome_aba)
+        cabecalhos = [str(c).strip().upper() for c in ws.row_values(1)]
+        
+        col_login_idx = -1
+        col_re_idx = -1
+        
+        for i, c in enumerate(cabecalhos):
+            if 'LOGIN' in c: col_login_idx = i + 1
+            if 'RE' in c and 'IQ' in c: col_re_idx = i + 1
+            
+        if col_login_idx == -1:
+            return False, "Coluna LOGIN não encontrada na aba do mês."
+            
+        # Se a coluna de RE_IQ não existir na aba do mês, cria ela no final
+        if col_re_idx == -1:
+            col_re_idx = len(cabecalhos) + 1
+            ws.update_cell(1, col_re_idx, f"RE_IQ_{mes_nome}")
+            
+        coluna_logins = ws.col_values(col_login_idx)
+        encontrou = False
+        for row_idx, val in enumerate(coluna_logins):
+            if str(val).strip().replace('.0', '') == str(login_tecnico).strip().replace('.0', ''):
+                ws.update_cell(row_idx + 1, col_re_idx, str(re_iq_novo))
+                encontrou = True
+                break
+                
+        if not encontrou:
+            # Se o técnico não está na aba do mês ainda, adiciona uma nova linha
+            nova_linha = [''] * len(cabecalhos)
+            # Preenche login e re_iq nas posições corretas
+            # (simplificado: insere append row se a estrutura permitir)
+            ws.append_row([str(login_tecnico), 'NÃO', str(re_iq_novo), 'NÃO', 'NÃO', 'NÃO'])
+            
+        st.cache_data.clear()
+        return True, "Técnico atribuído com sucesso!"
+    except Exception as e:
+        return False, f"Erro ao atribuir técnico: {e}"
+
 def registrar_vistoria_completa(re_iq, nome_iq, login_tec, nome_tec, tipo, irregulares, extra_info, obs, links_fotos):
     try:
         planilha = conectar_planilha()
@@ -600,6 +641,7 @@ dados_iqs, dados_completos, meses_info = carregar_dados()
 if meses_info:
     mes_vigente_info = meses_info[-1]
     mes_vigente = mes_vigente_info['mes_nome']
+    aba_mes_vigente_nome = mes_vigente_info['nome_aba']
     if len(meses_info) >= 2:
         mes_acompanhamento_info = meses_info[-2]
         mes_acompanhamento = mes_acompanhamento_info['mes_nome']
@@ -608,7 +650,7 @@ if meses_info:
         mes_acompanhamento = mes_vigente
         aba_acompanhamento = mes_vigente_info['nome_aba']
 else:
-    mes_vigente, aba_acompanhamento, mes_acompanhamento = None, None, None
+    mes_vigente, aba_acompanhamento, mes_acompanhamento, aba_mes_vigente_nome = None, None, None, None
 
 df_ctrl = carregar_controle_iq()
 
@@ -679,7 +721,6 @@ else:
                 equipe_vigente = dados_completos
     else:
         re_alvo_str = re_logado_str
-        # Garante que o IQ comum veja APENAS os técnicos vinculados a ele no mês de referência
         if col_re_iq_mes_acomp and col_re_iq_mes_acomp in dados_completos.columns:
             equipe_vigente = dados_completos[dados_completos[col_re_iq_mes_acomp].astype(str).str.replace('.0', '') == str(re_logado_str)]
         else:
@@ -860,8 +901,6 @@ else:
             
             if perfil_usuario == 'GESTÃO':
                 meta_input = st.number_input("Meta de Horas:", value=meta_alvo, step=1, key=f"meta_{re_alvo_horas}")
-                
-                # Se realizado_alvo for string com formato de hora, permitimos atualizar ou editar
                 st.markdown(f'<div class="metric-value" style="font-size:24px; margin-top:5px;">Realizado: {realizado_alvo}</div>', unsafe_allow_html=True)
                 
                 novo_real = st.text_input("Atualizar Realizado (HH:MM:SS):", value=str(realizado_alvo), key=f"real_txt_{re_alvo_horas}")
@@ -869,7 +908,7 @@ else:
                     salvar_horas_no_sheets(re_alvo_horas, meta_input, novo_real)
                     st.rerun()
             else:
-                st.markdown(f'<div class="metric-value">Meta: {meta_alvo}h</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="metric-value">Meta: {meta_input if "meta_input" in locals() else meta_alvo}h</div>', unsafe_allow_html=True)
                 st.markdown(f'<div class="metric-value" style="font-size:20px; margin-top:5px;">Realizado: {realizado_alvo}</div>', unsafe_allow_html=True)
                 st.markdown(f'<div class="metric-sub">Controle individual de horas</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
@@ -887,6 +926,43 @@ else:
                 st.markdown('<div class="metric-value">N/A</div>', unsafe_allow_html=True)
                 st.markdown('<div class="metric-sub">Sem base mensal</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
+
+        st.divider()
+
+        # --- SEÇÃO EXCLUSIVA DE GESTÃO: ATRIBUIR TÉCNICO A IQ ---
+        if perfil_usuario == 'GESTÃO':
+            with st.expander("🛠️ [Gestão] Atribuir / Adicionar Técnico a um IQ por Mês"):
+                st.write("Selecione o técnico e para qual IQ ele deve ser direcionado no mês de referência.")
+                lista_todos_tecnicos = dados_completos['nome'].tolist() if 'nome' in dados_completos.columns else []
+                lista_iqs_disponiveis = dados_iqs[dados_iqs['PERFIL'] != 'GESTÃO'][['re_iq', 'nome_iq']].drop_duplicates()
+                opcoes_iq_gestao = [f"{row['re_iq']} - {row['nome_iq']}" for _, row in lista_iqs_disponiveis.iterrows()]
+                
+                with st.form("form_atribuir_tec"):
+                    c_att1, c_att2, c_att3 = st.columns(3)
+                    with c_att1:
+                        tec_escolhido = st.selectbox("Técnico:", lista_todos_tecnicos)
+                    with c_att2:
+                        iq_escolhido_str = st.selectbox("Novo IQ Responsável:", opcoes_iq_gestao)
+                    with c_att3:
+                        mes_atribuicao = st.selectbox("Mês de Referência:", [m['mes_nome'] for m in meses_info], index=len(meses_info)-1)
+                        
+                    btn_salvar_atribuicao = st.form_submit_button("Salvar Atribuição", type="primary")
+                    
+                    if btn_salvar_atribuicao:
+                        re_novo_iq = iq_escolhido_str.split(" - ")[0].strip()
+                        tec_row_sel = dados_completos[dados_completos['nome'] == tec_escolhido]
+                        if not tec_row_sel.empty:
+                            login_tec_sel = tec_row_sel.iloc[0]['login']
+                            # Achar o nome da aba correta para o mês selecionado
+                            aba_alvo_mes = next((m['nome_aba'] for m in meses_info if m['mes_nome'] == mes_atribuicao), aba_acompanhamento)
+                            
+                            sucesso_atrib, msg_atrib = atribuir_tecnico_a_iq(aba_alvo_mes, login_tec_sel, re_novo_iq, mes_atribuicao)
+                            if sucesso_atrib:
+                                st.success(f"✅ {msg_atrib}")
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error(f"Erro: {msg_atrib}")
 
         st.divider()
         
