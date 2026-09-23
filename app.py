@@ -647,14 +647,14 @@ else:
     if 'agenda_matinal' not in st.session_state:
         st.session_state['agenda_matinal'] = carregar_agenda_matinal_sheets()
 
-    meta_atual, realizado_atual = 40, 0
+    meta_atual, realizado_atual = 60, "0"
     if not df_ctrl.empty and 'RE_IQ' in df_ctrl.columns:
         filtro_h = df_ctrl[df_ctrl['RE_IQ'].astype(str).str.strip().str.replace('.0','') == re_logado_str]
         if not filtro_h.empty:
-            try: meta_atual = int(filtro_h.iloc[0]['META_HORAS']) if filtro_h.iloc[0]['META_HORAS'] != '' else 40
+            try: meta_atual = int(filtro_h.iloc[0]['META_HORAS']) if filtro_h.iloc[0]['META_HORAS'] != '' else 60
             except: pass
-            try: realizado_atual = int(filtro_h.iloc[0]['REALIZADO_HORAS']) if filtro_h.iloc[0]['REALIZADO_HORAS'] != '' else 0
-            except: pass
+            val_real = filtro_h.iloc[0]['REALIZADO_HORAS']
+            realizado_atual = str(val_real) if val_real != '' else "0"
 
     # Definir coluna de RE do IQ para o mês de acompanhamento atual (ex: AGOSTO)
     col_re_iq_mes_acomp = f're_iq_responsavel_{mes_acompanhamento}' if mes_acompanhamento else None
@@ -810,10 +810,10 @@ else:
         if perfil_usuario == 'GESTÃO' and re_alvo_str and not df_ctrl.empty:
             f_alvo = df_ctrl[df_ctrl['RE_IQ'].astype(str).str.strip().str.replace('.0','') == str(re_alvo_str)]
             if not f_alvo.empty:
-                try: meta_alvo = int(f_alvo.iloc[0]['META_HORAS']) if f_alvo.iloc[0]['META_HORAS'] != '' else 40
+                try: meta_alvo = int(f_alvo.iloc[0]['META_HORAS']) if f_alvo.iloc[0]['META_HORAS'] != '' else 60
                 except: pass
-                try: realizado_alvo = int(f_alvo.iloc[0]['REALIZADO_HORAS']) if f_alvo.iloc[0]['REALIZADO_HORAS'] != '' else 0
-                except: pass
+                val_real = f_alvo.iloc[0]['REALIZADO_HORAS']
+                realizado_alvo = str(val_real) if val_real != '' else "0"
 
         col1, col2, col3 = st.columns(3)
         
@@ -860,14 +860,17 @@ else:
             
             if perfil_usuario == 'GESTÃO':
                 meta_input = st.number_input("Meta de Horas:", value=meta_alvo, step=1, key=f"meta_{re_alvo_horas}")
-                real_input = st.number_input("Horas Realizadas:", value=realizado_alvo, step=1, key=f"real_{re_alvo_horas}")
                 
-                if meta_input != meta_alvo or real_input != realizado_alvo:
-                    salvar_horas_no_sheets(re_alvo_horas, meta_input, real_input)
+                # Se realizado_alvo for string com formato de hora, permitimos atualizar ou editar
+                st.markdown(f'<div class="metric-value" style="font-size:24px; margin-top:5px;">Realizado: {realizado_alvo}</div>', unsafe_allow_html=True)
+                
+                novo_real = st.text_input("Atualizar Realizado (HH:MM:SS):", value=str(realizado_alvo), key=f"real_txt_{re_alvo_horas}")
+                if meta_input != meta_alvo or novo_real != str(realizado_alvo):
+                    salvar_horas_no_sheets(re_alvo_horas, meta_input, novo_real)
                     st.rerun()
             else:
                 st.markdown(f'<div class="metric-value">Meta: {meta_alvo}h</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="metric-value" style="font-size:20px; margin-top:5px;">Realizado: {realizado_alvo}h</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="metric-value" style="font-size:20px; margin-top:5px;">Realizado: {realizado_alvo}</div>', unsafe_allow_html=True)
                 st.markdown(f'<div class="metric-sub">Controle individual de horas</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
