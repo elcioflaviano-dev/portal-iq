@@ -791,6 +791,17 @@ else:
         df_res_mat = carregar_resultados_matinal()
         nota_geral_val = "Aguardando lançamento"
         nota_iq_val = "Aguardando lançamento"
+        nome_iq_nota_exibir = st.session_state["nome_iq"]
+
+        # Se for GESTÃO e houver um RE alvo selecionado no filtro lateral, busca o nome e nota dele
+        re_para_nota = re_logado_str
+        if perfil_usuario == 'GESTÃO' and 're_alvo_str' in locals() and re_alvo_str:
+            re_para_nota = re_alvo_str
+            match_iq_nome = dados_iqs[dados_iqs['re_iq'] == re_alvo_str]['nome_iq'].values
+            if match_iq_nome:
+                nome_iq_nota_exibir = match_iq_nome[0]
+            else:
+                nome_iq_nota_exibir = "Geral"
 
         if not df_res_mat.empty:
             df_res_mat.columns = [str(c).strip() for c in df_res_mat.columns]
@@ -804,12 +815,21 @@ else:
             col_re = next((c for c in df_res_mat.columns if c.upper() == 'RE_IQ'), None)
             col_niq = next((c for c in df_res_mat.columns if c.upper() == 'NOTA_IQ'), None)
             
-            if col_re and col_niq:
+            if col_re and col_niq and perfil_usuario != 'GESTÃO':
                 df_iq_log = df_res_mat[df_res_mat[col_re].astype(str).str.strip().str.replace('.0','') == re_logado_str]
                 if not df_iq_log.empty:
                     vals_iq = df_iq_log[col_niq].dropna()
                     if not vals_iq.empty:
                         nota_iq_val = str(vals_iq.iloc[-1])
+            elif col_re and col_niq and perfil_usuario == 'GESTÃO':
+                if 're_alvo_str' in locals() and re_alvo_str:
+                    df_iq_log = df_res_mat[df_res_mat[col_re].astype(str).str.strip().str.replace('.0','') == re_alvo_str]
+                    if not df_iq_log.empty:
+                        vals_iq = df_iq_log[col_niq].dropna()
+                        if not vals_iq.empty:
+                            nota_iq_val = str(vals_iq.iloc[-1])
+                else:
+                    nota_iq_val = "Selecione um IQ no filtro"
 
         st.markdown("### 📊 Resultado da Matinal CLARO")
         c_nota1, c_nota2 = st.columns(2)
@@ -821,9 +841,9 @@ else:
             st.markdown('</div>', unsafe_allow_html=True)
         with c_nota2:
             st.markdown('<div class="metric-card-purple">', unsafe_allow_html=True)
-            st.markdown(f'<div class="metric-title">⭐ Nota do IQ ({st.session_state["nome_iq"]})</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-title">⭐ Nota do IQ ({nome_iq_nota_exibir})</div>', unsafe_allow_html=True)
             st.markdown(f'<div class="metric-value">{nota_iq_val}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="metric-sub">Seu resultado recente</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-sub">Resultado recente</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
         st.divider()
@@ -950,7 +970,6 @@ else:
         # --- ACOMPANHAMENTO PENDENTE COM SELETOR DE IQ ---
         st.subheader(f"⚠️ Acompanhamento Pendente (Referência: {mes_acompanhamento or 'N/A'})")
 
-        # Menu para selecionar qual IQ visualizar nas monitorias ticadas
         lista_iqs_monitoria = dados_iqs[dados_iqs['PERFIL'] != 'GESTÃO'][['re_iq', 'nome_iq']].drop_duplicates()
         opcoes_iq_monit = [f"{row['re_iq']} - {row['nome_iq']}" for _, row in lista_iqs_monitoria.iterrows()]
         
