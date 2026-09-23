@@ -455,7 +455,7 @@ def carregar_agenda_matinal_sheets():
                 agenda_dict[tec] = {
                     'data': str(row.get('AGENDA_DATA', '')),
                     'iq_nome': str(row.get('AGENDA_IQ_NOME', '')),
-                    're_iq': str(row.get('RE_IQ', ''))
+                    're_iq': str(row.get('RE_IQ', '')).strip().replace('.0', '')
                 }
         return agenda_dict
     except:
@@ -925,12 +925,14 @@ else:
 
         st.divider()
 
-        # --- AGENDA DE MATINAIS ---
+        # --- AGENDA DE MATINAIS (FILTRADA PELO IQ DO MENU LATERAL) ---
         st.subheader("📅 Agenda de Matinais (Clique no nome para realizar a vistoria)")
-        agenda_do_usuario = {tec: info for tec, info in st.session_state['agenda_matinal'].items() if str(info.get('re_iq')) == str(re_logado_str) or perfil_usuario == 'GESTÃO'}
+        
+        re_alvo_agenda = re_alvo_str if (perfil_usuario == 'GESTÃO' and re_alvo_str) else re_logado_str
+        agenda_do_usuario = {tec: info for tec, info in st.session_state['agenda_matinal'].items() if str(info.get('re_iq')) == str(re_alvo_agenda) or (perfil_usuario == 'GESTÃO' and not re_alvo_str)}
         
         if not agenda_do_usuario:
-            st.info("Sua agenda está vazia. Vá na aba 'Agendamento de Matinal' para adicionar.")
+            st.info("Sua agenda está vazia ou nenhum técnico agendado para este IQ.")
         else:
             for tec, info in list(agenda_do_usuario.items()):
                 c_dash1, c_dash2, c_dash3 = st.columns([3, 2, 1])
@@ -953,14 +955,13 @@ else:
         # --- ACOMPANHAMENTO PENDENTE FILTRADO PELO MENU LATERAL ---
         st.subheader(f"⚠️ Acompanhamento Pendente (Referência: {mes_acompanhamento or 'N/A'})")
 
-        lista_iqs_disponiveis = dados_iqs[dados_iqs['PERFIL'] != 'GESTÃO'][['re_iq', 'nome_iq']].drop_duplicates()
-        opcoes_iq_gestao = [f"{row['re_iq']} - {row['nome_iq']}" for _, row in lista_iqs_disponiveis.iterrows()]
-
         # --- SEÇÃO EXCLUSIVA DE GESTÃO: ATRIBUIR TÉCNICO A IQ ---
         if perfil_usuario == 'GESTÃO':
             with st.expander("🛠️ [Gestão] Atribuir / Adicionar Técnico a um IQ por Mês"):
                 st.write("Selecione o técnico e para qual IQ ele deve ser direcionado no mês de referência.")
                 lista_todos_tecnicos = dados_completos['nome'].tolist() if 'nome' in dados_completos.columns else []
+                lista_iqs_disponiveis = dados_iqs[dados_iqs['PERFIL'] != 'GESTÃO'][['re_iq', 'nome_iq']].drop_duplicates()
+                opcoes_iq_gestao = [f"{row['re_iq']} - {row['nome_iq']}" for _, row in lista_iqs_disponiveis.iterrows()]
                 
                 with st.form("form_atribuir_tec"):
                     c_att1, c_att2, c_att3 = st.columns(3)
