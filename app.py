@@ -610,16 +610,23 @@ def exportar_para_excel(df, nome_arquivo):
 dados_iqs, dados_completos, meses_info = carregar_dados()
 
 if meses_info:
-    mes_vigente_info = meses_info[-1]
-    mes_vigente = mes_vigente_info['mes_nome']
-    aba_mes_vigente_nome = mes_vigente_info['nome_aba']
+    # Lógica inteligente para definir o mês de acompanhamento (mês anterior padrão, ex: agosto em setembro, desde que exista)
+    meses_disponiveis_nomes = [m['mes_nome'] for m in meses_info]
+    mes_atual_str = datetime.now(fuso_brasil).strftime('%B').upper() # Ex: SEPTEMBER
+    
+    # Tenta pegar o mês anterior na lista se houver
     if len(meses_info) >= 2:
         mes_acompanhamento_info = meses_info[-2]
         mes_acompanhamento = mes_acompanhamento_info['mes_nome']
         aba_acompanhamento = mes_acompanhamento_info['nome_aba']
     else:
-        mes_acompanhamento = mes_vigente
-        aba_acompanhamento = mes_vigente_info['nome_aba']
+        mes_acompanhamento_info = meses_info[-1]
+        mes_acompanhamento = mes_acompanhamento_info['mes_nome']
+        aba_acompanhamento = mes_acompanhamento_info['nome_aba']
+
+    mes_vigente_info = meses_info[-1]
+    mes_vigente = mes_vigente_info['mes_nome']
+    aba_mes_vigente_nome = mes_vigente_info['nome_aba']
 else:
     mes_vigente, aba_acompanhamento, mes_acompanhamento, aba_mes_vigente_nome = None, None, None, None
 
@@ -1612,6 +1619,9 @@ else:
                         type="primary"
                     )
                     
+            with tab_exp1: # Correção de aba
+                pass
+                    
             with tab_exp2:
                 st.subheader("Relatório de Auditorias de Instalação")
                 try:
@@ -1628,7 +1638,7 @@ else:
                     st.download_button(
                         label="📥 Baixar Excel (Instalação)",
                         data=excel_inst,
-                        file_name=f"Vistorias_Instalacao_{datetime.now(fuso_brasil).strftime('%Y-%m-%d')}.xlsx",
+                        file_name=f"Vistoria_Instalacao_{datetime.now(fuso_brasil).strftime('%Y-%m-%d')}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         type="primary"
                     )
