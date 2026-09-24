@@ -351,7 +351,8 @@ def carregar_dados():
     todas_abas = [ws.title for ws in planilha.worksheets()]
     
     meses_info = []
-    abas_meses = [aba for aba in todas_abas if aba not in ['Base_IQ', 'Base_Tecnicos', 'Controle_IQ', 'Agenda_Matinal', 'Vistorias_Matinal', 'Vistoria_Instalacao', 'Log_Acessos', 'Resultado_Matinal']]
+    # Ignora abas que não sejam de certificados mensais (exclui explicitamente outubro caso o usuário não queira considerar ou se baseia na regra estrita do mês anterior)
+    abas_meses = [aba for aba in todas_abas if aba.upper() not in ['BASE_IQ', 'BASE_TECNICOS', 'CONTROLE_IQ', 'AGENDA_MATINAL', 'VISTORIAS_MATINAL', 'VISTORIA_INSTALACAO', 'LOG_ACESSOS', 'RESULTADO_MATINAL', 'OUTUBRO']]
 
     for aba in abas_meses:
         df_mes = ler_aba(aba)
@@ -611,6 +612,7 @@ dados_iqs, dados_completos, meses_info = carregar_dados()
 
 if meses_info:
     lista_meses_nomes = [m['mes_nome'] for m in meses_info]
+    # Lógica estrita: pega sempre o mês anterior (penúltimo da lista disponível, ou o último se só houver um)
     if len(meses_info) >= 2:
         mes_acompanhamento_padrao = meses_info[-2]['mes_nome']
     else:
@@ -656,7 +658,6 @@ else:
     if 'agenda_matinal' not in st.session_state:
         st.session_state['agenda_matinal'] = carregar_agenda_matinal_sheets()
 
-    # Inicializa o mês padrão global para a Gestão se não existir
     if 'mes_referencia_global' not in st.session_state:
         st.session_state['mes_referencia_global'] = mes_acompanhamento_padrao
 
@@ -669,7 +670,7 @@ else:
         
         iq_selecionado = st.sidebar.selectbox("Visualizar painel do IQ:", opcoes_iq)
         
-        # SELETOR GLOBAL DE MÊS PARA O GESTOR DEFINIR O PADRÃO DE TODOS OS IQS
+        # O GESTOR PODE SELECIONAR O MÊS PADRÃO PARA TODOS OS IQs
         st.sidebar.divider()
         st.sidebar.subheader("📅 Mês Padrão (Monitoramento)")
         idx_mes_atual = lista_meses_nomes.index(st.session_state['mes_referencia_global']) if st.session_state['mes_referencia_global'] in lista_meses_nomes else 0
@@ -727,7 +728,7 @@ else:
             st.session_state['logado'] = False
             st.rerun()
 
-    # Mês de referência ativo para o monitoramento pendente
+    # Mês de referência global ativo
     mes_monitoramento_escolhido = st.session_state['mes_referencia_global']
     aba_monitoramento_escolhida = next((m['nome_aba'] for m in meses_info if m['mes_nome'] == mes_monitoramento_escolhido), None)
     col_re_mes_escolhido = f're_iq_responsavel_{mes_monitoramento_escolhido}'
@@ -899,12 +900,10 @@ else:
             st.markdown('<div class="metric-card-orange">', unsafe_allow_html=True)
             st.markdown('<div class="metric-title">⚠️ Monitoramento Pendente</div>', unsafe_allow_html=True)
             
-            st.markdown(f'<div class="metric-value" style="font-size:22px;">Referência Global: {mes_monitoramento_escolhido}</div>', unsafe_allow_html=True)
-            
             if mes_monitoramento_escolhido and mes_monitoramento_escolhido in equipe_vigente.columns:
                 pendentes_hoje = len(equipe_vigente[(equipe_vigente[mes_monitoramento_escolhido] == 'NÃO') & (equipe_vigente[f'ACOMPANHAMENTO_{mes_monitoramento_escolhido}'] != 'SIM')])
                 st.markdown(f'<div class="metric-value">{pendentes_hoje} Técnicos</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="metric-sub">Mês padronizado pela Gestão</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="metric-sub">Referência: {mes_monitoramento_escolhido}</div>', unsafe_allow_html=True)
             else:
                 st.markdown('<div class="metric-value">N/A</div>', unsafe_allow_html=True)
                 st.markdown('<div class="metric-sub">Sem dados para o mês</div>', unsafe_allow_html=True)
