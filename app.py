@@ -128,6 +128,8 @@ if 'pagina_atual' not in st.session_state: st.session_state['pagina_atual'] = "D
 if 'email_pronto' not in st.session_state: st.session_state['email_pronto'] = None
 if 'zap_pronto' not in st.session_state: st.session_state['zap_pronto'] = None
 if 'zap_matinal_pronto' not in st.session_state: st.session_state['zap_matinal_pronto'] = None
+if 'email_matinal_enviado' not in st.session_state: st.session_state['email_matinal_enviado'] = False
+if 'zap_matinal_enviado' not in st.session_state: st.session_state['zap_matinal_enviado'] = False
 if 'zap_agenda_pronto' not in st.session_state: st.session_state['zap_agenda_pronto'] = None
 if 'gcal_status' not in st.session_state: st.session_state['gcal_status'] = None
 if 'tec_selecionado_atalho' not in st.session_state: st.session_state['tec_selecionado_atalho'] = None
@@ -290,7 +292,6 @@ def salvar_fotos_no_cloudinary(uploaded_files, nome_tecnico, tipo_pasta):
             nome_limpo = "".join([c for c in nome_tecnico if c.isalnum() or c in (' ', '_')]).strip().replace(' ', '_')
             public_id = f"{tipo_pasta}/{tipo_pasta}_{nome_limpo}_{data_hora_str}_{i+1}"
             
-            # Força conversão e otimização para suportar fotos tiradas diretamente pela câmera do celular
             resultado = cloudinary.uploader.upload(
                 uploaded_file,
                 public_id=public_id,
@@ -1192,23 +1193,27 @@ else:
         with tab_executar:
             agenda_do_usuario = {tec: info for tec, info in st.session_state['agenda_matinal'].items() if str(info.get('re_iq')) == str(re_logado_str) or perfil_usuario == 'GESTÃO'}
             
-            if st.session_state.get('zap_matinal_pronto'):
-                st.success("✅ Vistoria gravada com sucesso e pronta para envio!")
-                st.markdown(f'<a href="{st.session_state["zap_matinal_pronto"]}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">💬 ENVIAR RELATÓRIO NO WHATSAPP (GRUPO IQ)</a>', unsafe_allow_html=True)
+            if st.session_state.get('email_pronto') and not st.session_state.get('email_matinal_enviado'):
+                st.info("📤 **Passo 1 de 2:** Clique no botão abaixo para disparar o e-mail do relatório para a Gestão.")
+                st.markdown(f'<a href="{st.session_state["email_pronto"]}" target="_blank" style="display: block; text-align: center; padding: 0.9em; color: white; background-color: #007BFF; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">📩 1. ABRIR E-MAIL COM O RELATÓRIO</a>', unsafe_allow_html=True)
                 st.write("")
-                if st.button("🧹 Limpar Tela e Voltar para Agenda"):
+                if st.button("👉 Já enviei o e-mail, ir para o WhatsApp"):
+                    st.session_state['email_matinal_enviado'] = True
+                    st.rerun()
+
+            elif st.session_state.get('email_matinal_enviado') and st.session_state.get('zap_matinal_pronto') and not st.session_state.get('zap_matinal_enviado'):
+                st.success("✅ E-mail processado!")
+                st.info("💬 **Passo 2 de 2:** Clique no botão abaixo para enviar o relatório no Grupo do WhatsApp.")
+                st.markdown(f'<a href="{st.session_state["zap_matinal_pronto"]}" target="_blank" style="display: block; text-align: center; padding: 0.9em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">💬 2. ENVIAR NO WHATSAPP (GRUPO IQ)</a>', unsafe_allow_html=True)
+                st.write("")
+                if st.button("✅ Já enviei no WhatsApp, Finalizar Processo"):
+                    st.session_state['email_pronto'] = None
                     st.session_state['zap_matinal_pronto'] = None
-                    st.session_state['email_pronto'] = None
+                    st.session_state['email_matinal_enviado'] = False
+                    st.session_state['zap_matinal_enviado'] = False
                     st.session_state['tec_selecionado_atalho'] = None
                     st.rerun()
-            elif st.session_state['email_pronto']:
-                st.success("✅ Vistoria gravada no Google Sheets e evidência armazenada no Cloudinary!")
-                st.markdown(f'<a href="{st.session_state["email_pronto"]}" target="_blank" style="display: inline-block; padding: 0.8em 1.5em; color: white; background-color: #007BFF; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">📩 ABRIR E-MAIL COM O RELATÓRIO</a>', unsafe_allow_html=True)
-                st.write("")
-                if st.button("🧹 Limpar Tela e Voltar para Agenda"):
-                    st.session_state['email_pronto'] = None
-                    st.session_state['tec_selecionado_atalho'] = None
-                    st.rerun()
+
             else:
                 if not agenda_do_usuario:
                     st.warning("Não há nenhum técnico agendado na sua agenda.")
@@ -1229,7 +1234,7 @@ else:
                         tec_atual = st.selectbox("Selecione o Técnico Agendado:", ["Selecione..."] + tecs_na_data, index=indice_default)
                     
                     if tec_atual != "Selecione...":
-                        st.info(f"⚠️ Assinale abaixo os itens que estão **FALTANDO** ou **IRREGULARES** para **{tec_atual}** ({data_selecionada_exec}).")
+                        st.info(f"⚠️ Assinale abaixo apenas os itens que estão **FALTANDO** ou **IRREGULARES** para **{tec_atual}** ({data_selecionada_exec}).")
                         
                         st.markdown("### 🏷️ Informações de Veículo, Lotes, Validades e Tamanhos (Preenchimento Obrigatório)")
                         col_p1, col_l1, col_l2 = st.columns(3)
@@ -1271,7 +1276,7 @@ else:
                                 cols = st.columns(2)
                                 for i, item in enumerate(lista_itens):
                                     col_atual = cols[i % 2]
-                                    if col_atual.checkbox(item, key=f"mat_{item}_{i}"):
+                                    if col_atual.checkbox(f"Faltando/Irregular: {item}", key=f"mat_{item}_{i}"):
                                         faltas.append(item)
 
                         renderizar_itens_matinal(ITENS_MATINAL["🛠️ Ferramental"], t_ferr)
@@ -1281,7 +1286,7 @@ else:
                             cols_epi = st.columns(2)
                             itens_epi_base = ITENS_MATINAL["👷 EPI / EPC"]
                             for i, item in enumerate(itens_epi_base):
-                                if cols_epi[i % 2].checkbox(item, key=f"mat_epi_{i}"):
+                                if cols_epi[i % 2].checkbox(f"Faltando/Irregular: {item}", key=f"mat_epi_{i}"):
                                     faltas.append(item)
                             
                             st.divider()
@@ -1299,7 +1304,7 @@ else:
                             cols_sis = st.columns(2)
                             itens_sis_base = ITENS_MATINAL["📱 Sistemas"]
                             for i, item in enumerate(itens_sis_base):
-                                if cols_sis[i % 2].checkbox(item, key=f"mat_sis_{i}"):
+                                if cols_sis[i % 2].checkbox(f"Faltando/Irregular: {item}", key=f"mat_sis_{i}"):
                                     faltas.append(item)
                                     
                             st.divider()
@@ -1311,12 +1316,12 @@ else:
                         renderizar_itens_matinal(ITENS_MATINAL["🚗 Veículo"], t_veic)
 
                         st.divider()
-                        fotos_upload = st.file_uploader("📸 Anexar Fotos da Vistoria (Múltiplas fotos permitidas)", type=['png', 'jpg'], accept_multiple_files=True)
+                        fotos_upload = st.file_uploader("📸 Anexar Fotos da Vistoria (Múltiplas fotos permitidas)", type=['png', 'jpg', 'jpeg', 'heic'], accept_multiple_files=True)
                         obs_final = st.text_area("Observações da Tratativa:")
 
                         resumo_faltas = " / ".join(faltas) if faltas else "Todas as ferramentas e condições em conformidade."
                         
-                        if st.button("Gravar Vistoria e Gerar Disparos", type="primary"):
+                        if st.button("Gravar Vistoria e Iniciar Envio", type="primary"):
                             if not fotos_upload:
                                 st.warning("⚠️ O envio de ao menos uma foto é obrigatório para comprovação.")
                             elif not (placa_veiculo.strip() and lote_capacete.strip() and venc_carneira.strip() and lote_cinto.strip() and lote_talabarte.strip() and lote_luva_pig.strip() and lote_luva_vaq.strip() and venc_protetor.strip() and tam_camisa.strip() and tam_calca.strip() and tam_jaqueta.strip()):
@@ -1370,7 +1375,8 @@ else:
                                 
                                 st.session_state['zap_matinal_pronto'] = url_zap_mat
                                 st.session_state['email_pronto'] = url_email
-                                st.session_state['tec_selecionado_atalho'] = None
+                                st.session_state['email_matinal_enviado'] = False
+                                st.session_state['zap_matinal_enviado'] = False
                                 st.rerun()
 
     # --- PÁGINA 4: VISTORIA DE INSTALAÇÃO ---
@@ -1426,7 +1432,7 @@ else:
                 
                 st.divider()
                 
-                fotos_inst = st.file_uploader("📸 Anexar Fotos da Instalação / Erro (Múltiplas fotos permitidas)", type=['png', 'jpg'], accept_multiple_files=True, key="fotos_inst")
+                fotos_inst = st.file_uploader("📸 Anexar Fotos da Instalação / Erro (Múltiplas fotos permitidas)", type=['png', 'jpg', 'jpeg', 'heic'], accept_multiple_files=True, key="fotos_inst")
                 obs_inst = st.text_area("Observações da Tratativa:", key="obs_inst")
                 
                 if st.button("Gravar Auditoria e Gerar Disparos", type="primary"):
