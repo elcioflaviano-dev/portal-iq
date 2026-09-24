@@ -1497,7 +1497,7 @@ else:
                     st.download_button(
                         label="📥 Baixar Excel (Instalação)",
                         data=excel_inst,
-                        file_name=f"Vistorias_Instalacao_{datetime.now(fuso_brasil).strftime('%Y-%m-%d')}.strftime('%Y-%m-%d')}.xlsx",
+                        file_name=f"Vistorias_Instalacao_{datetime.now(fuso_brasil).strftime('%Y-%m-%d')}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         type="primary"
                     )
