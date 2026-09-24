@@ -290,12 +290,18 @@ def salvar_fotos_no_cloudinary(uploaded_files, nome_tecnico, tipo_pasta):
             nome_limpo = "".join([c for c in nome_tecnico if c.isalnum() or c in (' ', '_')]).strip().replace(' ', '_')
             public_id = f"{tipo_pasta}/{tipo_pasta}_{nome_limpo}_{data_hora_str}_{i+1}"
             
+            # Força conversão e otimização para suportar fotos tiradas diretamente pela câmera do celular
             resultado = cloudinary.uploader.upload(
                 uploaded_file,
                 public_id=public_id,
                 folder=tipo_pasta,
                 overwrite=True,
-                resource_type="image"
+                resource_type="auto",
+                format="jpg",
+                transformation=[
+                    {"width": 1200, "height": 1200, "crop": "limit"},
+                    {"quality": "auto"}
+                ]
             )
             links.append(resultado.get("secure_url"))
         return links
