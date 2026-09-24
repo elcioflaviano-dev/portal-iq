@@ -925,7 +925,7 @@ else:
 
         st.divider()
 
-        # --- AGENDA DE MATINAIS (FILTRADA PELO FILTRO LATERAL) ---
+        # --- AGENDA DE MATINAIS ---
         st.subheader("📅 Agenda de Matinais (Clique no nome para realizar a vistoria)")
         
         re_alvo_agenda = re_alvo_str if (perfil_usuario == 'GESTÃO' and re_alvo_str) else re_logado_str
@@ -1497,7 +1497,7 @@ else:
                     st.download_button(
                         label="📥 Baixar Excel (Instalação)",
                         data=excel_inst,
-                        file_name=f"Vistorias_Instalacao_{datetime.now(fuso_brasil).strftime('%Y-%m-%d')}.xlsx",
+                        file_name=f"Vistorias_Instalacao_{datetime.now(fuso_brasil).strftime('%Y-%m-%d')}.strftime('%Y-%m-%d')}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         type="primary"
                     )
