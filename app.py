@@ -156,7 +156,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. Conexão com Google Sheets e Google Calendar (Proteção Avançada contra Erro 429) ---
+# --- 2. Conexão com Google Sheets e Google Calendar ---
 def conectar_planilha():
     tentativas = 5
     espera = 3
@@ -177,47 +177,6 @@ def conectar_planilha():
                 st.error("Servidor ocupado devido a acessos simultâneos (Erro 429). Aguarde alguns segundos e tente novamente.")
                 st.stop()
             time.sleep(2)
-
-def criar_evento_google_calendar(nome_tec, data_agendamento, nome_iq, email_tec=""):
-    try:
-        creds_dict = json.loads(st.secrets["gcp_service_account"])
-        scopes = ["https://www.googleapis.com/auth/calendar"]
-        credentials = service_account.Credentials.from_service_account_info(creds_dict, scopes=scopes)
-        
-        service = build('calendar', 'v3', credentials=credentials)
-        
-        data_str = data_agendada.strftime('%Y-%m-%d')
-        start_datetime = f"{data_str}T07:00:00-03:00"
-        end_datetime = f"{data_str}T08:00:00-03:00"
-        
-        event = {
-            'summary': f'Vistoria Matinal (IVM) - {nome_tec}',
-            'location': 'Base TOTALE ABC',
-            'description': f'Vistoria matinal agendada pelo IQ {nome_iq} com o técnico {nome_tec}.',
-            'start': {
-                'dateTime': start_datetime,
-                'timeZone': 'America/Sao_Paulo',
-            },
-            'end': {
-                'dateTime': end_datetime,
-                'timeZone': 'America/Sao_Paulo',
-            },
-            'attendees': [{'email': email_tec}] if email_tec and "@" in email_tec else [],
-            'reminders': {
-                'useDefault': False,
-                'overrides': [
-                    {'method': 'popup', 'minutes': 30},
-                    {'method': 'email', 'minutes': 60},
-                ],
-            },
-        }
-        
-        calendar_id = 'primary'
-        service.events().insert(calendarId=calendar_id, body=event, sendUpdates='all' if email_tec else 'none').execute()
-        return True
-    except Exception as e:
-        print(f"Erro ao inserir no Google Calendar: {e}")
-        return False
 
 def registrar_log_acesso(re_iq, nome_iq, acao, pagina):
     try:
@@ -291,16 +250,12 @@ def salvar_fotos_no_cloudinary(uploaded_files, nome_tecnico, tipo_pasta):
             nome_limpo = "".join([c for c in nome_tecnico if c.isalnum() or c in (' ', '_')]).strip().replace(' ', '_')
             public_id = f"{tipo_pasta}/{tipo_pasta}_{nome_limpo}_{data_hora_str}_{i+1}"
             
-            # Conversão robusta via PIL para suportar imagens tiradas pela câmera (HEIC, JPG, PNG de celulares)
             try:
                 img = Image.open(uploaded_file)
                 img = ImageOps.exif_transpose(img)
                 if img.mode in ("RGBA", "P"):
                     img = img.convert("RGB")
-                
-                # Redimensiona mantendo a proporção se a imagem for muito pesada (comum em celulares)
                 img.thumbnail((1280, 1280))
-                
                 byte_arr = io.BytesIO()
                 img.save(byte_arr, format='JPEG', quality=85)
                 byte_arr.seek(0)
@@ -756,6 +711,10 @@ else:
             registrar_log_acesso(re_logado_str, st.session_state['nome_iq'], "NAVEGACAO", "Instalacao")
             st.session_state['pagina_atual'] = "Instalacao"
             st.rerun()
+        if st.button("📂 Histórico e Edições", use_container_width=True): 
+            registrar_log_acesso(re_logado_str, st.session_state['nome_iq'], "NAVEGACAO", "HistoricoEdicoes")
+            st.session_state['pagina_atual'] = "HistoricoEdicoes"
+            st.rerun()
         if st.button("🔑 Alterar Senha", use_container_width=True):
             registrar_log_acesso(re_logado_str, st.session_state['nome_iq'], "NAVEGACAO", "AlterarSenha")
             st.session_state['pagina_atual'] = "AlterarSenha"
@@ -1080,7 +1039,7 @@ else:
                     base_historico = dados_completos
             else:
                 if col_re_hist in dados_completos.columns:
-                    base_historico = dados_completos[dados_completos[col_re_hist].astype(str).str.replace('.0', '') == str(re_logado_str)]
+                    base_historico = dados_completos[dados_completos[col_re_hist].astype(str) == str(re_logado_str)]
                 else:
                     base_historico = pd.DataFrame()
 
@@ -1207,19 +1166,19 @@ else:
             agenda_do_usuario = {tec: info for tec, info in st.session_state['agenda_matinal'].items() if str(info.get('re_iq')) == str(re_logado_str) or perfil_usuario == 'GESTÃO'}
             
             if st.session_state.get('email_pronto') and not st.session_state.get('email_matinal_enviado'):
-                st.info("📤 **Passo 1 de 2:** Clique no botão abaixo para disparar o e-mail do relatório para a Gestão.")
+                st.info("📤 **Passo 1 de 2 (Obrigatório):** Clique abaixo para abrir o e-mail do relatório para a Gestão.")
                 st.markdown(f'<a href="{st.session_state["email_pronto"]}" target="_blank" style="display: block; text-align: center; padding: 0.9em; color: white; background-color: #007BFF; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">📩 1. ABRIR E-MAIL COM O RELATÓRIO</a>', unsafe_allow_html=True)
                 st.write("")
-                if st.button("👉 Já enviei o e-mail, ir para o WhatsApp"):
+                if st.button("👉 Já enviei o e-mail, avançar para o WhatsApp"):
                     st.session_state['email_matinal_enviado'] = True
                     st.rerun()
 
             elif st.session_state.get('email_matinal_enviado') and st.session_state.get('zap_matinal_pronto') and not st.session_state.get('zap_matinal_enviado'):
                 st.success("✅ E-mail processado!")
-                st.info("💬 **Passo 2 de 2:** Clique no botão abaixo para enviar o relatório no Grupo do WhatsApp.")
+                st.info("💬 **Passo 2 de 2 (Obrigatório):** Clique abaixo para enviar o relatório no Grupo do WhatsApp.")
                 st.markdown(f'<a href="{st.session_state["zap_matinal_pronto"]}" target="_blank" style="display: block; text-align: center; padding: 0.9em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">💬 2. ENVIAR NO WHATSAPP (GRUPO IQ)</a>', unsafe_allow_html=True)
                 st.write("")
-                if st.button("✅ Já enviei no WhatsApp, Finalizar Processo"):
+                if st.button("✅ Já enviei no WhatsApp, Concluir Processo"):
                     st.session_state['email_pronto'] = None
                     st.session_state['zap_matinal_pronto'] = None
                     st.session_state['email_matinal_enviado'] = False
@@ -1247,7 +1206,7 @@ else:
                         tec_atual = st.selectbox("Selecione o Técnico Agendado:", ["Selecione..."] + tecs_na_data, index=indice_default)
                     
                     if tec_atual != "Selecione...":
-                        st.info(f"⚠️ Assinale abaixo apenas os itens que estão **FALTANDO** ou **IRREGULARES** para **{tec_atual}** ({data_selecionada_exec}).")
+                        st.info(f"⚠️ **Observação:** Marque abaixo **APENAS** os itens que estiverem **FALTANDO** ou **AUSENTES** para **{tec_atual}** ({data_selecionada_exec}).")
                         
                         st.markdown("### 🏷️ Informações de Veículo, Lotes, Validades e Tamanhos (Preenchimento Obrigatório)")
                         col_p1, col_l1, col_l2 = st.columns(3)
@@ -1286,45 +1245,48 @@ else:
                         
                         def renderizar_itens_matinal(lista_itens, aba):
                             with aba:
+                                st.caption("💡 Marque apenas o que estiver faltando:")
                                 cols = st.columns(2)
                                 for i, item in enumerate(lista_itens):
                                     col_atual = cols[i % 2]
-                                    if col_atual.checkbox(f"Faltando/Irregular: {item}", key=f"mat_{item}_{i}"):
+                                    if col_atual.checkbox(item, key=f"mat_{item}_{i}"):
                                         faltas.append(item)
 
                         renderizar_itens_matinal(ITENS_MATINAL["🛠️ Ferramental"], t_ferr)
                         renderizar_itens_matinal(ITENS_MATINAL["📡 GPON/Outros"], t_gpon)
                         
                         with t_epi:
+                            st.caption("💡 Marque apenas o que estiver faltando:")
                             cols_epi = st.columns(2)
                             itens_epi_base = ITENS_MATINAL["👷 EPI / EPC"]
                             for i, item in enumerate(itens_epi_base):
-                                if cols_epi[i % 2].checkbox(f"Faltando/Irregular: {item}", key=f"mat_epi_{i}"):
+                                if cols_epi[i % 2].checkbox(item, key=f"mat_epi_{i}"):
                                     faltas.append(item)
                             
                             st.divider()
-                            st.write("**Confirmação de ITENS FALTANTES (Marque APENAS se o técnico NÃO tiver):**")
-                            if cols_epi[0].checkbox("Capacete/Carneira ausente ou irregular?", key="posse_cap"): faltas.append("Capacete/Carneira ausente ou irregular")
-                            if cols_epi[1].checkbox("Cinto de Segurança ausente ou irregular?", key="posse_cin"): faltas.append("Cinto ausente ou irregular")
-                            if cols_epi[0].checkbox("Talabarte ausente ou irregular?", key="posse_tal"): faltas.append("Talabarte ausente ou irregular")
-                            if cols_epi[1].checkbox("Luva Pigmentada ausente ou irregular?", key="posse_lvp"): faltas.append("Luva Pigmentada ausente ou irregular")
-                            if cols_epi[0].checkbox("Luva Vaqueta ausente ou irregular?", key="posse_lvv"): faltas.append("Luva Vaqueta ausente ou irregular")
-                            if cols_epi[1].checkbox("Protetor Solar ausente ou vencido?", key="posse_pro"): faltas.append("Protetor Solar ausente ou vencido")
+                            st.write("**EPIs e Itens de Segurança Obrigatórios ausentes:**")
+                            if cols_epi[0].checkbox("Capacete / Carneira ausente", key="posse_cap"): faltas.append("Capacete/Carneira ausente")
+                            if cols_epi[1].checkbox("Cinto de Segurança ausente", key="posse_cin"): faltas.append("Cinto ausente")
+                            if cols_epi[0].checkbox("Talabarte ausente", key="posse_tal"): faltas.append("Talabarte ausente")
+                            if cols_epi[1].checkbox("Luva Pigmentada ausente", key="posse_lvp"): faltas.append("Luva Pigmentada ausente")
+                            if cols_epi[0].checkbox("Luva Vaqueta ausente", key="posse_lvv"): faltas.append("Luva Vaqueta ausente")
+                            if cols_epi[1].checkbox("Protetor Solar ausente/vencido", key="posse_pro"): faltas.append("Protetor Solar ausente")
 
                         renderizar_itens_matinal(ITENS_MATINAL["🧹 Asseio"], t_asseio)
                         
                         with t_sis:
+                            st.caption("💡 Marque apenas o que estiver faltando:")
                             cols_sis = st.columns(2)
                             itens_sis_base = ITENS_MATINAL["📱 Sistemas"]
                             for i, item in enumerate(itens_sis_base):
-                                if cols_sis[i % 2].checkbox(f"Faltando/Irregular: {item}", key=f"mat_sis_{i}"):
+                                if cols_sis[i % 2].checkbox(item, key=f"mat_sis_{i}"):
                                     faltas.append(item)
                                     
                             st.divider()
-                            st.write("**Confirmação de UNIFORMES FALTANTES (Marque APENAS se o técnico NÃO tiver):**")
-                            if cols_sis[0].checkbox("Uniforme - Camisa ausente?", key="posse_cam"): faltas.append("Uniforme Camisa ausente")
-                            if cols_sis[1].checkbox("Uniforme - Calça ausente?", key="posse_calc"): faltas.append("Uniforme Calça ausente")
-                            if cols_sis[0].checkbox("Uniforme - Jaqueta ausente?", key="posse_jaq"): faltas.append("Uniforme Jaqueta ausente")
+                            st.write("**Uniformes ausentes:**")
+                            if cols_sis[0].checkbox("Uniforme - Camisa ausente", key="posse_cam"): faltas.append("Uniforme Camisa ausente")
+                            if cols_sis[1].checkbox("Uniforme - Calça ausente", key="posse_calc"): faltas.append("Uniforme Calça ausente")
+                            if cols_sis[0].checkbox("Uniforme - Jaqueta ausente", key="posse_jaq"): faltas.append("Uniforme Jaqueta ausente")
 
                         renderizar_itens_matinal(ITENS_MATINAL["🚗 Veículo"], t_veic)
 
@@ -1397,20 +1359,24 @@ else:
         st.title("🛠️ Vistoria e Auditoria de Instalação em Campo")
         st.write("Auditoria baseada nos códigos oficiais da Totale. Registro de evidência e disparo para o WhatsApp (Grupo IQ).")
         
-        if st.session_state['zap_pronto']:
-            st.success("✅ Vistoria de Instalação gravada com sucesso!")
-            
-            c_zap, c_email = st.columns(2)
-            with c_zap:
-                st.markdown(f'<a href="{st.session_state["zap_pronto"]}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">💬 ENVIAR NO WHATSAPP (GRUPO IQ)</a>', unsafe_allow_html=True)
-            with c_email:
-                if st.session_state.get('email_instalacao'):
-                    st.markdown(f'<a href="{st.session_state["email_instalacao"]}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #007BFF; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">📩 ENVIAR POR E-MAIL (GESTÃO)</a>', unsafe_allow_html=True)
-            
+        if st.session_state.get('zap_pronto') and not st.session_state.get('email_inst_enviado', False):
+            st.info("📤 **Passo 1 de 2 (Obrigatório):** Clique abaixo para abrir o e-mail da auditoria para a Gestão.")
+            if st.session_state.get('email_instalacao'):
+                st.markdown(f'<a href="{st.session_state["email_instalacao"]}" target="_blank" style="display: block; text-align: center; padding: 0.9em; color: white; background-color: #007BFF; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">📩 1. ABRIR E-MAIL COM O RELATÓRIO</a>', unsafe_allow_html=True)
             st.write("")
-            if st.button("🧹 Realizar Nova Vistoria de Instalação"):
+            if st.button("👉 Já enviei o e-mail, avançar para o WhatsApp"):
+                st.session_state['email_inst_enviado'] = True
+                st.rerun()
+
+        elif st.session_state.get('email_inst_enviado', False) and st.session_state.get('zap_pronto'):
+            st.success("✅ E-mail processado!")
+            st.info("💬 **Passo 2 de 2 (Obrigatório):** Clique abaixo para enviar no Grupo do WhatsApp.")
+            st.markdown(f'<a href="{st.session_state["zap_pronto"]}" target="_blank" style="display: block; text-align: center; padding: 0.9em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">💬 2. ENVIAR NO WHATSAPP (GRUPO IQ)</a>', unsafe_allow_html=True)
+            st.write("")
+            if st.button("✅ Já enviei no WhatsApp, Concluir Processo"):
                 st.session_state['zap_pronto'] = None
                 st.session_state['email_instalacao'] = None
+                st.session_state['email_inst_enviado'] = False
                 st.rerun()
         else:
             col_tec, col_cont = st.columns(2)
@@ -1448,7 +1414,7 @@ else:
                 fotos_inst = st.file_uploader("📸 Anexar Fotos da Instalação / Erro (Múltiplas fotos permitidas)", type=['png', 'jpg', 'jpeg', 'heic'], accept_multiple_files=True, key="fotos_inst")
                 obs_inst = st.text_area("Observações da Tratativa:", key="obs_inst")
                 
-                if st.button("Gravar Auditoria e Gerar Disparos", type="primary"):
+                if st.button("Gravar Auditoria e Iniciar Envio", type="primary"):
                     if not num_contrato.strip():
                         st.warning("⚠️ O número do contrato é obrigatório para realizar a vistoria.")
                     elif not fotos_inst:
@@ -1486,7 +1452,119 @@ else:
                         
                         st.session_state['zap_pronto'] = url_whatsapp
                         st.session_state['email_instalacao'] = url_email
+                        st.session_state['email_inst_enviado'] = False
                         st.rerun()
+
+    # --- PÁGINA: HISTÓRICO E EDIÇÕES ---
+    elif st.session_state['pagina_atual'] == "HistoricoEdicoes":
+        st.title("📂 Histórico e Edição de Vistorias")
+        st.write("Consulte as vistorias já realizadas, edite informações ou reenvie os relatórios atualizados com aviso de **ERRATA**.")
+        
+        planilha_hist = conectar_planilha()
+        tab_h1, tab_h2 = st.tabs(["📊 Matinais Realizadas", "🛠️ Instalações Realizadas"])
+        
+        with tab_h1:
+            try:
+                ws_hmat = planilha_hist.worksheet("Vistorias_Matinal")
+                dados_hmat = ws_hmat.get_all_records()
+                df_hmat = pd.DataFrame(dados_hmat) if dados_hmat else pd.DataFrame()
+            except:
+                df_hmat = pd.DataFrame()
+                
+            if df_hmat.empty:
+                st.info("Nenhuma vistoria matinal registrada até o momento.")
+            else:
+                if perfil_usuario != 'GESTÃO':
+                    df_hmat = df_hmat[df_hmat['RE_IQ'].astype(str).str.strip().str.replace('.0','') == re_logado_str]
+                
+                st.dataframe(df_hmat, hide_index=True, use_container_width=True)
+                st.write("")
+                
+                id_busca_mat = st.selectbox("Selecione o ID da Matinal para Editar/Reenviar:", ["Selecione..."] + df_hmat['ID_Vistoria'].astype(str).tolist(), key="sel_ed_mat")
+                
+                if id_busca_mat != "Selecione...":
+                    reg_sel = df_hmat[df_hmat['ID_Vistoria'].astype(str) == id_busca_mat].iloc[0]
+                    
+                    with st.form("form_edita_mat"):
+                        st.subheader(f"Editando Vistoria Matinal ID: {id_busca_mat}")
+                        edit_tec = st.text_input("Técnico", value=str(reg_sel.get('Nome_Tecnico', '')))
+                        edit_placa = st.text_input("Placa do Veículo", value=str(reg_sel.get('Placa_Veiculo', '')))
+                        edit_irreg = st.text_area("Itens Faltantes / Irregulares", value=str(reg_sel.get('Itens_Irregulares', '')))
+                        edit_obs = st.text_area("Observações", value=str(reg_sel.get('Observacao', '')))
+                        
+                        btn_salvar_edicao_mat = st.form_submit_button("Salvar Edição e Gerar Errata (E-mail + WhatsApp)", type="primary")
+                        
+                        if btn_salvar_edicao_mat:
+                            # Atualiza na planilha
+                            cell_id = ws_hmat.find(id_busca_mat)
+                            if cell_id:
+                                row_i = cell_id.row
+                                ws_hmat.update_cell(row_i, 8, edit_irreg)
+                                ws_hmat.update_cell(row_i, 9, edit_placa)
+                                ws_hmat.update_cell(row_i, 20, edit_obs)
+                            
+                            links_f = str(reg_sel.get('Links_Fotos', ''))
+                            
+                            msg_errata_zap = f"⚠️ *[ERRATA - RELATÓRIO EDITADO]*\n*RELATÓRIO DE MATINAL (IVM 2026)*\n*ID da Vistoria:* {id_busca_mat}\n*Técnico:* {edit_tec}\n\n*Placa do Veículo:* {edit_placa}\n*Itens Faltantes / Irregulares:*\n- {edit_irreg}\n\n*Observações (Atualizadas):*\n{edit_obs}\n\n*Evidências (Fotos):*\n{links_f}"
+                            url_errata_zap = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_errata_zap)}"
+                            
+                            corpo_errata_email = f"⚠️ [ERRATA - RELATÓRIO EDITADO]\nRELATÓRIO DE MATINAL (IVM 2026)\nID da Vistoria: {id_busca_mat}\nTécnico: {edit_tec}\n\nPlaca do Veículo: {edit_placa}\nItens Faltantes / Irregulares:\n- {edit_irreg}\n\nObservações (Atualizadas):\n{edit_obs}\n\nEVIDÊNCIAS FOTOS:\n{links_f}"
+                            url_errata_email = f"mailto:{DESTINATARIOS_MATINAL}?subject=ERRATA - Relatorio Matinal [ID {id_busca_mat}] - {edit_tec}&body={urllib.parse.quote(corpo_errata_email)}"
+                            
+                            st.success("✅ Vistoria atualizada com sucesso! Utilize os links abaixo para enviar a ERRATA:")
+                            st.markdown(f'<a href="{url_errata_email}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #007BFF; border-radius: 8px; text-decoration: none; font-weight: bold; margin-bottom: 10px;">📩 1. ENVIAR ERRATA POR E-MAIL (GESTÃO)</a>', unsafe_allow_html=True)
+                            st.markdown(f'<a href="{url_errata_zap}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold;">💬 2. ENVIAR ERRATA NO WHATSAPP (GRUPO IQ)</a>', unsafe_allow_html=True)
+
+        with tab_h2:
+            try:
+                ws_hinst = planilha_hist.worksheet("Vistoria_Instalacao")
+                dados_hinst = ws_hinst.get_all_records()
+                df_hinst = pd.DataFrame(dados_hinst) if dados_hinst else pd.DataFrame()
+            except:
+                df_hinst = pd.DataFrame()
+                
+            if df_hinst.empty:
+                st.info("Nenhuma auditoria de instalação registrada até o momento.")
+            else:
+                if perfil_usuario != 'GESTÃO':
+                    df_hinst = df_hinst[df_hinst['RE_IQ'].astype(str).str.strip().str.replace('.0','') == re_logado_str]
+                
+                st.dataframe(df_hinst, hide_index=True, use_container_width=True)
+                st.write("")
+                
+                id_busca_inst = st.selectbox("Selecione o ID da Instalação para Editar/Reenviar:", ["Selecione..."] + df_hinst['ID_Vistoria'].astype(str).tolist(), key="sel_ed_inst")
+                
+                if id_busca_inst != "Selecione...":
+                    reg_inst_sel = df_hinst[df_hinst['ID_Vistoria'].astype(str) == id_busca_inst].iloc[0]
+                    
+                    with st.form("form_edita_inst"):
+                        st.subheader(f"Editando Auditoria de Instalação ID: {id_busca_inst}")
+                        edit_tec_i = st.text_input("Técnico", value=str(reg_inst_sel.get('Nome_Tecnico', '')))
+                        edit_contrato = st.text_input("Contrato", value=str(reg_inst_sel.get('Contrato', '')))
+                        edit_erros = st.text_area("Erros de Instalação", value=str(reg_inst_sel.get('Erros_Instalacao', '')))
+                        edit_obs_i = st.text_area("Observações", value=str(reg_inst_sel.get('Observacao', '')))
+                        
+                        btn_salvar_edicao_inst = st.form_submit_button("Salvar Edição e Gerar Errata (E-mail + WhatsApp)", type="primary")
+                        
+                        if btn_salvar_edicao_inst:
+                            cell_id_i = ws_hinst.find(id_busca_inst)
+                            if cell_id_i:
+                                row_ii = cell_id_i.row
+                                ws_hinst.update_cell(row_ii, 7, edit_contrato)
+                                ws_hinst.update_cell(row_ii, 8, edit_erros)
+                                ws_hinst.update_cell(row_ii, 9, edit_obs_i)
+                            
+                            links_fi = str(reg_inst_sel.get('Links_Fotos', ''))
+                            
+                            msg_errata_zap_i = f"⚠️ *[ERRATA - RELATÓRIO EDITADO]*\n*AUDITORIA DE INSTALAÇÃO - TOTALE ABC*\n*ID da Vistoria:* {id_busca_inst}\n\n*Contrato:* {edit_contrato}\n*Técnico:* {edit_tec_i}\n\n*Falhas Encontradas (Atualizadas):*\n- {edit_erros}\n\n*Observações:* {edit_obs_i}\n\n*Evidências (Fotos):*\n{links_fi}"
+                            url_errata_zap_i = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_errata_zap_i)}"
+                            
+                            corpo_errata_email_i = f"⚠️ [ERRATA - RELATÓRIO EDITADO]\nAUDITORIA DE INSTALAÇÃO\nID da Vistoria: {id_busca_inst}\nContrato: {edit_contrato}\nTécnico: {edit_tec_i}\n\nFalhas Encontradas (Atualizadas):\n- {edit_erros}\n\nObservações:\n{edit_obs_i}\n\nEVIDÊNCIA FOTO:\n{links_fi}"
+                            url_errata_email_i = f"mailto:{DESTINATARIOS_INSTALACAO}?subject=ERRATA - Auditoria [ID {id_busca_inst}] - Contrato {edit_contrato} - {edit_tec_i}&body={urllib.parse.quote(corpo_errata_email_i)}"
+                            
+                            st.success("✅ Auditoria atualizada com sucesso! Utilize os links abaixo para enviar a ERRATA:")
+                            st.markdown(f'<a href="{url_errata_email_i}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #007BFF; border-radius: 8px; text-decoration: none; font-weight: bold; margin-bottom: 10px;">📩 1. ENVIAR ERRATA POR E-MAIL (GESTÃO)</a>', unsafe_allow_html=True)
+                            st.markdown(f'<a href="{url_errata_zap_i}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold;">💬 2. ENVIAR ERRATA NO WHATSAPP (GRUPO IQ)</a>', unsafe_allow_html=True)
 
     # --- PÁGINA 5: RELATÓRIOS E EXPORTAÇÃO (EXCLUSIVO PARA GESTÃO) ---
     elif st.session_state['pagina_atual'] == "Relatorios":
