@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from PIL import Image
+from PIL import Image, ImageOps
 import os
 import urllib.parse
 import json
@@ -113,10 +113,9 @@ ITENS_MATINAL = {
     ],
     "🚗 Veículo": [
         "Veículo Interno: Organizado?", "Veículo Interno: Limpo?", "Veículo Interno: Tomada Carregamento OK?", 
-        "Veículo Interno: Óleo no Nível?", "Veículo Interno: Água no Nível?",
-        "Veículo Externo: Lâmpadas Queimadas?", "Veículo Externo: Pneus em Boas Condições?", 
-        "Veículo Externo: Calotas OK?", "Veículo Externo: Rack OK?", "Veículo Externo: Avarias?", 
-        "Veículo Externo: Bandeirola OK?", "Veículo Externo: Adesivos OK?"
+        "Veículo Interno: Óleo no Nível?", "Veículo Externo: Lâmpadas Queimadas?", 
+        "Veículo Externo: Pneus em Boas Condições?", "Veículo Externo: Calotas OK?", 
+        "Veículo Externo: Rack OK?", "Veículo Externo: Avarias?", "Veículo Externo: Bandeirola OK?", "Veículo Externo: Adesivos OK?"
     ]
 }
 
@@ -292,17 +291,31 @@ def salvar_fotos_no_cloudinary(uploaded_files, nome_tecnico, tipo_pasta):
             nome_limpo = "".join([c for c in nome_tecnico if c.isalnum() or c in (' ', '_')]).strip().replace(' ', '_')
             public_id = f"{tipo_pasta}/{tipo_pasta}_{nome_limpo}_{data_hora_str}_{i+1}"
             
+            # Conversão robusta via PIL para suportar imagens tiradas pela câmera (HEIC, JPG, PNG de celulares)
+            try:
+                img = Image.open(uploaded_file)
+                img = ImageOps.exif_transpose(img)
+                if img.mode in ("RGBA", "P"):
+                    img = img.convert("RGB")
+                
+                # Redimensiona mantendo a proporção se a imagem for muito pesada (comum em celulares)
+                img.thumbnail((1280, 1280))
+                
+                byte_arr = io.BytesIO()
+                img.save(byte_arr, format='JPEG', quality=85)
+                byte_arr.seek(0)
+                file_to_upload = byte_arr
+            except Exception:
+                uploaded_file.seek(0)
+                file_to_upload = uploaded_file
+
             resultado = cloudinary.uploader.upload(
-                uploaded_file,
+                file_to_upload,
                 public_id=public_id,
                 folder=tipo_pasta,
                 overwrite=True,
                 resource_type="auto",
-                format="jpg",
-                transformation=[
-                    {"width": 1200, "height": 1200, "crop": "limit"},
-                    {"quality": "auto"}
-                ]
+                format="jpg"
             )
             links.append(resultado.get("secure_url"))
         return links
