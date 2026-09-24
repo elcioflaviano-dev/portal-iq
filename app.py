@@ -120,7 +120,7 @@ ITENS_MATINAL = {
 }
 
 # --- 1. Configuração Inicial ---
-st.set_page_config(page_title="Portal do IQ - TOTALE ABC", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Portal do IQ - TOTALE ABC", layout="wide", initial_sidebar_state="collapsed")
 
 if 'logado' not in st.session_state: st.session_state['logado'] = False
 if 'pagina_atual' not in st.session_state: st.session_state['pagina_atual'] = "Dashboard"
@@ -1206,7 +1206,7 @@ else:
                         tec_atual = st.selectbox("Selecione o Técnico Agendado:", ["Selecione..."] + tecs_na_data, index=indice_default)
                     
                     if tec_atual != "Selecione...":
-                        st.info(f"⚠️ **Observação:** Marque abaixo **APENAS** os itens que estiverem **FALTANDO** ou **AUSENTES** para **{tec_atual}** ({data_selecionada_exec}).")
+                        st.info(f"⚠️ **Atenção:** Marque abaixo **APENAS** os itens que estiverem **FALTANDO** ou **AUSENTES** para **{tec_atual}** ({data_selecionada_exec}).")
                         
                         st.markdown("### 🏷️ Informações de Veículo, Lotes, Validades e Tamanhos (Preenchimento Obrigatório)")
                         col_p1, col_l1, col_l2 = st.columns(3)
@@ -1245,7 +1245,7 @@ else:
                         
                         def renderizar_itens_matinal(lista_itens, aba):
                             with aba:
-                                st.caption("💡 Marque apenas o que estiver faltando:")
+                                st.caption("💡 Ticar apenas se estiver faltando/ausente:")
                                 cols = st.columns(2)
                                 for i, item in enumerate(lista_itens):
                                     col_atual = cols[i % 2]
@@ -1256,7 +1256,7 @@ else:
                         renderizar_itens_matinal(ITENS_MATINAL["📡 GPON/Outros"], t_gpon)
                         
                         with t_epi:
-                            st.caption("💡 Marque apenas o que estiver faltando:")
+                            st.caption("💡 Ticar apenas se estiver faltando/ausente:")
                             cols_epi = st.columns(2)
                             itens_epi_base = ITENS_MATINAL["👷 EPI / EPC"]
                             for i, item in enumerate(itens_epi_base):
@@ -1264,18 +1264,18 @@ else:
                                     faltas.append(item)
                             
                             st.divider()
-                            st.write("**EPIs e Itens de Segurança Obrigatórios ausentes:**")
+                            st.write("**EPIs e Itens de Segurança Obrigatórios:**")
                             if cols_epi[0].checkbox("Capacete / Carneira ausente", key="posse_cap"): faltas.append("Capacete/Carneira ausente")
                             if cols_epi[1].checkbox("Cinto de Segurança ausente", key="posse_cin"): faltas.append("Cinto ausente")
                             if cols_epi[0].checkbox("Talabarte ausente", key="posse_tal"): faltas.append("Talabarte ausente")
                             if cols_epi[1].checkbox("Luva Pigmentada ausente", key="posse_lvp"): faltas.append("Luva Pigmentada ausente")
                             if cols_epi[0].checkbox("Luva Vaqueta ausente", key="posse_lvv"): faltas.append("Luva Vaqueta ausente")
-                            if cols_epi[1].checkbox("Protetor Solar ausente/vencido", key="posse_pro"): faltas.append("Protetor Solar ausente")
+                            if cols_epi[1].checkbox("Protetor Solar ausente", key="posse_pro"): faltas.append("Protetor Solar ausente")
 
                         renderizar_itens_matinal(ITENS_MATINAL["🧹 Asseio"], t_asseio)
                         
                         with t_sis:
-                            st.caption("💡 Marque apenas o que estiver faltando:")
+                            st.caption("💡 Ticar apenas se estiver faltando/ausente:")
                             cols_sis = st.columns(2)
                             itens_sis_base = ITENS_MATINAL["📱 Sistemas"]
                             for i, item in enumerate(itens_sis_base):
@@ -1455,15 +1455,17 @@ else:
                         st.session_state['email_inst_enviado'] = False
                         st.rerun()
 
-    # --- PÁGINA: HISTÓRICO E EDIÇÕES ---
+    # --- PÁGINA: HISTÓRICO E EDIÇÕES (BUSCA SIMPLES POR TÉCNICO) ---
     elif st.session_state['pagina_atual'] == "HistoricoEdicoes":
         st.title("📂 Histórico e Edição de Vistorias")
-        st.write("Consulte as vistorias já realizadas, edite informações ou reenvie os relatórios atualizados com aviso de **ERRATA**.")
+        st.write("Busque pelo nome do técnico para localizar, editar e reenviar o relatório com aviso de **ERRATA**.")
         
         planilha_hist = conectar_planilha()
-        tab_h1, tab_h2 = st.tabs(["📊 Matinais Realizadas", "🛠️ Instalações Realizadas"])
+        tipo_hist = st.radio("Selecione o tipo de vistoria:", ["📊 Vistorias Matinais", "🛠️ Vistorias de Instalação"], horizontal=True)
         
-        with tab_h1:
+        busca_tec_nome = st.text_input("🔍 Digite o nome do técnico para buscar:")
+        
+        if tipo_hist == "📊 Vistorias Matinais":
             try:
                 ws_hmat = planilha_hist.worksheet("Vistorias_Matinal")
                 dados_hmat = ws_hmat.get_all_records()
@@ -1477,45 +1479,50 @@ else:
                 if perfil_usuario != 'GESTÃO':
                     df_hmat = df_hmat[df_hmat['RE_IQ'].astype(str).str.strip().str.replace('.0','') == re_logado_str]
                 
-                st.dataframe(df_hmat, hide_index=True, use_container_width=True)
-                st.write("")
+                if busca_tec_nome.strip():
+                    df_hmat = df_hmat[df_hmat['Nome_Tecnico'].astype(str).str.contains(busca_tec_nome, case=False, na=False)]
                 
-                id_busca_mat = st.selectbox("Selecione o ID da Matinal para Editar/Reenviar:", ["Selecione..."] + df_hmat['ID_Vistoria'].astype(str).tolist(), key="sel_ed_mat")
-                
-                if id_busca_mat != "Selecione...":
-                    reg_sel = df_hmat[df_hmat['ID_Vistoria'].astype(str) == id_busca_mat].iloc[0]
+                if df_hmat.empty:
+                    st.warning("Nenhum registro encontrado para este técnico.")
+                else:
+                    st.dataframe(df_hmat, hide_index=True, use_container_width=True)
+                    st.write("")
                     
-                    with st.form("form_edita_mat"):
-                        st.subheader(f"Editando Vistoria Matinal ID: {id_busca_mat}")
-                        edit_tec = st.text_input("Técnico", value=str(reg_sel.get('Nome_Tecnico', '')))
-                        edit_placa = st.text_input("Placa do Veículo", value=str(reg_sel.get('Placa_Veiculo', '')))
-                        edit_irreg = st.text_area("Itens Faltantes / Irregulares", value=str(reg_sel.get('Itens_Irregulares', '')))
-                        edit_obs = st.text_area("Observações", value=str(reg_sel.get('Observacao', '')))
+                    id_busca_mat = st.selectbox("Selecione o ID da Matinal para Editar/Reenviar:", ["Selecione..."] + df_hmat['ID_Vistoria'].astype(str).tolist(), key="sel_ed_mat")
+                    
+                    if id_busca_mat != "Selecione...":
+                        reg_sel = df_hmat[df_hmat['ID_Vistoria'].astype(str) == id_busca_mat].iloc[0]
                         
-                        btn_salvar_edicao_mat = st.form_submit_button("Salvar Edição e Gerar Errata (E-mail + WhatsApp)", type="primary")
-                        
-                        if btn_salvar_edicao_mat:
-                            # Atualiza na planilha
-                            cell_id = ws_hmat.find(id_busca_mat)
-                            if cell_id:
-                                row_i = cell_id.row
-                                ws_hmat.update_cell(row_i, 8, edit_irreg)
-                                ws_hmat.update_cell(row_i, 9, edit_placa)
-                                ws_hmat.update_cell(row_i, 20, edit_obs)
+                        with st.form("form_edita_mat"):
+                            st.subheader(f"Editando Vistoria Matinal ID: {id_busca_mat}")
+                            edit_tec = st.text_input("Técnico", value=str(reg_sel.get('Nome_Tecnico', '')))
+                            edit_placa = st.text_input("Placa do Veículo", value=str(reg_sel.get('Placa_Veiculo', '')))
+                            edit_irreg = st.text_area("Itens Faltantes / Irregulares", value=str(reg_sel.get('Itens_Irregulares', '')))
+                            edit_obs = st.text_area("Observações", value=str(reg_sel.get('Observacao', '')))
                             
-                            links_f = str(reg_sel.get('Links_Fotos', ''))
+                            btn_salvar_edicao_mat = st.form_submit_button("Salvar Edição e Gerar Errata", type="primary")
                             
-                            msg_errata_zap = f"⚠️ *[ERRATA - RELATÓRIO EDITADO]*\n*RELATÓRIO DE MATINAL (IVM 2026)*\n*ID da Vistoria:* {id_busca_mat}\n*Técnico:* {edit_tec}\n\n*Placa do Veículo:* {edit_placa}\n*Itens Faltantes / Irregulares:*\n- {edit_irreg}\n\n*Observações (Atualizadas):*\n{edit_obs}\n\n*Evidências (Fotos):*\n{links_f}"
-                            url_errata_zap = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_errata_zap)}"
-                            
-                            corpo_errata_email = f"⚠️ [ERRATA - RELATÓRIO EDITADO]\nRELATÓRIO DE MATINAL (IVM 2026)\nID da Vistoria: {id_busca_mat}\nTécnico: {edit_tec}\n\nPlaca do Veículo: {edit_placa}\nItens Faltantes / Irregulares:\n- {edit_irreg}\n\nObservações (Atualizadas):\n{edit_obs}\n\nEVIDÊNCIAS FOTOS:\n{links_f}"
-                            url_errata_email = f"mailto:{DESTINATARIOS_MATINAL}?subject=ERRATA - Relatorio Matinal [ID {id_busca_mat}] - {edit_tec}&body={urllib.parse.quote(corpo_errata_email)}"
-                            
-                            st.success("✅ Vistoria atualizada com sucesso! Utilize os links abaixo para enviar a ERRATA:")
-                            st.markdown(f'<a href="{url_errata_email}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #007BFF; border-radius: 8px; text-decoration: none; font-weight: bold; margin-bottom: 10px;">📩 1. ENVIAR ERRATA POR E-MAIL (GESTÃO)</a>', unsafe_allow_html=True)
-                            st.markdown(f'<a href="{url_errata_zap}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold;">💬 2. ENVIAR ERRATA NO WHATSAPP (GRUPO IQ)</a>', unsafe_allow_html=True)
+                            if btn_salvar_edicao_mat:
+                                cell_id = ws_hmat.find(id_busca_mat)
+                                if cell_id:
+                                    row_i = cell_id.row
+                                    ws_hmat.update_cell(row_i, 8, edit_irreg)
+                                    ws_hmat.update_cell(row_i, 9, edit_placa)
+                                    ws_hmat.update_cell(row_i, 20, edit_obs)
+                                
+                                links_f = str(reg_sel.get('Links_Fotos', ''))
+                                
+                                msg_errata_zap = f"⚠️ *[ERRATA - RELATÓRIO EDITADO]*\n*RELATÓRIO DE MATINAL (IVM 2026)*\n*ID da Vistoria:* {id_busca_mat}\n*Técnico:* {edit_tec}\n\n*Placa do Veículo:* {edit_placa}\n*Itens Faltantes / Irregulares:*\n- {edit_irreg}\n\n*Observações (Atualizadas):*\n{edit_obs}\n\n*Evidências (Fotos):*\n{links_f}"
+                                url_errata_zap = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_errata_zap)}"
+                                
+                                corpo_errata_email = f"⚠️ [ERRATA - RELATÓRIO EDITADO]\nRELATÓRIO DE MATINAL (IVM 2026)\nID da Vistoria: {id_busca_mat}\nTécnico: {edit_tec}\n\nPlaca do Veículo: {edit_placa}\nItens Faltantes / Irregulares:\n- {edit_irreg}\n\nObservações (Atualizadas):\n{edit_obs}\n\nEVIDÊNCIAS FOTOS:\n{links_f}"
+                                url_errata_email = f"mailto:{DESTINATARIOS_MATINAL}?subject=ERRATA - Relatorio Matinal [ID {id_busca_mat}] - {edit_tec}&body={urllib.parse.quote(corpo_errata_email)}"
+                                
+                                st.success("✅ Vistoria atualizada com sucesso! Utilize os links abaixo para enviar a ERRATA:")
+                                st.markdown(f'<a href="{url_errata_email}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #007BFF; border-radius: 8px; text-decoration: none; font-weight: bold; margin-bottom: 10px;">📩 1. ENVIAR ERRATA POR E-MAIL (GESTÃO)</a>', unsafe_allow_html=True)
+                                st.markdown(f'<a href="{url_errata_zap}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold;">💬 2. ENVIAR ERRATA NO WHATSAPP (GRUPO IQ)</a>', unsafe_allow_html=True)
 
-        with tab_h2:
+        else:
             try:
                 ws_hinst = planilha_hist.worksheet("Vistoria_Instalacao")
                 dados_hinst = ws_hinst.get_all_records()
@@ -1529,42 +1536,48 @@ else:
                 if perfil_usuario != 'GESTÃO':
                     df_hinst = df_hinst[df_hinst['RE_IQ'].astype(str).str.strip().str.replace('.0','') == re_logado_str]
                 
-                st.dataframe(df_hinst, hide_index=True, use_container_width=True)
-                st.write("")
+                if busca_tec_nome.strip():
+                    df_hinst = df_hinst[df_hinst['Nome_Tecnico'].astype(str).str.contains(busca_tec_nome, case=False, na=False)]
                 
-                id_busca_inst = st.selectbox("Selecione o ID da Instalação para Editar/Reenviar:", ["Selecione..."] + df_hinst['ID_Vistoria'].astype(str).tolist(), key="sel_ed_inst")
-                
-                if id_busca_inst != "Selecione...":
-                    reg_inst_sel = df_hinst[df_hinst['ID_Vistoria'].astype(str) == id_busca_inst].iloc[0]
+                if df_hinst.empty:
+                    st.warning("Nenhum registro encontrado para este técnico.")
+                else:
+                    st.dataframe(df_hinst, hide_index=True, use_container_width=True)
+                    st.write("")
                     
-                    with st.form("form_edita_inst"):
-                        st.subheader(f"Editando Auditoria de Instalação ID: {id_busca_inst}")
-                        edit_tec_i = st.text_input("Técnico", value=str(reg_inst_sel.get('Nome_Tecnico', '')))
-                        edit_contrato = st.text_input("Contrato", value=str(reg_inst_sel.get('Contrato', '')))
-                        edit_erros = st.text_area("Erros de Instalação", value=str(reg_inst_sel.get('Erros_Instalacao', '')))
-                        edit_obs_i = st.text_area("Observações", value=str(reg_inst_sel.get('Observacao', '')))
+                    id_busca_inst = st.selectbox("Selecione o ID da Instalação para Editar/Reenviar:", ["Selecione..."] + df_hinst['ID_Vistoria'].astype(str).tolist(), key="sel_ed_inst")
+                    
+                    if id_busca_inst != "Selecione...":
+                        reg_inst_sel = df_hinst[df_hinst['ID_Vistoria'].astype(str) == id_busca_inst].iloc[0]
                         
-                        btn_salvar_edicao_inst = st.form_submit_button("Salvar Edição e Gerar Errata (E-mail + WhatsApp)", type="primary")
-                        
-                        if btn_salvar_edicao_inst:
-                            cell_id_i = ws_hinst.find(id_busca_inst)
-                            if cell_id_i:
-                                row_ii = cell_id_i.row
-                                ws_hinst.update_cell(row_ii, 7, edit_contrato)
-                                ws_hinst.update_cell(row_ii, 8, edit_erros)
-                                ws_hinst.update_cell(row_ii, 9, edit_obs_i)
+                        with st.form("form_edita_inst"):
+                            st.subheader(f"Editando Auditoria de Instalação ID: {id_busca_inst}")
+                            edit_tec_i = st.text_input("Técnico", value=str(reg_inst_sel.get('Nome_Tecnico', '')))
+                            edit_contrato = st.text_input("Contrato", value=str(reg_inst_sel.get('Contrato', '')))
+                            edit_erros = st.text_area("Erros de Instalação", value=str(reg_inst_sel.get('Erros_Instalacao', '')))
+                            edit_obs_i = st.text_area("Observações", value=str(reg_inst_sel.get('Observacao', '')))
                             
-                            links_fi = str(reg_inst_sel.get('Links_Fotos', ''))
+                            btn_salvar_edicao_inst = st.form_submit_button("Salvar Edição e Gerar Errata", type="primary")
                             
-                            msg_errata_zap_i = f"⚠️ *[ERRATA - RELATÓRIO EDITADO]*\n*AUDITORIA DE INSTALAÇÃO - TOTALE ABC*\n*ID da Vistoria:* {id_busca_inst}\n\n*Contrato:* {edit_contrato}\n*Técnico:* {edit_tec_i}\n\n*Falhas Encontradas (Atualizadas):*\n- {edit_erros}\n\n*Observações:* {edit_obs_i}\n\n*Evidências (Fotos):*\n{links_fi}"
-                            url_errata_zap_i = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_errata_zap_i)}"
-                            
-                            corpo_errata_email_i = f"⚠️ [ERRATA - RELATÓRIO EDITADO]\nAUDITORIA DE INSTALAÇÃO\nID da Vistoria: {id_busca_inst}\nContrato: {edit_contrato}\nTécnico: {edit_tec_i}\n\nFalhas Encontradas (Atualizadas):\n- {edit_erros}\n\nObservações:\n{edit_obs_i}\n\nEVIDÊNCIA FOTO:\n{links_fi}"
-                            url_errata_email_i = f"mailto:{DESTINATARIOS_INSTALACAO}?subject=ERRATA - Auditoria [ID {id_busca_inst}] - Contrato {edit_contrato} - {edit_tec_i}&body={urllib.parse.quote(corpo_errata_email_i)}"
-                            
-                            st.success("✅ Auditoria atualizada com sucesso! Utilize os links abaixo para enviar a ERRATA:")
-                            st.markdown(f'<a href="{url_errata_email_i}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #007BFF; border-radius: 8px; text-decoration: none; font-weight: bold; margin-bottom: 10px;">📩 1. ENVIAR ERRATA POR E-MAIL (GESTÃO)</a>', unsafe_allow_html=True)
-                            st.markdown(f'<a href="{url_errata_zap_i}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold;">💬 2. ENVIAR ERRATA NO WHATSAPP (GRUPO IQ)</a>', unsafe_allow_html=True)
+                            if btn_salvar_edicao_inst:
+                                cell_id_i = ws_hinst.find(id_busca_inst)
+                                if cell_id_i:
+                                    row_ii = cell_id_i.row
+                                    ws_hinst.update_cell(row_ii, 7, edit_contrato)
+                                    ws_hinst.update_cell(row_ii, 8, edit_erros)
+                                    ws_hinst.update_cell(row_ii, 9, edit_obs_i)
+                                
+                                links_fi = str(reg_inst_sel.get('Links_Fotos', ''))
+                                
+                                msg_errata_zap_i = f"⚠️ *[ERRATA - RELATÓRIO EDITADO]*\n*AUDITORIA DE INSTALAÇÃO - TOTALE ABC*\n*ID da Vistoria:* {id_busca_inst}\n\n*Contrato:* {edit_contrato}\n*Técnico:* {edit_tec_i}\n\n*Falhas Encontradas (Atualizadas):*\n- {edit_erros}\n\n*Observações:* {edit_obs_i}\n\n*Evidências (Fotos):*\n{links_fi}"
+                                url_errata_zap_i = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_errata_zap_i)}"
+                                
+                                corpo_errata_email_i = f"⚠️ [ERRATA - RELATÓRIO EDITADO]\nAUDITORIA DE INSTALAÇÃO\nID da Vistoria: {id_busca_inst}\nContrato: {edit_contrato}\nTécnico: {edit_tec_i}\n\nFalhas Encontradas (Atualizadas):\n- {edit_erros}\n\nObservações:\n{edit_obs_i}\n\nEVIDÊNCIA FOTO:\n{links_fi}"
+                                url_errata_email_i = f"mailto:{DESTINATARIOS_INSTALACAO}?subject=ERRATA - Auditoria [ID {id_busca_inst}] - Contrato {edit_contrato} - {edit_tec_i}&body={urllib.parse.quote(corpo_errata_email_i)}"
+                                
+                                st.success("✅ Auditoria atualizada com sucesso! Utilize os links abaixo para enviar a ERRATA:")
+                                st.markdown(f'<a href="{url_errata_email_i}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #007BFF; border-radius: 8px; text-decoration: none; font-weight: bold; margin-bottom: 10px;">📩 1. ENVIAR ERRATA POR E-MAIL (GESTÃO)</a>', unsafe_allow_html=True)
+                                st.markdown(f'<a href="{url_errata_zap_i}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold;">💬 2. ENVIAR ERRATA NO WHATSAPP (GRUPO IQ)</a>', unsafe_allow_html=True)
 
     # --- PÁGINA 5: RELATÓRIOS E EXPORTAÇÃO (EXCLUSIVO PARA GESTÃO) ---
     elif st.session_state['pagina_atual'] == "Relatorios":
