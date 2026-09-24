@@ -611,7 +611,6 @@ dados_iqs, dados_completos, meses_info = carregar_dados()
 
 if meses_info:
     lista_meses_nomes = [m['mes_nome'] for m in meses_info]
-    # Mês padrão sugerido (penúltimo se houver mais de um, caso contrário o último)
     if len(meses_info) >= 2:
         mes_acompanhamento_padrao = meses_info[-2]['mes_nome']
     else:
@@ -657,6 +656,10 @@ else:
     if 'agenda_matinal' not in st.session_state:
         st.session_state['agenda_matinal'] = carregar_agenda_matinal_sheets()
 
+    # Inicializa o mês padrão global para a Gestão se não existir
+    if 'mes_referencia_global' not in st.session_state:
+        st.session_state['mes_referencia_global'] = mes_acompanhamento_padrao
+
     # --- FILTRO LATERAL ÚNICO E GLOBAL ---
     if perfil_usuario == 'GESTÃO':
         st.sidebar.divider()
@@ -665,6 +668,12 @@ else:
         opcoes_iq = ["Visão Geral (Todos)"] + [f"{row['re_iq']} - {row['nome_iq']}" for _, row in lista_iqs.iterrows()]
         
         iq_selecionado = st.sidebar.selectbox("Visualizar painel do IQ:", opcoes_iq)
+        
+        # SELETOR GLOBAL DE MÊS PARA O GESTOR DEFINIR O PADRÃO DE TODOS OS IQS
+        st.sidebar.divider()
+        st.sidebar.subheader("📅 Mês Padrão (Monitoramento)")
+        idx_mes_atual = lista_meses_nomes.index(st.session_state['mes_referencia_global']) if st.session_state['mes_referencia_global'] in lista_meses_nomes else 0
+        st.session_state['mes_referencia_global'] = st.sidebar.selectbox("Definir mês para todos os IQs:", lista_meses_nomes, index=idx_mes_atual)
         
         if "Visão Geral" in iq_selecionado:
             re_alvo_str = None
@@ -717,6 +726,16 @@ else:
             registrar_log_acesso(re_logado_str, st.session_state['nome_iq'], "LOGOUT", "Sistema")
             st.session_state['logado'] = False
             st.rerun()
+
+    # Mês de referência ativo para o monitoramento pendente
+    mes_monitoramento_escolhido = st.session_state['mes_referencia_global']
+    aba_monitoramento_escolhida = next((m['nome_aba'] for m in meses_info if m['mes_nome'] == mes_monitoramento_escolhido), None)
+    col_re_mes_escolhido = f're_iq_responsavel_{mes_monitoramento_escolhido}'
+
+    if re_alvo_str and col_re_mes_escolhido in dados_completos.columns:
+        equipe_vigente = dados_completos[dados_completos[col_re_mes_escolhido].astype(str).str.replace('.0', '') == str(re_alvo_str)]
+    else:
+        equipe_vigente = dados_completos
 
     # --- PÁGINA: ALTERAR SENHA ---
     if st.session_state['pagina_atual'] == "AlterarSenha":
@@ -880,22 +899,12 @@ else:
             st.markdown('<div class="metric-card-orange">', unsafe_allow_html=True)
             st.markdown('<div class="metric-title">⚠️ Monitoramento Pendente</div>', unsafe_allow_html=True)
             
-            # SELETOR DE MÊS DE REFERÊNCIA PARA MONITORAMENTO PENDENTE
-            idx_default_mes = lista_meses_nomes.index(mes_acompanhamento_padrao) if mes_acompanhamento_padrao in lista_meses_nomes else 0
-            mes_monitoramento_escolhido = st.selectbox("📅 Mês de Referência (Monitoramento):", lista_meses_nomes, index=idx_default_mes, key="sel_mes_monitoramento")
+            st.markdown(f'<div class="metric-value" style="font-size:22px;">Referência Global: {mes_monitoramento_escolhido}</div>', unsafe_allow_html=True)
             
-            aba_monitoramento_escolhida = next((m['nome_aba'] for m in meses_info if m['mes_nome'] == mes_monitoramento_escolhido), None)
-            col_re_mes_escolhido = f're_iq_responsavel_{mes_monitoramento_escolhido}'
-            
-            if re_alvo_str and col_re_mes_escolhido in dados_completos.columns:
-                equipe_monitoramento_df = dados_completos[dados_completos[col_re_mes_escolhido].astype(str).str.replace('.0', '') == str(re_alvo_str)]
-            else:
-                equipe_monitoramento_df = dados_completos
-
-            if mes_monitoramento_escolhido and mes_monitoramento_escolhido in equipe_monitoramento_df.columns:
-                pendentes_hoje = len(equipe_monitoramento_df[(equipe_monitoramento_df[mes_monitoramento_escolhido] == 'NÃO') & (equipe_monitoramento_df[f'ACOMPANHAMENTO_{mes_monitoramento_escolhido}'] != 'SIM')])
+            if mes_monitoramento_escolhido and mes_monitoramento_escolhido in equipe_vigente.columns:
+                pendentes_hoje = len(equipe_vigente[(equipe_vigente[mes_monitoramento_escolhido] == 'NÃO') & (equipe_vigente[f'ACOMPANHAMENTO_{mes_monitoramento_escolhido}'] != 'SIM')])
                 st.markdown(f'<div class="metric-value">{pendentes_hoje} Técnicos</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="metric-sub">Referência: {mes_monitoramento_escolhido}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="metric-sub">Mês padronizado pela Gestão</div>', unsafe_allow_html=True)
             else:
                 st.markdown('<div class="metric-value">N/A</div>', unsafe_allow_html=True)
                 st.markdown('<div class="metric-sub">Sem dados para o mês</div>', unsafe_allow_html=True)
@@ -972,7 +981,7 @@ else:
                 st.info("ℹ️ Selecione um IQ específico no menu lateral esquerdo para visualizar e gerenciar as monitorias pendentes da equipe.")
                 tecnicos_nao_cert = pd.DataFrame()
             else:
-                tecnicos_nao_cert = equipe_monitoramento_df[(equipe_monitoramento_df[mes_monitoramento_escolhido] == 'NÃO') & (equipe_monitoramento_df[f'ACOMPANHAMENTO_{mes_monitoramento_escolhido}'] != 'SIM')]
+                tecnicos_nao_cert = equipe_vigente[(equipe_vigente[mes_monitoramento_escolhido] == 'NÃO') & (equipe_vigente[f'ACOMPANHAMENTO_{mes_monitoramento_escolhido}'] != 'SIM')]
             
             if tecnicos_nao_cert.empty:
                 st.success(f"Nenhum técnico pendente encontrado para o filtro selecionado no mês de {mes_monitoramento_escolhido}.")
@@ -1331,8 +1340,8 @@ else:
                                     links_fotos=links_fotos
                                 )
                                 
-                                if aba_acompanhamento:
-                                    atualizar_celula_especifica(aba_acompanhamento, tec_login, 'ACOMPANHAMENTO', 'SIM')
+                                if aba_monitoramento_escolhida:
+                                    atualizar_celula_especifica(aba_monitoramento_escolhida, tec_login, 'ACOMPANHAMENTO', 'SIM')
                                     
                                 del st.session_state['agenda_matinal'][tec_atual]
                                 salvar_agenda_no_sheets(st.session_state['agenda_matinal'])
@@ -1618,7 +1627,7 @@ else:
                     df_inst = pd.DataFrame()
                     
                 if df_inst.empty:
-                    st.info("Nenhum registro encontrado na abaVistoria_Instalacao.")
+                    st.info("Nenhum registro encontrado na aba Vistoria_Instalacao.")
                 else:
                     st.dataframe(df_inst, hide_index=True, use_container_width=True)
                     excel_inst = exportar_para_excel(df_inst, "vistorias_instalacao.xlsx")
