@@ -127,6 +127,7 @@ if 'logado' not in st.session_state: st.session_state['logado'] = False
 if 'pagina_atual' not in st.session_state: st.session_state['pagina_atual'] = "Dashboard"
 if 'email_pronto' not in st.session_state: st.session_state['email_pronto'] = None
 if 'zap_pronto' not in st.session_state: st.session_state['zap_pronto'] = None
+if 'zap_matinal_pronto' not in st.session_state: st.session_state['zap_matinal_pronto'] = None
 if 'zap_agenda_pronto' not in st.session_state: st.session_state['zap_agenda_pronto'] = None
 if 'gcal_status' not in st.session_state: st.session_state['gcal_status'] = None
 if 'tec_selecionado_atalho' not in st.session_state: st.session_state['tec_selecionado_atalho'] = None
@@ -1059,7 +1060,7 @@ else:
                     base_historico = dados_completos
             else:
                 if col_re_hist in dados_completos.columns:
-                    base_historico = dados_completos[dados_completos[col_re_hist].astype(str) == str(re_logado_str)]
+                    base_historico = dados_completos[dados_completos[col_re_hist].astype(str).str.replace('.0', '') == str(re_logado_str)]
                 else:
                     base_historico = pd.DataFrame()
 
@@ -1185,7 +1186,16 @@ else:
         with tab_executar:
             agenda_do_usuario = {tec: info for tec, info in st.session_state['agenda_matinal'].items() if str(info.get('re_iq')) == str(re_logado_str) or perfil_usuario == 'GESTÃO'}
             
-            if st.session_state['email_pronto']:
+            if st.session_state.get('zap_matinal_pronto'):
+                st.success("✅ Vistoria gravada com sucesso e pronta para envio!")
+                st.markdown(f'<a href="{st.session_state["zap_matinal_pronto"]}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">💬 ENVIAR RELATÓRIO NO WHATSAPP (GRUPO IQ)</a>', unsafe_allow_html=True)
+                st.write("")
+                if st.button("🧹 Limpar Tela e Voltar para Agenda"):
+                    st.session_state['zap_matinal_pronto'] = None
+                    st.session_state['email_pronto'] = None
+                    st.session_state['tec_selecionado_atalho'] = None
+                    st.rerun()
+            elif st.session_state['email_pronto']:
                 st.success("✅ Vistoria gravada no Google Sheets e evidência armazenada no Cloudinary!")
                 st.markdown(f'<a href="{st.session_state["email_pronto"]}" target="_blank" style="display: inline-block; padding: 0.8em 1.5em; color: white; background-color: #007BFF; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">📩 ABRIR E-MAIL COM O RELATÓRIO</a>', unsafe_allow_html=True)
                 st.write("")
@@ -1269,13 +1279,13 @@ else:
                                     faltas.append(item)
                             
                             st.divider()
-                            st.write("**Confirmação de Posse dos Itens Obrigatórios:**")
-                            if not cols_epi[0].checkbox("Possui Capacete e Carneira?", key="posse_cap"): faltas.append("Capacete/Carneira não ticado como presente")
-                            if not cols_epi[1].checkbox("Possui Cinto de Segurança?", key="posse_cin"): faltas.append("Cinto não ticado como presente")
-                            if not cols_epi[0].checkbox("Possui Talabarte?", key="posse_tal"): faltas.append("Talabarte não ticado como presente")
-                            if not cols_epi[1].checkbox("Possui Luva Pigmentada?", key="posse_lvp"): faltas.append("Luva Pigmentada não ticado como presente")
-                            if not cols_epi[0].checkbox("Possui Luva Vaqueta?", key="posse_lvv"): faltas.append("Luva Vaqueta não ticado como presente")
-                            if not cols_epi[1].checkbox("Possui Protetor Solar?", key="posse_pro"): faltas.append("Protetor Solar não ticado como presente")
+                            st.write("**Confirmação de ITENS FALTANTES (Marque APENAS se o técnico NÃO tiver):**")
+                            if cols_epi[0].checkbox("Capacete/Carneira ausente ou irregular?", key="posse_cap"): faltas.append("Capacete/Carneira ausente ou irregular")
+                            if cols_epi[1].checkbox("Cinto de Segurança ausente ou irregular?", key="posse_cin"): faltas.append("Cinto ausente ou irregular")
+                            if cols_epi[0].checkbox("Talabarte ausente ou irregular?", key="posse_tal"): faltas.append("Talabarte ausente ou irregular")
+                            if cols_epi[1].checkbox("Luva Pigmentada ausente ou irregular?", key="posse_lvp"): faltas.append("Luva Pigmentada ausente ou irregular")
+                            if cols_epi[0].checkbox("Luva Vaqueta ausente ou irregular?", key="posse_lvv"): faltas.append("Luva Vaqueta ausente ou irregular")
+                            if cols_epi[1].checkbox("Protetor Solar ausente ou vencido?", key="posse_pro"): faltas.append("Protetor Solar ausente ou vencido")
 
                         renderizar_itens_matinal(ITENS_MATINAL["🧹 Asseio"], t_asseio)
                         
@@ -1287,10 +1297,10 @@ else:
                                     faltas.append(item)
                                     
                             st.divider()
-                            st.write("**Confirmação de Uniformes:**")
-                            if not cols_sis[0].checkbox("Possui Uniforme - Camisa?", key="posse_cam"): faltas.append("Uniforme Camisa não ticado")
-                            if not cols_sis[1].checkbox("Possui Uniforme - Calça?", key="posse_calc"): faltas.append("Uniforme Calça não ticado")
-                            if not cols_sis[0].checkbox("Possui Uniforme - Jaqueta?", key="posse_jaq"): faltas.append("Uniforme Jaqueta não ticado")
+                            st.write("**Confirmação de UNIFORMES FALTANTES (Marque APENAS se o técnico NÃO tiver):**")
+                            if cols_sis[0].checkbox("Uniforme - Camisa ausente?", key="posse_cam"): faltas.append("Uniforme Camisa ausente")
+                            if cols_sis[1].checkbox("Uniforme - Calça ausente?", key="posse_calc"): faltas.append("Uniforme Calça ausente")
+                            if cols_sis[0].checkbox("Uniforme - Jaqueta ausente?", key="posse_jaq"): faltas.append("Uniforme Jaqueta ausente")
 
                         renderizar_itens_matinal(ITENS_MATINAL["🚗 Veículo"], t_veic)
 
@@ -1300,7 +1310,7 @@ else:
 
                         resumo_faltas = " / ".join(faltas) if faltas else "Todas as ferramentas e condições em conformidade."
                         
-                        if st.button("Gravar Vistoria e Gerar E-mail", type="primary"):
+                        if st.button("Gravar Vistoria e Gerar Disparos", type="primary"):
                             if not fotos_upload:
                                 st.warning("⚠️ O envio de ao menos uma foto é obrigatório para comprovação.")
                             elif not (placa_veiculo.strip() and lote_capacete.strip() and venc_carneira.strip() and lote_cinto.strip() and lote_talabarte.strip() and lote_luva_pig.strip() and lote_luva_vaq.strip() and venc_protetor.strip() and tam_camisa.strip() and tam_calca.strip() and tam_jaqueta.strip()):
@@ -1345,9 +1355,14 @@ else:
                                 salvar_agenda_no_sheets(st.session_state['agenda_matinal'])
                                 
                                 fotos_txt = "\n".join(links_fn for links_fn in links_fotos) if 'links_fotos' in locals() else ""
+                                
+                                msg_whatsapp_mat = f"*RELATÓRIO DE MATINAL (IVM 2026)*\n*ID da Vistoria:* {vistoria_id}\n*Técnico:* {tec_atual}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Placa do Veículo:* {placa_veiculo}\n*Itens Faltantes / Irregulares:*\n- {resumo_faltas}\n\n*Observações:* {obs_final}\n\n*Evidências (Fotos):*\n{fotos_txt}"
+                                url_zap_mat = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_whatsapp_mat)}"
+
                                 corpo_email = f"RELATÓRIO DE MATINAL (IVM 2026)\nID da Vistoria: {vistoria_id}\nRE: {tec_re}\nTécnico: {tec_atual}\nIQ: {st.session_state['nome_iq']}\n\nVEÍCULOS, LOTES, VALIDADES E TAMANHOS:\n- Placa do Veículo: {placa_veiculo}\n- Lote Capacete: {lote_capacete}\n- Vencimento Carneira: {venc_carneira}\n- Lote Cinto: {lote_cinto}\n- Lote Talabarte: {lote_talabarte}\n- Lote Luva Pigmentada: {lote_luva_pig}\n- Lote Luva Vaqueta: {lote_luva_vaq}\n- Venc. Protetor Solar: {venc_protetor}\n- Tamanho Camisa: {tam_camisa}\n- Tamanho Calça: {tam_calca}\n- Tamanho Jaqueta: {tam_jaqueta}\n\nITENS FALTANTES/IRREGULARES:\n- {resumo_faltas}\n\nOBSERVAÇÕES:\n{obs_final}\n\nEVIDÊNCIAS FOTOS:\n{fotos_txt}"
                                 url_email = f"mailto:{DESTINATARIOS_MATINAL}?subject=Relatorio Matinal [ID {vistoria_id}] - RE {tec_re} - {tec_atual}&body={urllib.parse.quote(corpo_email)}"
                                 
+                                st.session_state['zap_matinal_pronto'] = url_zap_mat
                                 st.session_state['email_pronto'] = url_email
                                 st.session_state['tec_selecionado_atalho'] = None
                                 st.rerun()
