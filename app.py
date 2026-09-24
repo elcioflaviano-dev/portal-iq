@@ -610,25 +610,15 @@ def exportar_para_excel(df, nome_arquivo):
 dados_iqs, dados_completos, meses_info = carregar_dados()
 
 if meses_info:
-    # Lógica inteligente para definir o mês de acompanhamento (mês anterior padrão, ex: agosto em setembro, desde que exista)
-    meses_disponiveis_nomes = [m['mes_nome'] for m in meses_info]
-    mes_atual_str = datetime.now(fuso_brasil).strftime('%B').upper() # Ex: SEPTEMBER
-    
-    # Tenta pegar o mês anterior na lista se houver
+    lista_meses_nomes = [m['mes_nome'] for m in meses_info]
+    # Mês padrão sugerido (penúltimo se houver mais de um, caso contrário o último)
     if len(meses_info) >= 2:
-        mes_acompanhamento_info = meses_info[-2]
-        mes_acompanhamento = mes_acompanhamento_info['mes_nome']
-        aba_acompanhamento = mes_acompanhamento_info['nome_aba']
+        mes_acompanhamento_padrao = meses_info[-2]['mes_nome']
     else:
-        mes_acompanhamento_info = meses_info[-1]
-        mes_acompanhamento = mes_acompanhamento_info['mes_nome']
-        aba_acompanhamento = mes_acompanhamento_info['nome_aba']
-
-    mes_vigente_info = meses_info[-1]
-    mes_vigente = mes_vigente_info['mes_nome']
-    aba_mes_vigente_nome = mes_vigente_info['nome_aba']
+        mes_acompanhamento_padrao = meses_info[-1]['mes_nome']
 else:
-    mes_vigente, aba_acompanhamento, mes_acompanhamento, aba_mes_vigente_nome = None, None, None, None
+    lista_meses_nomes = ['AGOSTO']
+    mes_acompanhamento_padrao = 'AGOSTO'
 
 df_ctrl = carregar_controle_iq()
 
@@ -667,8 +657,6 @@ else:
     if 'agenda_matinal' not in st.session_state:
         st.session_state['agenda_matinal'] = carregar_agenda_matinal_sheets()
 
-    col_re_iq_mes_acomp = f're_iq_responsavel_{mes_acompanhamento}' if mes_acompanhamento else None
-
     # --- FILTRO LATERAL ÚNICO E GLOBAL ---
     if perfil_usuario == 'GESTÃO':
         st.sidebar.divider()
@@ -679,20 +667,11 @@ else:
         iq_selecionado = st.sidebar.selectbox("Visualizar painel do IQ:", opcoes_iq)
         
         if "Visão Geral" in iq_selecionado:
-            equipe_vigente = dados_completos
             re_alvo_str = None
         else:
             re_alvo_str = iq_selecionado.split(" - ")[0].strip()
-            if col_re_iq_mes_acomp and col_re_iq_mes_acomp in dados_completos.columns:
-                equipe_vigente = dados_completos[dados_completos[col_re_iq_mes_acomp].astype(str).str.replace('.0', '') == str(re_alvo_str)]
-            else:
-                equipe_vigente = dados_completos
     else:
         re_alvo_str = re_logado_str
-        if col_re_iq_mes_acomp and col_re_iq_mes_acomp in dados_completos.columns:
-            equipe_vigente = dados_completos[dados_completos[col_re_iq_mes_acomp].astype(str).str.replace('.0', '') == str(re_logado_str)]
-        else:
-            equipe_vigente = pd.DataFrame()
 
     with st.sidebar:
         if os.path.exists("novo-logo-totale.png"): st.image(Image.open("novo-logo-totale.png"), use_container_width=True)
@@ -828,7 +807,7 @@ else:
 
         st.divider()
 
-        # --- HORAS DE MONITORIA RPPA (CONTROLADAS PELO FILTRO LATERAL) ---
+        # --- HORAS DE MONITORIA RPPA ---
         re_alvo_horas = re_alvo_str if (perfil_usuario == 'GESTÃO' and re_alvo_str) else (re_logado_str if perfil_usuario != 'GESTÃO' else None)
         
         meta_alvo, realizado_alvo = 60, "0"
@@ -901,13 +880,25 @@ else:
             st.markdown('<div class="metric-card-orange">', unsafe_allow_html=True)
             st.markdown('<div class="metric-title">⚠️ Monitoramento Pendente</div>', unsafe_allow_html=True)
             
-            if mes_acompanhamento:
-                pendentes_hoje = len(equipe_vigente[(equipe_vigente[mes_acompanhamento] == 'NÃO') & (equipe_vigente[f'ACOMPANHAMENTO_{mes_acompanhamento}'] != 'SIM')])
+            # SELETOR DE MÊS DE REFERÊNCIA PARA MONITORAMENTO PENDENTE
+            idx_default_mes = lista_meses_nomes.index(mes_acompanhamento_padrao) if mes_acompanhamento_padrao in lista_meses_nomes else 0
+            mes_monitoramento_escolhido = st.selectbox("📅 Mês de Referência (Monitoramento):", lista_meses_nomes, index=idx_default_mes, key="sel_mes_monitoramento")
+            
+            aba_monitoramento_escolhida = next((m['nome_aba'] for m in meses_info if m['mes_nome'] == mes_monitoramento_escolhido), None)
+            col_re_mes_escolhido = f're_iq_responsavel_{mes_monitoramento_escolhido}'
+            
+            if re_alvo_str and col_re_mes_escolhido in dados_completos.columns:
+                equipe_monitoramento_df = dados_completos[dados_completos[col_re_mes_escolhido].astype(str).str.replace('.0', '') == str(re_alvo_str)]
+            else:
+                equipe_monitoramento_df = dados_completos
+
+            if mes_monitoramento_escolhido and mes_monitoramento_escolhido in equipe_monitoramento_df.columns:
+                pendentes_hoje = len(equipe_monitoramento_df[(equipe_monitoramento_df[mes_monitoramento_escolhido] == 'NÃO') & (equipe_monitoramento_df[f'ACOMPANHAMENTO_{mes_monitoramento_escolhido}'] != 'SIM')])
                 st.markdown(f'<div class="metric-value">{pendentes_hoje} Técnicos</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="metric-sub">Referência: {mes_acompanhamento}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="metric-sub">Referência: {mes_monitoramento_escolhido}</div>', unsafe_allow_html=True)
             else:
                 st.markdown('<div class="metric-value">N/A</div>', unsafe_allow_html=True)
-                st.markdown('<div class="metric-sub">Sem base mensal</div>', unsafe_allow_html=True)
+                st.markdown('<div class="metric-sub">Sem dados para o mês</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
         st.divider()
@@ -939,8 +930,8 @@ else:
 
         st.divider()
         
-        # --- ACOMPANHAMENTO PENDENTE FILTRADO PELO FILTRO LATERAL ---
-        st.subheader(f"⚠️ Acompanhamento Pendente (Referência: {mes_acompanhamento or 'N/A'})")
+        # --- ACOMPANHAMENTO PENDENTE FILTRADO ---
+        st.subheader(f"⚠️ Acompanhamento Pendente (Referência: {mes_monitoramento_escolhido})")
 
         # --- SEÇÃO EXCLUSIVA DE GESTÃO: ATRIBUIR TÉCNICO A IQ ---
         if perfil_usuario == 'GESTÃO':
@@ -966,7 +957,7 @@ else:
                         tec_row_sel = dados_completos[dados_completos['nome'] == tec_escolhido]
                         if not tec_row_sel.empty:
                             login_tec_sel = tec_row_sel.iloc[0]['login']
-                            aba_alvo_mes = next((m['nome_aba'] for m in meses_info if m['mes_nome'] == mes_atribuicao), aba_acompanhamento)
+                            aba_alvo_mes = next((m['nome_aba'] for m in meses_info if m['mes_nome'] == mes_atribuicao), aba_monitoramento_escolhida)
                             
                             sucesso_atrib, msg_atrib = atribuir_tecnico_a_iq(aba_alvo_mes, login_tec_sel, re_novo_iq, mes_atribuicao)
                             if sucesso_atrib:
@@ -976,29 +967,28 @@ else:
                             else:
                                 st.error(f"Erro: {msg_atrib}")
 
-        if mes_acompanhamento:
+        if mes_monitoramento_escolhido:
             if perfil_usuario == 'GESTÃO' and not re_alvo_str:
                 st.info("ℹ️ Selecione um IQ específico no menu lateral esquerdo para visualizar e gerenciar as monitorias pendentes da equipe.")
                 tecnicos_nao_cert = pd.DataFrame()
             else:
-                tecnicos_nao_cert = equipe_vigente[(equipe_vigente[mes_acompanhamento] == 'NÃO') & (equipe_vigente[f'ACOMPANHAMENTO_{mes_acompanhamento}'] != 'SIM')]
+                tecnicos_nao_cert = equipe_monitoramento_df[(equipe_monitoramento_df[mes_monitoramento_escolhido] == 'NÃO') & (equipe_monitoramento_df[f'ACOMPANHAMENTO_{mes_monitoramento_escolhido}'] != 'SIM')]
             
             if tecnicos_nao_cert.empty:
-                st.success(f"Nenhum técnico pendente encontrado para o filtro selecionado no mês de {mes_acompanhamento}.")
+                st.success(f"Nenhum técnico pendente encontrado para o filtro selecionado no mês de {mes_monitoramento_escolhido}.")
             else:
                 for index, row in tecnicos_nao_cert.iterrows():
                     tec_login = row['login']
                     tec_nome = row['nome']
-                    col_re_mes_acomp = f're_iq_responsavel_{mes_acompanhamento}'
-                    iq_resp = row.get(col_re_mes_acomp, '')
+                    iq_resp = row.get(col_re_mes_escolhido, '')
                     
                     nome_iq_resp = iq_resp
                     match_iq = dados_iqs[dados_iqs['re_iq'] == str(iq_resp)]
                     if not match_iq.empty: nome_iq_resp = match_iq.iloc[0]['nome_iq']
 
-                    m1_val = str(row.get(f'MONIT_1_{mes_acompanhamento}', '')).upper() == 'SIM'
-                    m2_val = str(row.get(f'MONIT_2_{mes_acompanhamento}', '')).upper() == 'SIM'
-                    m3_val = str(row.get(f'MONIT_3_{mes_acompanhamento}', '')).upper() == 'SIM'
+                    m1_val = str(row.get(f'MONIT_1_{mes_monitoramento_escolhido}', '')).upper() == 'SIM'
+                    m2_val = str(row.get(f'MONIT_2_{mes_monitoramento_escolhido}', '')).upper() == 'SIM'
+                    m3_val = str(row.get(f'MONIT_3_{mes_monitoramento_escolhido}', '')).upper() == 'SIM'
 
                     with st.form(key=f"form_monit_{tec_login}"):
                         c_info, c_m1, c_m2, c_m3, c_btn = st.columns([3, 1, 1, 1, 1])
@@ -1015,12 +1005,12 @@ else:
                             val_m2 = 'SIM' if f_m2 else 'NÃO'
                             val_m3 = 'SIM' if f_m3 else 'NÃO'
                             
-                            atualizar_celula_especifica(aba_acompanhamento, tec_login, 'MONIT_1', val_m1)
-                            atualizar_celula_especifica(aba_acompanhamento, tec_login, 'MONIT_2', val_m2)
-                            atualizar_celula_especifica(aba_acompanhamento, tec_login, 'MONIT_3', val_m3)
+                            atualizar_celula_especifica(aba_monitoramento_escolhida, tec_login, 'MONIT_1', val_m1)
+                            atualizar_celula_especifica(aba_monitoramento_escolhida, tec_login, 'MONIT_2', val_m2)
+                            atualizar_celula_especifica(aba_monitoramento_escolhida, tec_login, 'MONIT_3', val_m3)
                             
                             if f_m1 and f_m2 and f_m3:
-                                atualizar_celula_especifica(aba_acompanhamento, tec_login, 'ACOMPANHAMENTO', 'SIM')
+                                atualizar_celula_especifica(aba_monitoramento_escolhida, tec_login, 'ACOMPANHAMENTO', 'SIM')
                             
                             st.success(f"Monitorias de {tec_nome} salvas com sucesso!")
                             st.rerun()
@@ -1619,9 +1609,6 @@ else:
                         type="primary"
                     )
                     
-            with tab_exp1: # Correção de aba
-                pass
-                    
             with tab_exp2:
                 st.subheader("Relatório de Auditorias de Instalação")
                 try:
@@ -1631,14 +1618,14 @@ else:
                     df_inst = pd.DataFrame()
                     
                 if df_inst.empty:
-                    st.info("Nenhum registro encontrado na aba Vistoria_Instalacao.")
+                    st.info("Nenhum registro encontrado na abaVistoria_Instalacao.")
                 else:
                     st.dataframe(df_inst, hide_index=True, use_container_width=True)
                     excel_inst = exportar_para_excel(df_inst, "vistorias_instalacao.xlsx")
                     st.download_button(
                         label="📥 Baixar Excel (Instalação)",
                         data=excel_inst,
-                        file_name=f"Vistoria_Instalacao_{datetime.now(fuso_brasil).strftime('%Y-%m-%d')}.xlsx",
+                        file_name=f"Vistorias_Instalacao_{datetime.now(fuso_brasil).strftime('%Y-%m-%d')}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         type="primary"
                     )
