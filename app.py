@@ -351,7 +351,6 @@ def carregar_dados():
     todas_abas = [ws.title for ws in planilha.worksheets()]
     
     meses_info = []
-    # Ignora abas que não sejam de certificados mensais (exclui explicitamente outubro caso o usuário não queira considerar ou se baseia na regra estrita do mês anterior)
     abas_meses = [aba for aba in todas_abas if aba.upper() not in ['BASE_IQ', 'BASE_TECNICOS', 'CONTROLE_IQ', 'AGENDA_MATINAL', 'VISTORIAS_MATINAL', 'VISTORIA_INSTALACAO', 'LOG_ACESSOS', 'RESULTADO_MATINAL', 'OUTUBRO']]
 
     for aba in abas_meses:
@@ -612,7 +611,6 @@ dados_iqs, dados_completos, meses_info = carregar_dados()
 
 if meses_info:
     lista_meses_nomes = [m['mes_nome'] for m in meses_info]
-    # Lógica estrita: pega sempre o mês anterior (penúltimo da lista disponível, ou o último se só houver um)
     if len(meses_info) >= 2:
         mes_acompanhamento_padrao = meses_info[-2]['mes_nome']
     else:
@@ -670,7 +668,7 @@ else:
         
         iq_selecionado = st.sidebar.selectbox("Visualizar painel do IQ:", opcoes_iq)
         
-        # O GESTOR PODE SELECIONAR O MÊS PADRÃO PARA TODOS OS IQs
+        # O GESTOR SELECIONA O MÊS PADRÃO PARA TODOS OS IQs
         st.sidebar.divider()
         st.sidebar.subheader("📅 Mês Padrão (Monitoramento)")
         idx_mes_atual = lista_meses_nomes.index(st.session_state['mes_referencia_global']) if st.session_state['mes_referencia_global'] in lista_meses_nomes else 0
@@ -728,7 +726,6 @@ else:
             st.session_state['logado'] = False
             st.rerun()
 
-    # Mês de referência global ativo
     mes_monitoramento_escolhido = st.session_state['mes_referencia_global']
     aba_monitoramento_escolhida = next((m['nome_aba'] for m in meses_info if m['mes_nome'] == mes_monitoramento_escolhido), None)
     col_re_mes_escolhido = f're_iq_responsavel_{mes_monitoramento_escolhido}'
