@@ -668,7 +668,6 @@ else:
         
         iq_selecionado = st.sidebar.selectbox("Visualizar painel do IQ:", opcoes_iq)
         
-        # O GESTOR SELECIONA O MÊS PADRÃO PARA TODOS OS IQs
         st.sidebar.divider()
         st.sidebar.subheader("📅 Mês Padrão (Monitoramento)")
         idx_mes_atual = lista_meses_nomes.index(st.session_state['mes_referencia_global']) if st.session_state['mes_referencia_global'] in lista_meses_nomes else 0
@@ -1181,11 +1180,18 @@ else:
                 st.markdown(f'<a href="{st.session_state["zap_matinal_pronto"]}" target="_blank" style="display: block; text-align: center; padding: 0.9em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">💬 2. ENVIAR NO WHATSAPP (GRUPO IQ)</a>', unsafe_allow_html=True)
                 st.write("")
                 if st.button("✅ Já enviei no WhatsApp, Concluir Processo"):
+                    # Remove o técnico da agenda de forma definitiva e limpa os estados
+                    tec_concluido = st.session_state.get('tec_concluido_atual')
+                    if tec_concluido and tec_concluido in st.session_state['agenda_matinal']:
+                        del st.session_state['agenda_matinal'][tec_concluido]
+                        salvar_agenda_no_sheets(st.session_state['agenda_matinal'])
+
                     st.session_state['email_pronto'] = None
                     st.session_state['zap_matinal_pronto'] = None
                     st.session_state['email_matinal_enviado'] = False
                     st.session_state['zap_matinal_enviado'] = False
                     st.session_state['tec_selecionado_atalho'] = None
+                    st.session_state['tec_concluido_atual'] = None
                     st.rerun()
 
             else:
@@ -1339,8 +1345,8 @@ else:
                                 if aba_monitoramento_escolhida:
                                     atualizar_celula_especifica(aba_monitoramento_escolhida, tec_login, 'ACOMPANHAMENTO', 'SIM')
                                     
-                                del st.session_state['agenda_matinal'][tec_atual]
-                                salvar_agenda_no_sheets(st.session_state['agenda_matinal'])
+                                # Guarda o nome para remoção definitiva após os passos obrigatórios
+                                st.session_state['tec_concluido_atual'] = tec_atual
                                 
                                 fotos_txt = "\n".join(links_fn for links_fn in links_fotos) if 'links_fotos' in locals() else ""
                                 
@@ -1630,7 +1636,7 @@ else:
                     st.download_button(
                         label="📥 Baixar Excel (Instalação)",
                         data=excel_inst,
-                        file_name=f"Vistorias_Instalacao_{datetime.now(fuso_brasil).strftime('%Y-%m-%d')}.xlsx",
+                        file_name=f"Vistorias_Matinal_{datetime.now(fuso_brasil).strftime('%Y-%m-%d')}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         type="primary"
                     )
