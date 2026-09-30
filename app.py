@@ -797,80 +797,6 @@ else:
         st.title(titulo_painel)
         st.write("")
 
-        # --- RESUMO DE REPOSIÇÕES PENDENTES NA TELA INICIAL (TOTAL DE TÉCNICOS) ---
-        try:
-            planilha_dash_rep = conectar_planilha()
-            try:
-                ws_drep = planilha_dash_rep.worksheet("Controle_Reposicao")
-            except:
-                ws_drep = planilha_dash_rep.add_worksheet(title="Controle_Reposicao", rows=100, cols=8)
-                ws_drep.append_row(["ID_Item", "ID_Vistoria", "Data", "RE_IQ", "Nome_IQ", "Nome_Tecnico", "Item_Faltante", "Status_Reposicao"])
-            df_drep = pd.DataFrame(ws_drep.get_all_records())
-        except:
-            df_drep = pd.DataFrame()
-
-        if not df_drep.empty:
-            if 'ID_Item' not in df_drep.columns and 'Itens_Faltantes' in df_drep.columns:
-                novos_registros = []
-                for _, r in df_drep.iterrows():
-                    itens_sep = [it.strip() for it in str(r.get('Itens_Faltantes', '')).split('/') if it.strip()]
-                    for it in itens_sep:
-                        novos_registros.append({
-                            "ID_Item": str(uuid.uuid4())[:8].upper(),
-                            "ID_Vistoria": r.get('ID_Vistoria', ''),
-                            "Data": r.get('Data', ''),
-                            "RE_IQ": r.get('RE_IQ', ''),
-                            "Nome_IQ": r.get('Nome_IQ', ''),
-                            "Nome_Tecnico": r.get('Nome_Tecnico', ''),
-                            "Item_Faltante": it,
-                            "Status_Reposicao": r.get('Status_Reposicao', 'Pendente')
-                        })
-                if novos_registros:
-                    df_drep = pd.DataFrame(novos_registros)
-                    ws_drep.clear()
-                    ws_drep.append_row(["ID_Item", "ID_Vistoria", "Data", "RE_IQ", "Nome_IQ", "Nome_Tecnico", "Item_Faltante", "Status_Reposicao"])
-                    ws_drep.append_rows([[r["ID_Item"], r["ID_Vistoria"], r["Data"], r["RE_IQ"], r["Nome_IQ"], r["Nome_Tecnico"], r["Item_Faltante"], r["Status_Reposicao"]] for r in novos_registros])
-
-        if not df_drep.empty and 'ID_Item' in df_drep.columns:
-            if perfil_usuario != 'GESTÃO':
-                df_drep = df_drep[df_drep['RE_IQ'].astype(str).str.strip().str.replace('.0','') == re_logado_str]
-            
-            pendentes_rep = df_drep[df_drep['Status_Reposicao'].astype(str).str.upper() == 'PENDENTE']
-            
-            if not pendentes_rep.empty:
-                tecnicos_pendentes_unicos = pendentes_rep[['Nome_Tecnico', 'Nome_IQ', 'Data']].drop_duplicates(subset=['Nome_Tecnico'])
-                total_tecnicos_pendentes = len(tecnicos_pendentes_unicos)
-                
-                hoje_dt = datetime.now(fuso_brasil)
-                antigos_count = 0
-                for _, r in tecnicos_pendentes_unicos.iterrows():
-                    try:
-                        dt_reg = datetime.strptime(str(r.get('Data', ''))[:10], "%d/%m/%Y").replace(tzinfo=fuso_brasil)
-                        if (hoje_dt - dt_reg).days > 5:
-                            antigos_count += 1
-                    except:
-                        pass
-
-                card_tipo = "metric-card-red" if antigos_count > 0 else "metric-card-orange"
-                st.markdown(f'<div class="{card_tipo}">', unsafe_allow_html=True)
-                st.markdown('<div class="metric-title">📦 ALERTA DE REPOSIÇÃO DE ITENS</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="metric-value">{total_tecnicos_pendentes} Técnicos com Itens Pendentes</div>', unsafe_allow_html=True)
-                if antigos_count > 0:
-                    st.markdown(f'<div class="metric-sub">⚠️ Atenção: Existem <b>{antigos_count}</b> técnicos com pendências há mais de 5 dias!</div>', unsafe_allow_html=True)
-                else:
-                    st.markdown(f'<div class="metric-sub">Clique no nome do técnico para gerenciar a reposição.</div>', unsafe_allow_html=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-
-                st.write("**Técnicos com pendências de reposição:**")
-                for _, prow in tecnicos_pendentes_unicos.iterrows():
-                    c_tec_rep1, c_tec_rep2 = st.columns([4, 1])
-                    c_tec_rep1.write(f"👤 **{prow.get('Nome_Tecnico', '')}** (IQ: {prow.get('Nome_IQ', '')})")
-                    if c_tec_rep2.button("Ver Técnico ➔", key=f"btn_ir_tec_{prow.get('Nome_Tecnico','')}"):
-                        st.session_state['filtro_tec_reposicao'] = prow.get('Nome_Tecnico', '')
-                        st.session_state['pagina_atual'] = "Reposicao"
-                        st.rerun()
-                st.write("")
-
         df_res_mat = carregar_resultados_matinal()
         nota_geral_val = "Aguardando lançamento"
         nota_iq_val = "Aguardando lançamento"
@@ -1033,7 +959,81 @@ else:
                         st.rerun()
 
         st.divider()
-        
+
+        # --- RESUMO DE REPOSIÇÕES PENDENTES NA TELA INICIAL (LOGADO APÓS A MATINAL) ---
+        try:
+            planilha_dash_rep = conectar_planilha()
+            try:
+                ws_drep = planilha_dash_rep.worksheet("Controle_Reposicao")
+            except:
+                ws_drep = planilha_dash_rep.add_worksheet(title="Controle_Reposicao", rows=100, cols=8)
+                ws_drep.append_row(["ID_Item", "ID_Vistoria", "Data", "RE_IQ", "Nome_IQ", "Nome_Tecnico", "Item_Faltante", "Status_Reposicao"])
+            df_drep = pd.DataFrame(ws_drep.get_all_records())
+        except:
+            df_drep = pd.DataFrame()
+
+        if not df_drep.empty:
+            if 'ID_Item' not in df_drep.columns and 'Itens_Faltantes' in df_drep.columns:
+                novos_registros = []
+                for _, r in df_drep.iterrows():
+                    itens_sep = [it.strip() for it in str(r.get('Itens_Faltantes', '')).split('/') if it.strip()]
+                    for it in itens_sep:
+                        novos_registros.append({
+                            "ID_Item": str(uuid.uuid4())[:8].upper(),
+                            "ID_Vistoria": r.get('ID_Vistoria', ''),
+                            "Data": r.get('Data', ''),
+                            "RE_IQ": r.get('RE_IQ', ''),
+                            "Nome_IQ": r.get('Nome_IQ', ''),
+                            "Nome_Tecnico": r.get('Nome_Tecnico', ''),
+                            "Item_Faltante": it,
+                            "Status_Reposicao": r.get('Status_Reposicao', 'Pendente')
+                        })
+                if novos_registros:
+                    df_drep = pd.DataFrame(novos_registros)
+                    ws_drep.clear()
+                    ws_drep.append_row(["ID_Item", "ID_Vistoria", "Data", "RE_IQ", "Nome_IQ", "Nome_Tecnico", "Item_Faltante", "Status_Reposicao"])
+                    ws_drep.append_rows([[r["ID_Item"], r["ID_Vistoria"], r["Data"], r["RE_IQ"], r["Nome_IQ"], r["Nome_Tecnico"], r["Item_Faltante"], r["Status_Reposicao"]] for r in novos_registros])
+
+        if not df_drep.empty and 'ID_Item' in df_drep.columns:
+            if perfil_usuario != 'GESTÃO':
+                df_drep = df_drep[df_drep['RE_IQ'].astype(str).str.strip().str.replace('.0','') == re_logado_str]
+            
+            pendentes_rep = df_drep[df_drep['Status_Reposicao'].astype(str).str.upper() == 'PENDENTE']
+            
+            if not pendentes_rep.empty:
+                tecnicos_pendentes_unicos = pendentes_rep[['Nome_Tecnico', 'Nome_IQ', 'Data']].drop_duplicates(subset=['Nome_Tecnico'])
+                total_tecnicos_pendentes = len(tecnicos_pendentes_unicos)
+                
+                hoje_dt = datetime.now(fuso_brasil)
+                antigos_count = 0
+                for _, r in tecnicos_pendentes_unicos.iterrows():
+                    try:
+                        dt_reg = datetime.strptime(str(r.get('Data', ''))[:10], "%d/%m/%Y").replace(tzinfo=fuso_brasil)
+                        if (hoje_dt - dt_reg).days > 5:
+                            antigos_count += 1
+                    except:
+                        pass
+
+                card_tipo = "metric-card-red" if antigos_count > 0 else "metric-card-orange"
+                st.markdown(f'<div class="{card_tipo}">', unsafe_allow_html=True)
+                st.markdown('<div class="metric-title">📦 ALERTA DE REPOSIÇÃO DE ITENS</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="metric-value">{total_tecnicos_pendentes} Técnicos com Itens Pendentes</div>', unsafe_allow_html=True)
+                if antigos_count > 0:
+                    st.markdown(f'<div class="metric-sub">⚠️ Atenção: Existem <b>{antigos_count}</b> técnicos com pendências há mais de 5 dias!</div>', unsafe_allow_html=True)
+                else:
+                    st.markdown(f'<div class="metric-sub">Clique no nome do técnico para gerenciar a reposição.</div>', unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+
+                st.write("**Técnicos com pendências de reposição:**")
+                for _, prow in tecnicos_pendentes_unicos.iterrows():
+                    c_tec_rep1, c_tec_rep2 = st.columns([4, 1])
+                    c_tec_rep1.write(f"👤 **{prow.get('Nome_Tecnico', '')}** (IQ: {prow.get('Nome_IQ', '')})")
+                    if c_tec_rep2.button("Ver Técnico ➔", key=f"btn_ir_tec_{prow.get('Nome_Tecnico','')}"):
+                        st.session_state['filtro_tec_reposicao'] = prow.get('Nome_Tecnico', '')
+                        st.session_state['pagina_atual'] = "Reposicao"
+                        st.rerun()
+                st.write("")
+
         # --- ACOMPANHAMENTO PENDENTE FILTRADO ---
         st.subheader(f"⚠️ Acompanhamento Pendente (Referência: {mes_monitoramento_escolhido})")
 
@@ -1418,7 +1418,7 @@ else:
                             if not fotos_upload:
                                 st.warning("⚠️ O envio de ao menos uma foto é obrigatório para comprovação.")
                             elif not (placa_veiculo.strip() and lote_capacete.strip() and venc_carneira.strip() and lote_cinto.strip() and lote_talabarte.strip() and lote_luva_pig.strip() and lote_luva_vaq.strip() and venc_protetor.strip() and tam_camisa.strip() and tam_calca.strip() and tam_jaqueta.strip()):
-                                st.warning("⚠️️ Todos os campos de Placa do Veículo, Lotes, Validades e Tamanhos de Uniformes são obrigatórios.")
+                                st.warning("⚠️ Todos os campos de Placa do Veículo, Lotes, Validades e Tamanhos de Uniformes são obrigatórios.")
                             else:
                                 tec_row = equipe_vigente[equipe_vigente['nome'] == tec_atual]
                                 tec_login = tec_row['login'].iloc[0] if not tec_row.empty else "N/A"
@@ -1721,7 +1721,7 @@ else:
                                 
                                 links_f = str(reg_sel.get('Links_Fotos', ''))
                                 
-                                msg_errata_zap = f"⚠️️ *[ERRATA - RELATÓRIO EDITADO]*\n*RELATÓRIO DE MATINAL (IVM 2026)*\n*ID da Vistoria:* {id_busca_mat}\n*Técnico:* {edit_tec}\n\n*Placa do Veículo:* {edit_placa}\n*Itens Faltantes / Irregulares:*\n- {edit_irreg}\n\n*Observações (Atualizadas):*\n{edit_obs}\n\n*Evidências (Fotos):*\n{links_f}"
+                                msg_errata_zap = f"⚠️ *[ERRATA - RELATÓRIO EDITADO]*\n*RELATÓRIO DE MATINAL (IVM 2026)*\n*ID da Vistoria:* {id_busca_mat}\n*Técnico:* {edit_tec}\n\n*Placa do Veículo:* {edit_placa}\n*Itens Faltantes / Irregulares:*\n- {edit_irreg}\n\n*Observações (Atualizadas):*\n{edit_obs}\n\n*Evidências (Fotos):*\n{links_f}"
                                 url_errata_zap = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_errata_zap)}"
                                 
                                 corpo_errata_email = f"⚠️ [ERRATA - RELATÓRIO EDITADO]\nRELATÓRIO DE MATINAL (IVM 2026)\nID da Vistoria: {id_busca_mat}\nTécnico: {edit_tec}\n\nPlaca do Veículo: {edit_placa}\nItens Faltantes / Irregulares:\n- {edit_irreg}\n\nObservações (Atualizadas):\n{edit_obs}\n\nEVIDÊNCIAS FOTOS:\n{links_f}"
