@@ -541,7 +541,7 @@ def registrar_vistoria_completa(re_iq, nome_iq, login_tec, nome_tec, tipo, irreg
             extra_info.get('tam_jaqueta', ''), obs, links_str, "Concluída"
         ])
         
-        # REGISTRO ITEM A ITEM PARA RASTREABILIDADE NA REPOSIÇÃO
+        # Registra ITEM A ITEM na aba Controle_Reposicao para rastreabilidade individual
         if irregulares and "conformidade" not in irregulares.lower():
             try:
                 ws_rep = planilha.worksheet("Controle_Reposicao")
@@ -549,7 +549,7 @@ def registrar_vistoria_completa(re_iq, nome_iq, login_tec, nome_tec, tipo, irreg
                 ws_rep = planilha.add_worksheet(title="Controle_Reposicao", rows=100, cols=8)
                 ws_rep.append_row(["ID_Item", "ID_Vistoria", "Data", "RE_IQ", "Nome_IQ", "Nome_Tecnico", "Item_Faltante", "Status_Reposicao"])
             
-            # Divide os itens separados por " / " e cria uma linha para cada um
+            # Verifica cabeçalhos antigos se necessário e adiciona os itens
             lista_itens_f = [item.strip() for item in irregulares.split("/") if item.strip()]
             for item_f in lista_itens_f:
                 id_item = str(uuid.uuid4())[:8].upper()
@@ -795,7 +795,11 @@ else:
         # --- RESUMO DE REPOSIÇÕES PENDENTES COM ALERTA E LINK DIRETO PARA O TÉCNICO ---
         try:
             planilha_dash_rep = conectar_planilha()
-            ws_drep = planilha_dash_rep.worksheet("Controle_Reposicao")
+            try:
+                ws_drep = planilha_dash_rep.worksheet("Controle_Reposicao")
+            except:
+                ws_drep = planilha_dash_rep.add_worksheet(title="Controle_Reposicao", rows=100, cols=8)
+                ws_drep.append_row(["ID_Item", "ID_Vistoria", "Data", "RE_IQ", "Nome_IQ", "Nome_Tecnico", "Item_Faltante", "Status_Reposicao"])
             df_drep = pd.DataFrame(ws_drep.get_all_records())
         except:
             df_drep = pd.DataFrame()
@@ -1282,7 +1286,7 @@ else:
                     if tec_atual != "Selecione...":
                         st.info(f"⚠️ **Atenção:** Marque abaixo **APENAS** os itens que estiverem **FALTANDO** ou **AUSENTES** para **{tec_atual}** ({data_selecionada_exec}).")
                         
-                        st.markdown("### 🏷️ Informações de Veículo, Lotes, Validades e Tamanhos (Preenchimento Obrigatório)")
+                        st.markdown("### 🏷️️ Informações de Veículo, Lotes, Validades e Tamanhos (Preenchimento Obrigatório)")
                         col_p1, col_l1, col_l2 = st.columns(3)
                         with col_p1:
                             placa_veiculo = st.text_input("Placa do Veículo *")
@@ -1556,7 +1560,6 @@ else:
             if perfil_usuario != 'GESTÃO':
                 df_rep = df_rep[df_rep['RE_IQ'].astype(str).str.strip().str.replace('.0','') == re_logado_str]
 
-            # Filtra automaticamente se veio do clique no Dashboard
             filtro_inicial_tec = st.session_state.get('filtro_tec_reposicao', None)
             if filtro_inicial_tec:
                 df_rep = df_rep[df_rep['Nome_Tecnico'].astype(str).str.contains(filtro_inicial_tec, case=False, na=False)]
@@ -1657,7 +1660,7 @@ else:
                                 
                                 links_f = str(reg_sel.get('Links_Fotos', ''))
                                 
-                                msg_errata_zap = f"⚠️️ *[ERRATA - RELATÓRIO EDITADO]*\n*RELATÓRIO DE MATINAL (IVM 2026)*\n*ID da Vistoria:* {id_busca_mat}\n*Técnico:* {edit_tec}\n\n*Placa do Veículo:* {edit_placa}\n*Itens Faltantes / Irregulares:*\n- {edit_irreg}\n\n*Observações (Atualizadas):*\n{edit_obs}\n\n*Evidências (Fotos):*\n{links_f}"
+                                msg_errata_zap = f"⚠️ *[ERRATA - RELATÓRIO EDITADO]*\n*RELATÓRIO DE MATINAL (IVM 2026)*\n*ID da Vistoria:* {id_busca_mat}\n*Técnico:* {edit_tec}\n\n*Placa do Veículo:* {edit_placa}\n*Itens Faltantes / Irregulares:*\n- {edit_irreg}\n\n*Observações (Atualizadas):*\n{edit_obs}\n\n*Evidências (Fotos):*\n{links_f}"
                                 url_errata_zap = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_errata_zap)}"
                                 
                                 corpo_errata_email = f"⚠️ [ERRATA - RELATÓRIO EDITADO]\nRELATÓRIO DE MATINAL (IVM 2026)\nID da Vistoria: {id_busca_mat}\nTécnico: {edit_tec}\n\nPlaca do Veículo: {edit_placa}\nItens Faltantes / Irregulares:\n- {edit_irreg}\n\nObservações (Atualizadas):\n{edit_obs}\n\nEVIDÊNCIAS FOTOS:\n{links_f}"
