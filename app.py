@@ -541,7 +541,7 @@ def registrar_vistoria_completa(re_iq, nome_iq, login_tec, nome_tec, tipo, irreg
             extra_info.get('tam_jaqueta', ''), obs, links_str, "Concluída"
         ])
         
-        # Registra ITEM A ITEM na aba Controle_Reposicao para rastreabilidade individual
+        # REGISTRO ITEM A ITEM NA ABA Controle_Reposicao para rastreabilidade individual
         if irregulares and "conformidade" not in irregulares.lower():
             try:
                 ws_rep = planilha.worksheet("Controle_Reposicao")
@@ -549,7 +549,12 @@ def registrar_vistoria_completa(re_iq, nome_iq, login_tec, nome_tec, tipo, irreg
                 ws_rep = planilha.add_worksheet(title="Controle_Reposicao", rows=100, cols=8)
                 ws_rep.append_row(["ID_Item", "ID_Vistoria", "Data", "RE_IQ", "Nome_IQ", "Nome_Tecnico", "Item_Faltante", "Status_Reposicao"])
             
-            # Verifica cabeçalhos antigos se necessário e adiciona os itens
+            # Limpa cabeçalho antigo caso esteja com ID_Vistoria agrupado
+            cab_rep = ws_rep.row_values(1)
+            if "ID_VISTORIA" in [str(c).upper() for c in cab_rep] and "ID_ITEM" not in [str(c).upper() for c in cab_rep]:
+                ws_rep.clear()
+                ws_rep.append_row(["ID_Item", "ID_Vistoria", "Data", "RE_IQ", "Nome_IQ", "Nome_Tecnico", "Item_Faltante", "Status_Reposicao"])
+
             lista_itens_f = [item.strip() for item in irregulares.split("/") if item.strip()]
             for item_f in lista_itens_f:
                 id_item = str(uuid.uuid4())[:8].upper()
@@ -805,6 +810,11 @@ else:
             df_drep = pd.DataFrame()
 
         if not df_drep.empty:
+            # Corrige caso a planilha venha do formato antigo sem ID_Item
+            if 'ID_Item' not in df_drep.columns:
+                df_drep = pd.DataFrame()
+
+        if not df_drep.empty:
             if perfil_usuario != 'GESTÃO':
                 df_drep = df_drep[df_drep['RE_IQ'].astype(str).str.strip().str.replace('.0','') == re_logado_str]
             
@@ -907,7 +917,7 @@ else:
                 realizado_alvo = str(val_real) if val_real != '' else "0"
 
         st.markdown('<div class="metric-card-green">', unsafe_allow_html=True)
-        st.markdown('<div class="metric-title">⏱️ Horas de Monitoria RPPA</div>', unsafe_allow_html=True)
+        st.markdown('<div class="metric-title">⏱️️ Horas de Monitoria RPPA</div>', unsafe_allow_html=True)
 
         if perfil_usuario == 'GESTÃO' and not re_alvo_str:
             st.info("ℹ️ Selecione um IQ específico no menu lateral esquerdo para gerenciar as horas de monitoria.")
@@ -1044,7 +1054,7 @@ else:
 
         if mes_monitoramento_escolhido:
             if perfil_usuario == 'GESTÃO' and not re_alvo_str:
-                st.info("ℹ️ Selecione um IQ específico no menu lateral esquerdo para visualizar e gerenciar as monitorias pendentes da equipe.")
+                st.info("ℹ️️ Selecione um IQ específico no menu lateral esquerdo para visualizar e gerenciar as monitorias pendentes da equipe.")
                 tecnicos_nao_cert = pd.DataFrame()
             else:
                 tecnicos_nao_cert = equipe_vigente[(equipe_vigente[mes_monitoramento_escolhido] == 'NÃO') & (equipe_vigente[f'ACOMPANHAMENTO_{mes_monitoramento_escolhido}'] != 'SIM')]
@@ -1286,7 +1296,7 @@ else:
                     if tec_atual != "Selecione...":
                         st.info(f"⚠️ **Atenção:** Marque abaixo **APENAS** os itens que estiverem **FALTANDO** ou **AUSENTES** para **{tec_atual}** ({data_selecionada_exec}).")
                         
-                        st.markdown("### 🏷️️ Informações de Veículo, Lotes, Validades e Tamanhos (Preenchimento Obrigatório)")
+                        st.markdown("### 🏷️ Informações de Veículo, Lotes, Validades e Tamanhos (Preenchimento Obrigatório)")
                         col_p1, col_l1, col_l2 = st.columns(3)
                         with col_p1:
                             placa_veiculo = st.text_input("Placa do Veículo *")
@@ -1554,7 +1564,7 @@ else:
         except:
             df_rep = pd.DataFrame()
 
-        if df_rep.empty:
+        if df_rep.empty or 'ID_Item' not in df_rep.columns:
             st.info("Nenhum item faltante registrado para controle de reposição até o momento.")
         else:
             if perfil_usuario != 'GESTÃO':
@@ -1581,9 +1591,12 @@ else:
                     st.session_state['filtro_tec_reposicao'] = None
                     st.rerun()
 
-            id_item_busca = st.selectbox("Selecione o ID do Item para atualizar status:", ["Selecione..."] + df_rep['ID_Item'].astype(str).tolist(), key="sel_rep_item")
+            # Cria lista legível para o selectbox mostrando ID, Técnico e o Item específico
+            opcoes_itens = ["Selecione..."] + [f"{r['ID_Item']} - {r['Nome_Tecnico']} ({r['Item_Faltante']})" for _, r in df_rep.iterrows()]
+            escolha_sel = st.selectbox("Selecione o Item para atualizar status:", opcoes_itens, key="sel_rep_item")
 
-            if id_item_busca != "Selecione...":
+            if escolha_sel != "Selecione...":
+                id_item_busca = escolha_sel.split(" - ")[0].strip()
                 reg_r = df_rep[df_rep['ID_Item'].astype(str) == id_item_busca].iloc[0]
                 status_atual = str(reg_r.get('Status_Reposicao', 'Pendente'))
 
@@ -1660,7 +1673,7 @@ else:
                                 
                                 links_f = str(reg_sel.get('Links_Fotos', ''))
                                 
-                                msg_errata_zap = f"⚠️ *[ERRATA - RELATÓRIO EDITADO]*\n*RELATÓRIO DE MATINAL (IVM 2026)*\n*ID da Vistoria:* {id_busca_mat}\n*Técnico:* {edit_tec}\n\n*Placa do Veículo:* {edit_placa}\n*Itens Faltantes / Irregulares:*\n- {edit_irreg}\n\n*Observações (Atualizadas):*\n{edit_obs}\n\n*Evidências (Fotos):*\n{links_f}"
+                                msg_errata_zap = f"⚠️️ *[ERRATA - RELATÓRIO EDITADO]*\n*RELATÓRIO DE MATINAL (IVM 2026)*\n*ID da Vistoria:* {id_busca_mat}\n*Técnico:* {edit_tec}\n\n*Placa do Veículo:* {edit_placa}\n*Itens Faltantes / Irregulares:*\n- {edit_irreg}\n\n*Observações (Atualizadas):*\n{edit_obs}\n\n*Evidências (Fotos):*\n{links_f}"
                                 url_errata_zap = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_errata_zap)}"
                                 
                                 corpo_errata_email = f"⚠️ [ERRATA - RELATÓRIO EDITADO]\nRELATÓRIO DE MATINAL (IVM 2026)\nID da Vistoria: {id_busca_mat}\nTécnico: {edit_tec}\n\nPlaca do Veículo: {edit_placa}\nItens Faltantes / Irregulares:\n- {edit_irreg}\n\nObservações (Atualizadas):\n{edit_obs}\n\nEVIDÊNCIAS FOTOS:\n{links_f}"
