@@ -541,7 +541,6 @@ def registrar_vistoria_completa(re_iq, nome_iq, login_tec, nome_tec, tipo, irreg
             extra_info.get('tam_jaqueta', ''), obs, links_str, "Concluída"
         ])
         
-        # REGISTRO ITEM A ITEM NA ABA Controle_Reposicao com migração automática do formato antigo se necessário
         if irregulares and "conformidade" not in irregulares.lower():
             try:
                 ws_rep = planilha.worksheet("Controle_Reposicao")
@@ -809,7 +808,6 @@ else:
             df_drep = pd.DataFrame()
 
         if not df_drep.empty:
-            # Compatibilidade automática se a planilha estiver no formato antigo (agrupado por ID_Vistoria)
             if 'ID_Item' not in df_drep.columns and 'Itens_Faltantes' in df_drep.columns:
                 novos_registros = []
                 for _, r in df_drep.iterrows():
@@ -859,11 +857,13 @@ else:
                     st.markdown(f'<div class="metric-sub">Clique abaixo no técnico para ir direto à reposição.</div>', unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
 
-                st.write("**Técnicos com itens pendentes de reposição:**")
-                for _, prow in pendentes_rep.iterrows():
+                st.write("**Técnicos com itens pendentes de reposição (Clique para gerenciar):**")
+                # Lista apenas os nomes únicos dos técnicos pendentes para ficar limpo
+                tecnicos_pendentes_unicos = pendentes_rep[['Nome_Tecnico', 'Nome_IQ']].drop_duplicates()
+                for _, prow in tecnicos_pendentes_unicos.iterrows():
                     c_tec_rep1, c_tec_rep2 = st.columns([4, 1])
-                    c_tec_rep1.write(f"• **{prow.get('Nome_Tecnico', '')}** (IQ: {prow.get('Nome_IQ', '')}) — *Item: {prow.get('Item_Faltante', '')}*")
-                    if c_tec_rep2.button("Ver Reposição ➔", key=f"btn_ir_rep_{prow.get('ID_Item','')}"):
+                    c_tec_rep1.write(f"👤 **{prow.get('Nome_Tecnico', '')}** (IQ: {prow.get('Nome_IQ', '')})")
+                    if c_tec_rep2.button("Ver Técnico ➔", key=f"btn_ir_tec_{prow.get('Nome_Tecnico','')}"):
                         st.session_state['filtro_tec_reposicao'] = prow.get('Nome_Tecnico', '')
                         st.session_state['pagina_atual'] = "Reposicao"
                         st.rerun()
@@ -1403,7 +1403,7 @@ else:
                         
                         if st.button("Gravar Vistoria e Iniciar Envio", type="primary"):
                             if not fotos_upload:
-                                st.warning("⚠️️ O envio de ao menos uma foto é obrigatório para comprovação.")
+                                st.warning("⚠️ O envio de ao menos uma foto é obrigatório para comprovação.")
                             elif not (placa_veiculo.strip() and lote_capacete.strip() and venc_carneira.strip() and lote_cinto.strip() and lote_talabarte.strip() and lote_luva_pig.strip() and lote_luva_vaq.strip() and venc_protetor.strip() and tam_camisa.strip() and tam_calca.strip() and tam_jaqueta.strip()):
                                 st.warning("⚠️ Todos os campos de Placa do Veículo, Lotes, Validades e Tamanhos de Uniformes são obrigatórios.")
                             else:
@@ -1566,7 +1566,7 @@ else:
     # --- PÁGINA: CONTROLE DE REPOSIÇÃO ---
     elif st.session_state['pagina_atual'] == "Reposicao":
         st.title("📦 Controle de Reposição de Itens Faltantes")
-        st.write("Acompanhe e atualize o status item a item de reposição dos materiais apontados nas vistorias matinais.")
+        st.write("Selecione o técnico abaixo para visualizar os itens pendentes e atualizar o status de reposição.")
         
         try:
             planilha_rep = conectar_planilha()
@@ -1581,50 +1581,56 @@ else:
             if perfil_usuario != 'GESTÃO':
                 df_rep = df_rep[df_rep['RE_IQ'].astype(str).str.strip().str.replace('.0','') == re_logado_str]
 
-            filtro_inicial_tec = st.session_state.get('filtro_tec_reposicao', None)
-            if filtro_inicial_tec:
-                df_rep = df_rep[df_rep['Nome_Tecnico'].astype(str).str.contains(filtro_inicial_tec, case=False, na=False)]
+            # Filtra apenas pendentes para a seleção inicial por nome de técnico
+            pendentes_df = df_rep[df_rep['Status_Reposicao'].astype(str).str.upper() == 'PENDENTE']
 
-            def destacar_antigos(row):
-                try:
-                    dt_r = datetime.strptime(str(row.get('Data', ''))[:10], "%d/%m/%Y").replace(tzinfo=fuso_brasil)
-                    if row.get('Status_Reposicao', '').upper() == 'PENDENTE' and (datetime.now(fuso_brasil) - dt_r).days > 5:
-                        return ['background-color: #f8d7da; color: #721c24; font-weight: bold;'] * len(row)
-                except:
-                    pass
-                return [''] * len(row)
+            if pendentes_df.empty:
+                st.success("🎉 Não há itens pendentes de reposição no momento!")
+            else:
+                lista_tecnicos_pendentes = sorted(pendentes_df['Nome_Tecnico'].dropna().unique().tolist())
+                
+                # Se veio do link do Dashboard, define o índice inicial
+                idx_tec_ini = 0
+                filtro_inicial_tec = st.session_state.get('filtro_tec_reposicao', None)
+                if filtro_inicial_tec in lista_tecnicos_pendentes:
+                    idx_tec_ini = lista_tecnicos_pendentes.index(filtro_inicial_tec) + 1
 
-            st.dataframe(df_rep.style.apply(destacar_antigos, axis=1), hide_index=True, use_container_width=True)
-            st.write("")
+                # 1. SELEÇÃO APENAS DO NOME DO TÉCNICO
+                escolha_tec = st.selectbox("👤 Selecione o Técnico:", ["Selecione o técnico..."] + lista_tecnicos_pendentes, index=idx_tec_ini)
 
-            if filtro_inicial_tec:
-                if st.button("🧹 Limpar Filtro de Técnico"):
+                if escolha_tec != "Selecione o técnico...":
+                    # Limpa o filtro de sessão após selecionar
                     st.session_state['filtro_tec_reposicao'] = None
-                    st.rerun()
-
-            opcoes_itens = ["Selecione..."] + [f"{r['ID_Item']} - {r['Nome_Tecnico']} ({r['Item_Faltante']})" for _, r in df_rep.iterrows()]
-            escolha_sel = st.selectbox("Selecione o Item para atualizar status:", opcoes_itens, key="sel_rep_item")
-
-            if escolha_sel != "Selecione...":
-                id_item_busca = escolha_sel.split(" - ")[0].strip()
-                reg_r = df_rep[df_rep['ID_Item'].astype(str) == id_item_busca].iloc[0]
-                status_atual = str(reg_r.get('Status_Reposicao', 'Pendente'))
-
-                with st.form("form_atualiza_reposicao"):
-                    st.subheader(f"Atualizar Item - ID: {id_item_busca} ({reg_r.get('Nome_Tecnico','')})")
-                    st.write(f"**Item Faltante:** {reg_r.get('Item_Faltante','')}")
                     
-                    novo_status = st.selectbox("Status da Reposição:", ["Pendente", "Em Transporte", "Reposição Concluída"], index=["Pendente", "Em Transporte", "Reposição Concluída"].index(status_atual) if status_atual in ["Pendente", "Em Transporte", "Reposição Concluída"] else 0)
+                    # Filtra os itens pendentes daquele técnico específico
+                    itens_tec_df = pendentes_df[pendentes_df['Nome_Tecnico'] == escolha_tec]
                     
-                    btn_salvar_rep = st.form_submit_button("Atualizar Status do Item", type="primary")
-                    
-                    if btn_salvar_rep:
-                        cell_rep = ws_rep.find(id_item_busca)
-                        if cell_rep:
-                            ws_rep.update_cell(cell_rep.row, 8, novo_status)
-                            st.success("✅ Status do item atualizado com sucesso!")
-                            time.sleep(1)
-                            st.rerun()
+                    st.write(f"### Itens Faltantes para: **{escolha_tec}**")
+                    st.dataframe(itens_tec_df[['ID_Item', 'Data', 'Nome_IQ', 'Item_Faltante', 'Status_Reposicao']], hide_index=True, use_container_width=True)
+                    st.write("")
+
+                    # 2. SE O TÉCNICO FOR ESCOLHIDO, APARECE A TELA COM OS ITENS PARA ATUALIZAR
+                    opcoes_itens_tec = ["Selecione o item..."] + [f"{r['ID_Item']} — {r['Item_Faltante']}" for _, r in itens_tec_df.iterrows()]
+                    escolha_item_tec = st.selectbox("Selecione o item específico para dar baixa/atualizar:", opcoes_itens_tec)
+
+                    if escolha_item_tec != "Selecione o item...":
+                        id_item_escolhido = escolha_item_tec.split(" — ")[0].strip()
+                        reg_item = itens_tec_df[itens_tec_df['ID_Item'].astype(str) == id_item_escolhido].iloc[0]
+                        status_atual_item = str(reg_item.get('Status_Reposicao', 'Pendente'))
+
+                        with st.form(f"form_atualiza_item_{id_item_escolhido}"):
+                            st.write(f"**Item Selecionado:** {reg_item.get('Item_Faltante', '')}")
+                            novo_status_item = st.selectbox("Novo Status:", ["Pendente", "Em Transporte", "Reposição Concluída"], index=["Pendente", "Em Transporte", "Reposição Concluída"].index(status_atual_item) if status_atual_item in ["Pendente", "Em Transporte", "Reposição Concluída"] else 0)
+                            
+                            btn_salvar_item = st.form_submit_button("Salvar Atualização do Item", type="primary")
+                            
+                            if btn_salvar_item:
+                                cell_rep = ws_rep.find(id_item_escolhido)
+                                if cell_rep:
+                                    ws_rep.update_cell(cell_rep.row, 8, novo_status_item)
+                                    st.success("✅ Status do item atualizado com sucesso!")
+                                    time.sleep(1)
+                                    st.rerun()
 
     # --- PÁGINA 5: HISTÓRICO E EDIÇÕES (BUSCA SIMPLES POR TÉCNICO) ---
     elif st.session_state['pagina_atual'] == "HistoricoEdicoes":
@@ -1743,7 +1749,7 @@ else:
                                 msg_errata_zap_i = f"⚠️ *[ERRATA - RELATÓRIO EDITADO]*\n*AUDITORIA DE INSTALAÇÃO - TOTALE ABC*\n*ID da Vistoria:* {id_busca_inst}\n\n*Contrato:* {edit_contrato}\n*Técnico:* {edit_tec_i}\n\n*Falhas Encontradas (Atualizadas):*\n- {edit_erros}\n\n*Observações:* {edit_obs_i}\n\n*Evidências (Fotos):*\n{links_fi}"
                                 url_errata_zap_i = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_errata_zap_i)}"
                                 
-                                corpo_errata_email_i = f"⚠️ [ERRATA - RELATÓRIO EDITADO]\nAUDITORIA DE INSTALAÇÃO\nID da Vistoria: {id_busca_inst}\nContrato: {edit_contrato}\nTécnico: {edit_tec_i}\n\nFalhas Encontradas (Atualizadas):\n- {edit_erros}\n\nObservações:\n{edit_obs_i}\n\nEVIDÊNCIA FOTO:\n{links_fi}"
+                                corpo_errata_email_i = f"⚠️️ [ERRATA - RELATÓRIO EDITADO]\nAUDITORIA DE INSTALAÇÃO\nID da Vistoria: {id_busca_inst}\nContrato: {edit_contrato}\nTécnico: {edit_tec_i}\n\nFalhas Encontradas (Atualizadas):\n- {edit_erros}\n\nObservações:\n{edit_obs_i}\n\nEVIDÊNCIA FOTO:\n{links_fi}"
                                 url_errata_email_i = f"mailto:{DESTINATARIOS_INSTALACAO}?subject=ERRATA - Auditoria [ID {id_busca_inst}] - Contrato {edit_contrato} - {edit_tec_i}&body={urllib.parse.quote(corpo_errata_email_i)}"
                                 
                                 st.success("✅ Auditoria atualizada com sucesso! Utilize os links abaixo para enviar a ERRATA:")
