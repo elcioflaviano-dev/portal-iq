@@ -541,13 +541,19 @@ def registrar_vistoria_completa(re_iq, nome_iq, login_tec, nome_tec, tipo, irreg
             extra_info.get('tam_jaqueta', ''), obs, links_str, "Concluída"
         ])
         
+        # REGISTRO ITEM A ITEM PARA RASTREABILIDADE NA REPOSIÇÃO
         if irregulares and "conformidade" not in irregulares.lower():
             try:
                 ws_rep = planilha.worksheet("Controle_Reposicao")
             except:
-                ws_rep = planilha.add_worksheet(title="Controle_Reposicao", rows=100, cols=7)
-                ws_rep.append_row(["ID_Vistoria", "Data", "RE_IQ", "Nome_IQ", "Nome_Tecnico", "Itens_Faltantes", "Status_Reposicao"])
-            ws_rep.append_row([vistoria_id, data_hora, str(re_iq), nome_iq, nome_tec, irregulares, "Pendente"])
+                ws_rep = planilha.add_worksheet(title="Controle_Reposicao", rows=100, cols=8)
+                ws_rep.append_row(["ID_Item", "ID_Vistoria", "Data", "RE_IQ", "Nome_IQ", "Nome_Tecnico", "Item_Faltante", "Status_Reposicao"])
+            
+            # Divide os itens separados por " / " e cria uma linha para cada um
+            lista_itens_f = [item.strip() for item in irregulares.split("/") if item.strip()]
+            for item_f in lista_itens_f:
+                id_item = str(uuid.uuid4())[:8].upper()
+                ws_rep.append_row([id_item, vistoria_id, data_hora, str(re_iq), nome_iq, nome_tec, item_f, "Pendente"])
 
         st.cache_data.clear()
         return vistoria_id
@@ -786,7 +792,7 @@ else:
         st.title(titulo_painel)
         st.write("")
 
-        # --- RESUMO DE REPOSIÇÕES PENDENTES COM ALERTA E TÉCNICOS ---
+        # --- RESUMO DE REPOSIÇÕES PENDENTES COM ALERTA E LINK DIRETO PARA O TÉCNICO ---
         try:
             planilha_dash_rep = conectar_planilha()
             ws_drep = planilha_dash_rep.worksheet("Controle_Reposicao")
@@ -815,7 +821,7 @@ else:
                 card_tipo = "metric-card-red" if antigos_count > 0 else "metric-card-orange"
                 st.markdown(f'<div class="{card_tipo}">', unsafe_allow_html=True)
                 st.markdown('<div class="metric-title">📦 ALERTA DE REPOSIÇÃO DE ITENS</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="metric-value">{total_pendentes_rep} Pedidos Pendentes</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="metric-value">{total_pendentes_rep} Itens Pendentes</div>', unsafe_allow_html=True)
                 if antigos_count > 0:
                     st.markdown(f'<div class="metric-sub">⚠️ Atenção: Existem <b>{antigos_count}</b> itens com mais de 5 dias aguardando reposição!</div>', unsafe_allow_html=True)
                 else:
@@ -825,8 +831,8 @@ else:
                 st.write("**Técnicos com itens pendentes de reposição:**")
                 for _, prow in pendentes_rep.iterrows():
                     c_tec_rep1, c_tec_rep2 = st.columns([4, 1])
-                    c_tec_rep1.write(f"• **{prow.get('Nome_Tecnico', '')}** (IQ: {prow.get('Nome_IQ', '')}) — *{prow.get('Itens_Faltantes', '')}*")
-                    if c_tec_rep2.button("Ver Reposição ➔", key=f"btn_ir_rep_{prow.get('ID_Vistoria','')}"):
+                    c_tec_rep1.write(f"• **{prow.get('Nome_Tecnico', '')}** (IQ: {prow.get('Nome_IQ', '')}) — *Item: {prow.get('Item_Faltante', '')}*")
+                    if c_tec_rep2.button("Ver Reposição ➔", key=f"btn_ir_rep_{prow.get('ID_Item','')}"):
                         st.session_state['filtro_tec_reposicao'] = prow.get('Nome_Tecnico', '')
                         st.session_state['pagina_atual'] = "Reposicao"
                         st.rerun()
@@ -1529,15 +1535,15 @@ else:
     # --- PÁGINA: CONTROLE DE REPOSIÇÃO ---
     elif st.session_state['pagina_atual'] == "Reposicao":
         st.title("📦 Controle de Reposição de Itens Faltantes")
-        st.write("Acompanhe e atualize o status de reposição dos itens apontados nas vistorias matinais.")
+        st.write("Acompanhe e atualize o status item a item de reposição dos materiais apontados nas vistorias matinais.")
         
         try:
             planilha_rep = conectar_planilha()
             try:
                 ws_rep = planilha_rep.worksheet("Controle_Reposicao")
             except:
-                ws_rep = planilha_rep.add_worksheet(title="Controle_Reposicao", rows=100, cols=7)
-                ws_rep.append_row(["ID_Vistoria", "Data", "RE_IQ", "Nome_IQ", "Nome_Tecnico", "Itens_Faltantes", "Status_Reposicao"])
+                ws_rep = planilha_rep.add_worksheet(title="Controle_Reposicao", rows=100, cols=8)
+                ws_rep.append_row(["ID_Item", "ID_Vistoria", "Data", "RE_IQ", "Nome_IQ", "Nome_Tecnico", "Item_Faltante", "Status_Reposicao"])
             
             registros_rep = ws_rep.get_all_records()
             df_rep = pd.DataFrame(registros_rep) if registros_rep else pd.DataFrame()
@@ -1572,25 +1578,25 @@ else:
                     st.session_state['filtro_tec_reposicao'] = None
                     st.rerun()
 
-            id_reposicao = st.selectbox("Selecione o ID da Vistoria para atualizar status:", ["Selecione..."] + df_rep['ID_Vistoria'].astype(str).tolist(), key="sel_rep")
+            id_item_busca = st.selectbox("Selecione o ID do Item para atualizar status:", ["Selecione..."] + df_rep['ID_Item'].astype(str).tolist(), key="sel_rep_item")
 
-            if id_reposicao != "Selecione...":
-                reg_r = df_rep[df_rep['ID_Vistoria'].astype(str) == id_reposicao].iloc[0]
+            if id_item_busca != "Selecione...":
+                reg_r = df_rep[df_rep['ID_Item'].astype(str) == id_item_busca].iloc[0]
                 status_atual = str(reg_r.get('Status_Reposicao', 'Pendente'))
 
                 with st.form("form_atualiza_reposicao"):
-                    st.subheader(f"Atualizar Reposição - Vistoria ID: {id_reposicao} ({reg_r.get('Nome_Tecnico','')})")
-                    st.write(f"**Itens Faltantes:** {reg_r.get('Itens_Faltantes','')}")
+                    st.subheader(f"Atualizar Item - ID: {id_item_busca} ({reg_r.get('Nome_Tecnico','')})")
+                    st.write(f"**Item Faltante:** {reg_r.get('Item_Faltante','')}")
                     
                     novo_status = st.selectbox("Status da Reposição:", ["Pendente", "Em Transporte", "Reposição Concluída"], index=["Pendente", "Em Transporte", "Reposição Concluída"].index(status_atual) if status_atual in ["Pendente", "Em Transporte", "Reposição Concluída"] else 0)
                     
-                    btn_salvar_rep = st.form_submit_button("Atualizar Status", type="primary")
+                    btn_salvar_rep = st.form_submit_button("Atualizar Status do Item", type="primary")
                     
                     if btn_salvar_rep:
-                        cell_rep = ws_rep.find(id_reposicao)
+                        cell_rep = ws_rep.find(id_item_busca)
                         if cell_rep:
-                            ws_rep.update_cell(cell_rep.row, 7, novo_status)
-                            st.success("✅ Status de reposição atualizado com sucesso!")
+                            ws_rep.update_cell(cell_rep.row, 8, novo_status)
+                            st.success("✅ Status do item atualizado com sucesso!")
                             time.sleep(1)
                             st.rerun()
 
@@ -1711,7 +1717,7 @@ else:
                                 msg_errata_zap_i = f"⚠️ *[ERRATA - RELATÓRIO EDITADO]*\n*AUDITORIA DE INSTALAÇÃO - TOTALE ABC*\n*ID da Vistoria:* {id_busca_inst}\n\n*Contrato:* {edit_contrato}\n*Técnico:* {edit_tec_i}\n\n*Falhas Encontradas (Atualizadas):*\n- {edit_erros}\n\n*Observações:* {edit_obs_i}\n\n*Evidências (Fotos):*\n{links_fi}"
                                 url_errata_zap_i = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_errata_zap_i)}"
                                 
-                                corpo_errata_email_i = f"⚠️️ [ERRATA - RELATÓRIO EDITADO]\nAUDITORIA DE INSTALAÇÃO\nID da Vistoria: {id_busca_inst}\nContrato: {edit_contrato}\nTécnico: {edit_tec_i}\n\nFalhas Encontradas (Atualizadas):\n- {edit_erros}\n\nObservações:\n{edit_obs_i}\n\nEVIDÊNCIA FOTO:\n{links_fi}"
+                                corpo_errata_email_i = f"⚠️ [ERRATA - RELATÓRIO EDITADO]\nAUDITORIA DE INSTALAÇÃO\nID da Vistoria: {id_busca_inst}\nContrato: {edit_contrato}\nTécnico: {edit_tec_i}\n\nFalhas Encontradas (Atualizadas):\n- {edit_erros}\n\nObservações:\n{edit_obs_i}\n\nEVIDÊNCIA FOTO:\n{links_fi}"
                                 url_errata_email_i = f"mailto:{DESTINATARIOS_INSTALACAO}?subject=ERRATA - Auditoria [ID {id_busca_inst}] - Contrato {edit_contrato} - {edit_tec_i}&body={urllib.parse.quote(corpo_errata_email_i)}"
                                 
                                 st.success("✅ Auditoria atualizada com sucesso! Utilize os links abaixo para enviar a ERRATA:")
