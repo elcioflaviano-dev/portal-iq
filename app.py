@@ -543,13 +543,14 @@ def registrar_vistoria_completa(re_iq, nome_iq, login_tec, nome_tec, tipo, irreg
             extra_info.get('tam_jaqueta', ''), obs, links_str, "Concluída"
         ])
         
+        # Sincronização inteligente com a aba Controle_Reposicao unificando os dados já gravados no Sheets
+        try:
+            ws_rep = planilha.worksheet("Controle_Reposicao")
+        except:
+            ws_rep = planilha.add_worksheet(title="Controle_Reposicao", rows=100, cols=8)
+            ws_rep.append_row(["ID_Item", "ID_Vistoria", "Data", "RE_IQ", "Nome_IQ", "Nome_Tecnico", "Item_Faltante", "Status_Reposicao"])
+
         if irregulares and "conformidade" not in irregulares.lower():
-            try:
-                ws_rep = planilha.worksheet("Controle_Reposicao")
-            except:
-                ws_rep = planilha.add_worksheet(title="Controle_Reposicao", rows=100, cols=8)
-                ws_rep.append_row(["ID_Item", "ID_Vistoria", "Data", "RE_IQ", "Nome_IQ", "Nome_Tecnico", "Item_Faltante", "Status_Reposicao"])
-            
             cab_rep = [str(c).upper() for c in ws_rep.row_values(1)]
             if "ID_ITEM" not in cab_rep:
                 ws_rep.clear()
@@ -956,7 +957,7 @@ else:
 
         st.divider()
 
-        # --- ALERTA DE REPOSIÇÃO DE ITENS (POSICIONADO APÓS A MATINAL) ---
+        # --- ALERTA DE REPOSIÇÃO DE ITENS (APÓS A MATINAL) ---
         try:
             planilha_dash_rep = conectar_planilha()
             try:
@@ -968,27 +969,35 @@ else:
         except:
             df_drep = pd.DataFrame()
 
-        if not df_drep.empty:
-            if 'ID_Item' not in df_drep.columns and 'Itens_Faltantes' in df_drep.columns:
-                novos_registros = []
-                for _, r in df_drep.iterrows():
-                    itens_sep = [it.strip() for it in str(r.get('Itens_Faltantes', '')).split('/') if it.strip()]
-                    for it in itens_sep:
-                        novos_registros.append({
-                            "ID_Item": str(uuid.uuid4())[:8].upper(),
-                            "ID_Vistoria": r.get('ID_Vistoria', ''),
-                            "Data": r.get('Data', ''),
-                            "RE_IQ": r.get('RE_IQ', ''),
-                            "Nome_IQ": r.get('Nome_IQ', ''),
-                            "Nome_Tecnico": r.get('Nome_Tecnico', ''),
-                            "Item_Faltante": it,
-                            "Status_Reposicao": r.get('Status_Reposicao', 'Pendente')
-                        })
-                if novos_registros:
-                    df_drep = pd.DataFrame(novos_registros)
-                    ws_drep.clear()
-                    ws_drep.append_row(["ID_Item", "ID_Vistoria", "Data", "RE_IQ", "Nome_IQ", "Nome_Tecnico", "Item_Faltante", "Status_Reposicao"])
-                    ws_drep.append_rows([[r["ID_Item"], r["ID_Vistoria"], r["Data"], r["RE_IQ"], r["Nome_IQ"], r["Nome_Tecnico"], r["Item_Faltante"], r["Status_Reposicao"]] for r in novos_registros])
+        # Sincronização automática para ler dados já gravados no Sheets (Vistorias_Matinal ou Controle_Reposicao antigo)
+        if df_drep.empty or 'ID_Item' not in df_drep.columns:
+            try:
+                ws_vmat = planilha_dash_rep.worksheet("Vistorias_Matinal")
+                reg_vmat = ws_vmat.get_all_records()
+                if reg_vmat:
+                    df_vm = pd.DataFrame(reg_vmat)
+                    novos_registros = []
+                    for _, r in df_vm.iterrows():
+                        irreg = str(r.get('Itens_Irregulares', ''))
+                        if irreg and "conformidade" not in irreg.lower():
+                            for it in [i.strip() for i in irreg.split('/') if i.strip()]:
+                                novos_registros.append({
+                                    "ID_Item": str(uuid.uuid4())[:8].upper(),
+                                    "ID_Vistoria": r.get('ID_Vistoria', ''),
+                                    "Data": r.get('Data_Hora', '')[:10],
+                                    "RE_IQ": r.get('RE_IQ', ''),
+                                    "Nome_IQ": r.get('Nome_IQ', ''),
+                                    "Nome_Tecnico": r.get('Nome_Tecnico', ''),
+                                    "Item_Faltante": it,
+                                    "Status_Reposicao": "Pendente"
+                                })
+                    if novos_registros:
+                        df_drep = pd.DataFrame(novos_registros)
+                        ws_rep.clear()
+                        ws_rep.append_row(["ID_Item", "ID_Vistoria", "Data", "RE_IQ", "Nome_IQ", "Nome_Tecnico", "Item_Faltante", "Status_Reposicao"])
+                        ws_rep.append_rows([[r["ID_Item"], r["ID_Vistoria"], r["Data"], r["RE_IQ"], r["Nome_IQ"], r["Nome_Tecnico"], r["Item_Faltante"], r["Status_Reposicao"]] for r in novos_registros])
+            except:
+                pass
 
         if not df_drep.empty and 'ID_Item' in df_drep.columns:
             if perfil_usuario != 'GESTÃO':
@@ -1015,7 +1024,7 @@ else:
                 st.markdown('<div class="metric-title">📦 ALERTA DE REPOSIÇÃO DE ITENS</div>', unsafe_allow_html=True)
                 st.markdown(f'<div class="metric-value">{total_tecnicos_pendentes} Técnicos com Itens Pendentes</div>', unsafe_allow_html=True)
                 if antigos_count > 0:
-                    st.markdown(f'<div class="metric-sub">⚠️ Atenção: Existem <b>{antigos_count}</b> técnicos com pendências há mais de 5 dias!</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="metric-sub">⚠️️ Atenção: Existem <b>{antigos_count}</b> técnicos com pendências há mais de 5 dias!</div>', unsafe_allow_html=True)
                 else:
                     st.markdown(f'<div class="metric-sub">Clique no nome do técnico para gerenciar a reposição.</div>', unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
@@ -1322,7 +1331,7 @@ else:
                     if tec_atual != "Selecione...":
                         st.info(f"⚠️ **Atenção:** Marque abaixo **APENAS** os itens que estiverem **FALTANDO** ou **AUSENTES** para **{tec_atual}** ({data_selecionada_exec}).")
                         
-                        st.markdown("### 🏷️️ Informações de Veículo, Lotes, Validades e Tamanhos (Preenchimento Obrigatório)")
+                        st.markdown("### 🏷️ Informações de Veículo, Lotes, Validades e Tamanhos (Preenchimento Obrigatório)")
                         col_p1, col_l1, col_l2 = st.columns(3)
                         with col_p1:
                             placa_veiculo = st.text_input("Placa do Veículo *")
@@ -1550,9 +1559,9 @@ else:
                 
                 if st.button("Gravar Auditoria e Iniciar Envio", type="primary"):
                     if not num_contrato.strip():
-                        st.warning("⚠️️ O número do contrato é obrigatório para realizar a vistoria.")
+                        st.warning("⚠️ O número do contrato é obrigatório para realizar a vistoria.")
                     elif not fotos_inst:
-                        st.warning("⚠️️ O envio de ao menos uma foto é obrigatório para comprovar a auditoria.")
+                        st.warning("⚠️ O envio de ao menos uma foto é obrigatório para comprovar a auditoria.")
                     else:
                         tec_row = dados_completos[dados_completos['nome'] == tec_inst]
                         tec_login = tec_row['login'].iloc[0] if not tec_row.empty else "N/A"
@@ -1610,6 +1619,36 @@ else:
                 df_rep = pd.DataFrame(ws_rep.get_all_records())
             except:
                 df_rep = pd.DataFrame()
+
+            # Sincronização inteligente com vistorias matinais já gravadas no Sheets caso a aba esteja vazia
+            if df_rep.empty or 'ID_Item' not in df_rep.columns:
+                try:
+                    ws_vmat = planilha_rep.worksheet("Vistorias_Matinal")
+                    reg_vmat = ws_vmat.get_all_records()
+                    if reg_vmat:
+                        df_vm = pd.DataFrame(reg_vmat)
+                        novos_registros = []
+                        for _, r in df_vm.iterrows():
+                            irreg = str(r.get('Itens_Irregulares', ''))
+                            if irreg and "conformidade" not in irreg.lower():
+                                for it in [i.strip() for i in irreg.split('/') if i.strip()]:
+                                    novos_registros.append({
+                                        "ID_Item": str(uuid.uuid4())[:8].upper(),
+                                        "ID_Vistoria": r.get('ID_Vistoria', ''),
+                                        "Data": r.get('Data_Hora', '')[:10],
+                                        "RE_IQ": r.get('RE_IQ', ''),
+                                        "Nome_IQ": r.get('Nome_IQ', ''),
+                                        "Nome_Tecnico": r.get('Nome_Tecnico', ''),
+                                        "Item_Faltante": it,
+                                        "Status_Reposicao": "Pendente"
+                                    })
+                        if novos_registros:
+                            df_rep = pd.DataFrame(novos_registros)
+                            ws_rep.clear()
+                            ws_rep.append_row(["ID_Item", "ID_Vistoria", "Data", "RE_IQ", "Nome_IQ", "Nome_Tecnico", "Item_Faltante", "Status_Reposicao"])
+                            ws_rep.append_rows([[r["ID_Item"], r["ID_Vistoria"], r["Data"], r["RE_IQ"], r["Nome_IQ"], r["Nome_Tecnico"], r["Item_Faltante"], r["Status_Reposicao"]] for r in novos_registros])
+                except:
+                    pass
 
             if df_rep.empty or 'ID_Item' not in df_rep.columns:
                 st.info("Nenhum item faltante registrado para controle de reposição até o momento.")
