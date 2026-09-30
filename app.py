@@ -127,6 +127,8 @@ if 'pagina_atual' not in st.session_state: st.session_state['pagina_atual'] = "D
 if 'email_pronto' not in st.session_state: st.session_state['email_pronto'] = None
 if 'zap_pronto' not in st.session_state: st.session_state['zap_pronto'] = None
 if 'zap_matinal_pronto' not in st.session_state: st.session_state['zap_matinal_pronto'] = None
+if 'zap_tec_matinal' not in st.session_state: st.session_state['zap_tec_matinal'] = None
+if 'zap_tec_instalacao' not in st.session_state: st.session_state['zap_tec_instalacao'] = None
 if 'email_matinal_enviado' not in st.session_state: st.session_state['email_matinal_enviado'] = False
 if 'zap_matinal_enviado' not in st.session_state: st.session_state['zap_matinal_enviado'] = False
 if 'zap_agenda_pronto' not in st.session_state: st.session_state['zap_agenda_pronto'] = None
@@ -934,7 +936,7 @@ else:
                 realizado_alvo = str(val_real) if val_real != '' else "0"
 
         st.markdown('<div class="metric-card-green">', unsafe_allow_html=True)
-        st.markdown('<div class="metric-title">⏱️️ Horas de Monitoria RPPA</div>', unsafe_allow_html=True)
+        st.markdown('<div class="metric-title">⏱️ Horas de Monitoria RPPA</div>', unsafe_allow_html=True)
 
         if perfil_usuario == 'GESTÃO' and not re_alvo_str:
             st.info("ℹ️ Selecione um IQ específico no menu lateral esquerdo para gerenciar as horas de monitoria.")
@@ -1414,9 +1416,9 @@ else:
                         
                         if st.button("Gravar Vistoria e Iniciar Envio", type="primary"):
                             if not fotos_upload:
-                                st.warning("⚠️️ O envio de ao menos uma foto é obrigatório para comprovação.")
+                                st.warning("⚠️ O envio de ao menos uma foto é obrigatório para comprovação.")
                             elif not (placa_veiculo.strip() and lote_capacete.strip() and venc_carneira.strip() and lote_cinto.strip() and lote_talabarte.strip() and lote_luva_pig.strip() and lote_luva_vaq.strip() and venc_protetor.strip() and tam_camisa.strip() and tam_calca.strip() and tam_jaqueta.strip()):
-                                st.warning("⚠️ Todos os campos de Placa do Veículo, Lotes, Validades e Tamanhos de Uniformes são obrigatórios.")
+                                st.warning("⚠️️ Todos os campos de Placa do Veículo, Lotes, Validades e Tamanhos de Uniformes são obrigatórios.")
                             else:
                                 tec_row = equipe_vigente[equipe_vigente['nome'] == tec_atual]
                                 tec_login = tec_row['login'].iloc[0] if not tec_row.empty else "N/A"
@@ -1719,7 +1721,7 @@ else:
                                 
                                 links_f = str(reg_sel.get('Links_Fotos', ''))
                                 
-                                msg_errata_zap = f"⚠️ *[ERRATA - RELATÓRIO EDITADO]*\n*RELATÓRIO DE MATINAL (IVM 2026)*\n*ID da Vistoria:* {id_busca_mat}\n*Técnico:* {edit_tec}\n\n*Placa do Veículo:* {edit_placa}\n*Itens Faltantes / Irregulares:*\n- {edit_irreg}\n\n*Observações (Atualizadas):*\n{edit_obs}\n\n*Evidências (Fotos):*\n{links_f}"
+                                msg_errata_zap = f"⚠️️ *[ERRATA - RELATÓRIO EDITADO]*\n*RELATÓRIO DE MATINAL (IVM 2026)*\n*ID da Vistoria:* {id_busca_mat}\n*Técnico:* {edit_tec}\n\n*Placa do Veículo:* {edit_placa}\n*Itens Faltantes / Irregulares:*\n- {edit_irreg}\n\n*Observações (Atualizadas):*\n{edit_obs}\n\n*Evidências (Fotos):*\n{links_f}"
                                 url_errata_zap = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_errata_zap)}"
                                 
                                 corpo_errata_email = f"⚠️ [ERRATA - RELATÓRIO EDITADO]\nRELATÓRIO DE MATINAL (IVM 2026)\nID da Vistoria: {id_busca_mat}\nTécnico: {edit_tec}\n\nPlaca do Veículo: {edit_placa}\nItens Faltantes / Irregulares:\n- {edit_irreg}\n\nObservações (Atualizadas):\n{edit_obs}\n\nEVIDÊNCIAS FOTOS:\n{links_f}"
