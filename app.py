@@ -127,6 +127,8 @@ if 'pagina_atual' not in st.session_state: st.session_state['pagina_atual'] = "D
 if 'email_pronto' not in st.session_state: st.session_state['email_pronto'] = None
 if 'zap_pronto' not in st.session_state: st.session_state['zap_pronto'] = None
 if 'zap_matinal_pronto' not in st.session_state: st.session_state['zap_matinal_pronto'] = None
+if 'zap_tec_matinal' not in st.session_state: st.session_state['zap_tec_matinal'] = None
+if 'zap_tec_instalacao' not in st.session_state: st.session_state['zap_tec_instalacao'] = None
 if 'email_matinal_enviado' not in st.session_state: st.session_state['email_matinal_enviado'] = False
 if 'zap_matinal_enviado' not in st.session_state: st.session_state['zap_matinal_enviado'] = False
 if 'zap_agenda_pronto' not in st.session_state: st.session_state['zap_agenda_pronto'] = None
@@ -798,7 +800,11 @@ else:
         # --- RESUMO DE REPOSIÇÕES PENDENTES NA TELA INICIAL (APENAS NOME DO TÉCNICO) ---
         try:
             planilha_dash_rep = conectar_planilha()
-            ws_drep = planilha_dash_rep.worksheet("Controle_Reposicao")
+            try:
+                ws_drep = planilha_dash_rep.worksheet("Controle_Reposicao")
+            except:
+                ws_drep = planilha_dash_rep.add_worksheet(title="Controle_Reposicao", rows=100, cols=8)
+                ws_drep.append_row(["ID_Item", "ID_Vistoria", "Data", "RE_IQ", "Nome_IQ", "Nome_Tecnico", "Item_Faltante", "Status_Reposicao"])
             df_drep = pd.DataFrame(ws_drep.get_all_records())
         except:
             df_drep = pd.DataFrame()
@@ -848,7 +854,7 @@ else:
                 st.markdown('<div class="metric-title">📦 ALERTA DE REPOSIÇÃO DE ITENS</div>', unsafe_allow_html=True)
                 st.markdown(f'<div class="metric-value">{total_pendentes_rep} Itens Pendentes</div>', unsafe_allow_html=True)
                 if antigos_count > 0:
-                    st.markdown(f'<div class="metric-sub">⚠️️ Atenção: Existem <b>{antigos_count}</b> itens com mais de 5 dias aguardando reposição!</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="metric-sub">⚠️ Atenção: Existem <b>{antigos_count}</b> itens com mais de 5 dias aguardando reposição!</div>', unsafe_allow_html=True)
                 else:
                     st.markdown(f'<div class="metric-sub">Clique no nome do técnico para gerenciar a reposição.</div>', unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
@@ -1133,7 +1139,7 @@ else:
                     base_historico = dados_completos
             else:
                 if col_re_hist in dados_completos.columns:
-                    base_historico = dados_completos[dados_completos[col_re_hist].astype(str) == str(re_logado_str)]
+                    base_historico = dados_completos[dados_completos[col_re_hist].astype(str).str.replace('.0', '') == str(re_logado_str)]
                 else:
                     base_historico = pd.DataFrame()
 
@@ -1260,19 +1266,28 @@ else:
             agenda_do_usuario = {tec: info for tec, info in st.session_state['agenda_matinal'].items() if str(info.get('re_iq')) == str(re_logado_str) or perfil_usuario == 'GESTÃO'}
             
             if st.session_state.get('email_pronto') and not st.session_state.get('email_matinal_enviado'):
-                st.info("📤 **Passo 1 de 2 (Obrigatório):** Clique abaixo para abrir o e-mail do relatório para a Gestão.")
+                st.info("📤 **Passo 1 de 3 (Obrigatório):** Clique abaixo para abrir o e-mail do relatório para a Gestão.")
                 st.markdown(f'<a href="{st.session_state["email_pronto"]}" target="_blank" style="display: block; text-align: center; padding: 0.9em; color: white; background-color: #007BFF; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">📩 1. ABRIR E-MAIL COM O RELATÓRIO</a>', unsafe_allow_html=True)
                 st.write("")
-                if st.button("👉 Já enviei o e-mail, avançar para o WhatsApp"):
+                if st.button("👉 Já enviei o e-mail, ir para o WhatsApp do Técnico"):
                     st.session_state['email_matinal_enviado'] = True
                     st.rerun()
 
-            elif st.session_state.get('email_matinal_enviado') and st.session_state.get('zap_matinal_pronto') and not st.session_state.get('zap_matinal_enviado'):
+            elif st.session_state.get('email_matinal_enviado') and st.session_state.get('zap_tec_matinal') and not st.session_state.get('zap_tec_matinal_enviado', False):
                 st.success("✅ E-mail processado!")
-                st.info("💬 **Passo 2 de 2 (Obrigatório):** Clique abaixo para enviar o relatório no Grupo do WhatsApp.")
-                st.markdown(f'<a href="{st.session_state["zap_matinal_pronto"]}" target="_blank" style="display: block; text-align: center; padding: 0.9em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">💬 2. ENVIAR NO WHATSAPP (GRUPO IQ)</a>', unsafe_allow_html=True)
+                st.info("💬 **Passo 2 de 3 (WhatsApp do Técnico):** Envie para o técnico a lista de itens pontuados.")
+                st.markdown(f'<a href="{st.session_state["zap_tec_matinal"]}" target="_blank" style="display: block; text-align: center; padding: 0.9em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">📱 2. ENVIAR RESUMO NO WHATSAPP DO TÉCNICO</a>', unsafe_allow_html=True)
                 st.write("")
-                if st.button("✅ Já enviei no WhatsApp, Concluir Processo"):
+                if st.button("👉 Já enviei para o Técnico, ir para o Grupo IQ"):
+                    st.session_state['zap_tec_matinal_enviado'] = True
+                    st.rerun()
+
+            elif st.session_state.get('zap_tec_matinal_enviado', False) and st.session_state.get('zap_matinal_pronto') and not st.session_state.get('zap_matinal_enviado'):
+                st.success("✅ WhatsApp do Técnico processado!")
+                st.info("💬 **Passo 3 de 3 (Obrigatório):** Envie o relatório no Grupo do WhatsApp (IQ).")
+                st.markdown(f'<a href="{st.session_state["zap_matinal_pronto"]}" target="_blank" style="display: block; text-align: center; padding: 0.9em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">💬 3. ENVIAR NO WHATSAPP (GRUPO IQ)</a>', unsafe_allow_html=True)
+                st.write("")
+                if st.button("✅ Já enviei no Grupo, Concluir Processo"):
                     tec_concluido = st.session_state.get('tec_concluido_atual')
                     if tec_concluido and tec_concluido in st.session_state['agenda_matinal']:
                         del st.session_state['agenda_matinal'][tec_concluido]
@@ -1280,7 +1295,9 @@ else:
 
                     st.session_state['email_pronto'] = None
                     st.session_state['zap_matinal_pronto'] = None
+                    st.session_state['zap_tec_matinal'] = None
                     st.session_state['email_matinal_enviado'] = False
+                    st.session_state['zap_tec_matinal_enviado'] = False
                     st.session_state['zap_matinal_enviado'] = False
                     st.session_state['tec_selecionado_atalho'] = None
                     st.session_state['tec_concluido_atual'] = None
@@ -1405,6 +1422,7 @@ else:
                                 tec_row = equipe_vigente[equipe_vigente['nome'] == tec_atual]
                                 tec_login = tec_row['login'].iloc[0] if not tec_row.empty else "N/A"
                                 tec_re = tec_row['re'].iloc[0] if ('re' in tec_row.columns and not tec_row.empty) else tec_login
+                                tel_tec = tec_row['telefone_tec'].iloc[0] if not tec_row.empty and 'telefone_tec' in tec_row.columns else "5511994524040"
                                 
                                 links_fotos = salvar_fotos_no_cloudinary(fotos_upload, tec_atual, "Evidencias_Matinal")
                                 
@@ -1445,6 +1463,10 @@ else:
                                 
                                 fotos_txt = "\n".join(links_fn for links_fn in links_fotos) if 'links_fotos' in locals() else ""
                                 
+                                # Mensagem para o WhatsApp do Técnico
+                                msg_zap_tec_mat = f"Olá *{tec_atual}*,\n\nSua *Vistoria Matinal (IVM)* foi realizada pelo IQ *{st.session_state['nome_iq']}*.\n\n*Itens Faltantes / Irregulares apontados:*\n- {resumo_faltas}\n\n*Observações:* {obs_final}\n\nPor favor, providencie a regularização dos itens."
+                                url_zap_tec_mat = f"https://api.whatsapp.com/send?phone={tel_tec}&text={urllib.parse.quote(msg_zap_tec_mat)}"
+
                                 msg_whatsapp_mat = f"*RELATÓRIO DE MATINAL (IVM 2026)*\n*ID da Vistoria:* {vistoria_id}\n*Técnico:* {tec_atual}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Placa do Veículo:* {placa_veiculo}\n*Itens Faltantes / Irregulares:*\n- {resumo_faltas}\n\n*Observações:* {obs_final}\n\n*Evidências (Fotos):*\n{fotos_txt}"
                                 url_zap_mat = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_whatsapp_mat)}"
 
@@ -1452,8 +1474,10 @@ else:
                                 url_email = f"mailto:{DESTINATARIOS_MATINAL}?subject=Relatorio Matinal [ID {vistoria_id}] - RE {tec_re} - {tec_atual}&body={urllib.parse.quote(corpo_email)}"
                                 
                                 st.session_state['zap_matinal_pronto'] = url_zap_mat
+                                st.session_state['zap_tec_matinal'] = url_zap_tec_mat
                                 st.session_state['email_pronto'] = url_email
                                 st.session_state['email_matinal_enviado'] = False
+                                st.session_state['zap_tec_matinal_enviado'] = False
                                 st.session_state['zap_matinal_enviado'] = False
                                 st.rerun()
 
@@ -1463,23 +1487,34 @@ else:
         st.write("Auditoria baseada nos códigos oficiais da Totale. Registro de evidência e disparo para o WhatsApp (Grupo IQ).")
         
         if st.session_state.get('zap_pronto') and not st.session_state.get('email_inst_enviado', False):
-            st.info("📤 **Passo 1 de 2 (Obrigatório):** Clique abaixo para abrir o e-mail da auditoria para a Gestão.")
+            st.info("📤 **Passo 1 de 3 (Obrigatório):** Clique abaixo para abrir o e-mail da auditoria para a Gestão.")
             if st.session_state.get('email_instalacao'):
                 st.markdown(f'<a href="{st.session_state["email_instalacao"]}" target="_blank" style="display: block; text-align: center; padding: 0.9em; color: white; background-color: #007BFF; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">📩 1. ABRIR E-MAIL COM O RELATÓRIO</a>', unsafe_allow_html=True)
             st.write("")
-            if st.button("👉 Já enviei o e-mail, avançar para o WhatsApp"):
+            if st.button("👉 Já enviei o e-mail, ir para o WhatsApp do Técnico"):
                 st.session_state['email_inst_enviado'] = True
                 st.rerun()
 
-        elif st.session_state.get('email_inst_enviado', False) and st.session_state.get('zap_pronto'):
+        elif st.session_state.get('email_inst_enviado', False) and st.session_state.get('zap_tec_instalacao') and not st.session_state.get('zap_tec_inst_enviado', False):
             st.success("✅ E-mail processado!")
-            st.info("💬 **Passo 2 de 2 (Obrigatório):** Clique abaixo para enviar no Grupo do WhatsApp.")
-            st.markdown(f'<a href="{st.session_state["zap_pronto"]}" target="_blank" style="display: block; text-align: center; padding: 0.9em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">💬 2. ENVIAR NO WHATSAPP (GRUPO IQ)</a>', unsafe_allow_html=True)
+            st.info("💬 **Passo 2 de 3 (WhatsApp do Técnico):** Envie para o técnico a lista de falhas apontadas.")
+            st.markdown(f'<a href="{st.session_state["zap_tec_instalacao"]}" target="_blank" style="display: block; text-align: center; padding: 0.9em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">📱 2. ENVIAR RESUMO NO WHATSAPP DO TÉCNICO</a>', unsafe_allow_html=True)
+            st.write("")
+            if st.button("👉 Já enviei para o Técnico, ir para o Grupo IQ"):
+                st.session_state['zap_tec_inst_enviado'] = True
+                st.rerun()
+
+        elif st.session_state.get('zap_tec_inst_enviado', False) and st.session_state.get('zap_pronto'):
+            st.success("✅ WhatsApp do Técnico processado!")
+            st.info("💬 **Passo 3 de 3 (Obrigatório):** Clique abaixo para enviar no Grupo do WhatsApp.")
+            st.markdown(f'<a href="{st.session_state["zap_pronto"]}" target="_blank" style="display: block; text-align: center; padding: 0.9em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">💬 3. ENVIAR NO WHATSAPP (GRUPO IQ)</a>', unsafe_allow_html=True)
             st.write("")
             if st.button("✅ Já enviei no WhatsApp, Concluir Processo"):
                 st.session_state['zap_pronto'] = None
                 st.session_state['email_instalacao'] = None
+                st.session_state['zap_tec_instalacao'] = None
                 st.session_state['email_inst_enviado'] = False
+                st.session_state['zap_tec_inst_enviado'] = False
                 st.rerun()
         else:
             col_tec, col_cont = st.columns(2)
@@ -1526,6 +1561,7 @@ else:
                         tec_row = dados_completos[dados_completos['nome'] == tec_inst]
                         tec_login = tec_row['login'].iloc[0] if not tec_row.empty else "N/A"
                         tec_re = tec_row['re'].iloc[0] if ('re' in tec_row.columns and not tec_row.empty) else tec_login
+                        tel_tec = tec_row['telefone_tec'].iloc[0] if not tec_row.empty and 'telefone_tec' in tec_row.columns else "5511994524040"
                         
                         links_fotos = salvar_fotos_no_cloudinary(fotos_inst, tec_inst, "Evidencias_Instalacao")
                         resumo_erros_sheets = " / ".join(erros_encontrados) if erros_encontrados else "Instalação sem falhas registradas."
@@ -1547,6 +1583,11 @@ else:
                             linhas_erros = "- Nenhuma falha encontrada (100% conforme)"
 
                         fotos_txt = "\n".join(links_fotos)
+                        
+                        # Mensagem para o WhatsApp do Técnico
+                        msg_zap_tec_inst = f"Olá *{tec_inst}*,\n\nSua *Auditoria de Instalação (Contrato: {num_contrato})* foi realizada pelo IQ *{st.session_state['nome_iq']}*.\n\n*Falhas Encontradas:*\n{linhas_erros}\n\n*Observações:* {obs_inst}\n\nPor favor, verifique os pontos apontados."
+                        url_zap_tec_inst = f"https://api.whatsapp.com/send?phone={tel_tec}&text={urllib.parse.quote(msg_zap_tec_inst)}"
+
                         msg_whatsapp = f"*AUDITORIA DE INSTALAÇÃO - TOTALE ABC*\n*ID da Vistoria:* {vistoria_inst_id}\n\n*Contrato:* {num_contrato}\n*RE do Técnico:* {tec_re}\n*Técnico:* {tec_inst}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Falhas Encontradas:*\n{linhas_erros}\n\n*Observações:* {obs_inst}\n\n*Evidências (Fotos):*\n{fotos_txt}"
                         url_whatsapp = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_whatsapp)}"
                         
@@ -1555,7 +1596,9 @@ else:
                         
                         st.session_state['zap_pronto'] = url_whatsapp
                         st.session_state['email_instalacao'] = url_email
+                        st.session_state['zap_tec_instalacao'] = url_zap_tec_inst
                         st.session_state['email_inst_enviado'] = False
+                        st.session_state['zap_tec_inst_enviado'] = False
                         st.rerun()
 
     # --- PÁGINA: CONTROLE DE REPOSIÇÃO ---
@@ -1588,13 +1631,11 @@ else:
                 if filtro_inicial_tec in lista_tecnicos_pendentes:
                     idx_tec_ini = lista_tecnicos_pendentes.index(filtro_inicial_tec) + 1
 
-                # 1. SELEÇÃO APENAS DO NOME DO TÉCNICO
                 escolha_tec = st.selectbox("👤 Selecione o Técnico:", ["Selecione o técnico..."] + lista_tecnicos_pendentes, index=idx_tec_ini)
 
                 if escolha_tec != "Selecione o técnico...":
                     st.session_state['filtro_tec_reposicao'] = None
                     
-                    # Filtra os itens pendentes daquele técnico
                     itens_tec_df = pendentes_df[pendentes_df['Nome_Tecnico'] == escolha_tec]
                     
                     st.write(f"### Itens Faltantes para: **{escolha_tec}**")
@@ -1741,7 +1782,7 @@ else:
                                 msg_errata_zap_i = f"⚠️ *[ERRATA - RELATÓRIO EDITADO]*\n*AUDITORIA DE INSTALAÇÃO - TOTALE ABC*\n*ID da Vistoria:* {id_busca_inst}\n\n*Contrato:* {edit_contrato}\n*Técnico:* {edit_tec_i}\n\n*Falhas Encontradas (Atualizadas):*\n- {edit_erros}\n\n*Observações:* {edit_obs_i}\n\n*Evidências (Fotos):*\n{links_fi}"
                                 url_errata_zap_i = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_errata_zap_i)}"
                                 
-                                corpo_errata_email_i = f"⚠️ [ERRATA - RELATÓRIO EDITADO]\nAUDITORIA DE INSTALAÇÃO\nID da Vistoria: {id_busca_inst}\nContrato: {edit_contrato}\nTécnico: {edit_tec_i}\n\nFalhas Encontradas (Atualizadas):\n- {edit_erros}\n\nObservações:\n{edit_obs_i}\n\nEVIDÊNCIA FOTO:\n{links_fi}"
+                                corpo_errata_email_i = f"⚠️️ [ERRATA - RELATÓRIO EDITADO]\nAUDITORIA DE INSTALAÇÃO\nID da Vistoria: {id_busca_inst}\nContrato: {edit_contrato}\nTécnico: {edit_tec_i}\n\nFalhas Encontradas (Atualizadas):\n- {edit_erros}\n\nObservações:\n{edit_obs_i}\n\nEVIDÊNCIA FOTO:\n{links_fi}"
                                 url_errata_email_i = f"mailto:{DESTINATARIOS_INSTALACAO}?subject=ERRATA - Auditoria [ID {id_busca_inst}] - Contrato {edit_contrato} - {edit_tec_i}&body={urllib.parse.quote(corpo_errata_email_i)}"
                                 
                                 st.success("✅ Auditoria atualizada com sucesso! Utilize os links abaixo para enviar a ERRATA:")
