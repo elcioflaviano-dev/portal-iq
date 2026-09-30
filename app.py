@@ -127,8 +127,6 @@ if 'pagina_atual' not in st.session_state: st.session_state['pagina_atual'] = "D
 if 'email_pronto' not in st.session_state: st.session_state['email_pronto'] = None
 if 'zap_pronto' not in st.session_state: st.session_state['zap_pronto'] = None
 if 'zap_matinal_pronto' not in st.session_state: st.session_state['zap_matinal_pronto'] = None
-if 'zap_tec_matinal' not in st.session_state: st.session_state['zap_tec_matinal'] = None
-if 'zap_tec_instalacao' not in st.session_state: st.session_state['zap_tec_instalacao'] = None
 if 'email_matinal_enviado' not in st.session_state: st.session_state['email_matinal_enviado'] = False
 if 'zap_matinal_enviado' not in st.session_state: st.session_state['zap_matinal_enviado'] = False
 if 'zap_agenda_pronto' not in st.session_state: st.session_state['zap_agenda_pronto'] = None
@@ -797,7 +795,7 @@ else:
         st.title(titulo_painel)
         st.write("")
 
-        # --- RESUMO DE REPOSIÇÕES PENDENTES NA TELA INICIAL (APENAS NOME DO TÉCNICO) ---
+        # --- RESUMO DE REPOSIÇÕES PENDENTES NA TELA INICIAL (TOTAL DE TÉCNICOS) ---
         try:
             planilha_dash_rep = conectar_planilha()
             try:
@@ -837,30 +835,31 @@ else:
             
             pendentes_rep = df_drep[df_drep['Status_Reposicao'].astype(str).str.upper() == 'PENDENTE']
             
-            hoje_dt = datetime.now(fuso_brasil)
-            antigos_count = 0
-            for _, r in pendentes_rep.iterrows():
-                try:
-                    dt_reg = datetime.strptime(str(r.get('Data', ''))[:10], "%d/%m/%Y").replace(tzinfo=fuso_brasil)
-                    if (hoje_dt - dt_reg).days > 5:
-                        antigos_count += 1
-                except:
-                    pass
+            if not pendentes_rep.empty:
+                tecnicos_pendentes_unicos = pendentes_rep[['Nome_Tecnico', 'Nome_IQ', 'Data']].drop_duplicates(subset=['Nome_Tecnico'])
+                total_tecnicos_pendentes = len(tecnicos_pendentes_unicos)
+                
+                hoje_dt = datetime.now(fuso_brasil)
+                antigos_count = 0
+                for _, r in tecnicos_pendentes_unicos.iterrows():
+                    try:
+                        dt_reg = datetime.strptime(str(r.get('Data', ''))[:10], "%d/%m/%Y").replace(tzinfo=fuso_brasil)
+                        if (hoje_dt - dt_reg).days > 5:
+                            antigos_count += 1
+                    except:
+                        pass
 
-            total_pendentes_rep = len(pendentes_rep)
-            if total_pendentes_rep > 0:
                 card_tipo = "metric-card-red" if antigos_count > 0 else "metric-card-orange"
                 st.markdown(f'<div class="{card_tipo}">', unsafe_allow_html=True)
                 st.markdown('<div class="metric-title">📦 ALERTA DE REPOSIÇÃO DE ITENS</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="metric-value">{total_pendentes_rep} Itens Pendentes</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="metric-value">{total_tecnicos_pendentes} Técnicos com Itens Pendentes</div>', unsafe_allow_html=True)
                 if antigos_count > 0:
-                    st.markdown(f'<div class="metric-sub">⚠️ Atenção: Existem <b>{antigos_count}</b> itens com mais de 5 dias aguardando reposição!</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="metric-sub">⚠️ Atenção: Existem <b>{antigos_count}</b> técnicos com pendências há mais de 5 dias!</div>', unsafe_allow_html=True)
                 else:
                     st.markdown(f'<div class="metric-sub">Clique no nome do técnico para gerenciar a reposição.</div>', unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
 
                 st.write("**Técnicos com pendências de reposição:**")
-                tecnicos_pendentes_unicos = pendentes_rep[['Nome_Tecnico', 'Nome_IQ']].drop_duplicates()
                 for _, prow in tecnicos_pendentes_unicos.iterrows():
                     c_tec_rep1, c_tec_rep2 = st.columns([4, 1])
                     c_tec_rep1.write(f"👤 **{prow.get('Nome_Tecnico', '')}** (IQ: {prow.get('Nome_IQ', '')})")
@@ -935,7 +934,7 @@ else:
                 realizado_alvo = str(val_real) if val_real != '' else "0"
 
         st.markdown('<div class="metric-card-green">', unsafe_allow_html=True)
-        st.markdown('<div class="metric-title">⏱️ Horas de Monitoria RPPA</div>', unsafe_allow_html=True)
+        st.markdown('<div class="metric-title">⏱️️ Horas de Monitoria RPPA</div>', unsafe_allow_html=True)
 
         if perfil_usuario == 'GESTÃO' and not re_alvo_str:
             st.info("ℹ️ Selecione um IQ específico no menu lateral esquerdo para gerenciar as horas de monitoria.")
@@ -1139,7 +1138,7 @@ else:
                     base_historico = dados_completos
             else:
                 if col_re_hist in dados_completos.columns:
-                    base_historico = dados_completos[dados_completos[col_re_hist].astype(str).str.replace('.0', '') == str(re_logado_str)]
+                    base_historico = dados_completos[dados_completos[col_re_hist].astype(str) == str(re_logado_str)]
                 else:
                     base_historico = pd.DataFrame()
 
@@ -1415,7 +1414,7 @@ else:
                         
                         if st.button("Gravar Vistoria e Iniciar Envio", type="primary"):
                             if not fotos_upload:
-                                st.warning("⚠️ O envio de ao menos uma foto é obrigatório para comprovação.")
+                                st.warning("⚠️️ O envio de ao menos uma foto é obrigatório para comprovação.")
                             elif not (placa_veiculo.strip() and lote_capacete.strip() and venc_carneira.strip() and lote_cinto.strip() and lote_talabarte.strip() and lote_luva_pig.strip() and lote_luva_vaq.strip() and venc_protetor.strip() and tam_camisa.strip() and tam_calca.strip() and tam_jaqueta.strip()):
                                 st.warning("⚠️ Todos os campos de Placa do Veículo, Lotes, Validades e Tamanhos de Uniformes são obrigatórios.")
                             else:
@@ -1463,7 +1462,6 @@ else:
                                 
                                 fotos_txt = "\n".join(links_fn for links_fn in links_fotos) if 'links_fotos' in locals() else ""
                                 
-                                # Mensagem para o WhatsApp do Técnico
                                 msg_zap_tec_mat = f"Olá *{tec_atual}*,\n\nSua *Vistoria Matinal (IVM)* foi realizada pelo IQ *{st.session_state['nome_iq']}*.\n\n*Itens Faltantes / Irregulares apontados:*\n- {resumo_faltas}\n\n*Observações:* {obs_final}\n\nPor favor, providencie a regularização dos itens."
                                 url_zap_tec_mat = f"https://api.whatsapp.com/send?phone={tel_tec}&text={urllib.parse.quote(msg_zap_tec_mat)}"
 
@@ -1584,7 +1582,6 @@ else:
 
                         fotos_txt = "\n".join(links_fotos)
                         
-                        # Mensagem para o WhatsApp do Técnico
                         msg_zap_tec_inst = f"Olá *{tec_inst}*,\n\nSua *Auditoria de Instalação (Contrato: {num_contrato})* foi realizada pelo IQ *{st.session_state['nome_iq']}*.\n\n*Falhas Encontradas:*\n{linhas_erros}\n\n*Observações:* {obs_inst}\n\nPor favor, verifique os pontos apontados."
                         url_zap_tec_inst = f"https://api.whatsapp.com/send?phone={tel_tec}&text={urllib.parse.quote(msg_zap_tec_inst)}"
 
@@ -1782,7 +1779,7 @@ else:
                                 msg_errata_zap_i = f"⚠️ *[ERRATA - RELATÓRIO EDITADO]*\n*AUDITORIA DE INSTALAÇÃO - TOTALE ABC*\n*ID da Vistoria:* {id_busca_inst}\n\n*Contrato:* {edit_contrato}\n*Técnico:* {edit_tec_i}\n\n*Falhas Encontradas (Atualizadas):*\n- {edit_erros}\n\n*Observações:* {edit_obs_i}\n\n*Evidências (Fotos):*\n{links_fi}"
                                 url_errata_zap_i = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_errata_zap_i)}"
                                 
-                                corpo_errata_email_i = f"⚠️️ [ERRATA - RELATÓRIO EDITADO]\nAUDITORIA DE INSTALAÇÃO\nID da Vistoria: {id_busca_inst}\nContrato: {edit_contrato}\nTécnico: {edit_tec_i}\n\nFalhas Encontradas (Atualizadas):\n- {edit_erros}\n\nObservações:\n{edit_obs_i}\n\nEVIDÊNCIA FOTO:\n{links_fi}"
+                                corpo_errata_email_i = f"⚠️ [ERRATA - RELATÓRIO EDITADO]\nAUDITORIA DE INSTALAÇÃO\nID da Vistoria: {id_busca_inst}\nContrato: {edit_contrato}\nTécnico: {edit_tec_i}\n\nFalhas Encontradas (Atualizadas):\n- {edit_erros}\n\nObservações:\n{edit_obs_i}\n\nEVIDÊNCIA FOTO:\n{links_fi}"
                                 url_errata_email_i = f"mailto:{DESTINATARIOS_INSTALACAO}?subject=ERRATA - Auditoria [ID {id_busca_inst}] - Contrato {edit_contrato} - {edit_tec_i}&body={urllib.parse.quote(corpo_errata_email_i)}"
                                 
                                 st.success("✅ Auditoria atualizada com sucesso! Utilize os links abaixo para enviar a ERRATA:")
