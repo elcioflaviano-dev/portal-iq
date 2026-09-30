@@ -351,7 +351,7 @@ def carregar_dados():
     todas_abas = [ws.title for ws in planilha.worksheets()]
     
     meses_info = []
-    abas_meses = [aba for aba in todas_abas if aba.upper() not in ['BASE_IQ', 'BASE_TECNICOS', 'CONTROLE_IQ', 'AGENDA_MATINAL', 'VISTORIAS_MATINAL', 'VISTORIA_INSTALACAO', 'LOG_ACESSOS', 'RESULTADO_MATINAL', 'OUTUBRO']]
+    abas_meses = [aba for aba in todas_abas if aba.upper() not in ['BASE_IQ', 'BASE_TECNICOS', 'CONTROLE_IQ', 'AGENDA_MATINAL', 'VISTORIAS_MATINAL', 'VISTORIA_INSTALACAO', 'LOG_ACESSOS', 'RESULTADO_MATINAL', 'OUTUBRO', 'CONTROLE_REPOSICAO']]
 
     for aba in abas_meses:
         df_mes = ler_aba(aba)
@@ -538,6 +538,16 @@ def registrar_vistoria_completa(re_iq, nome_iq, login_tec, nome_tec, tipo, irreg
             extra_info.get('tam_camisa', ''), extra_info.get('tam_calca', ''),
             extra_info.get('tam_jaqueta', ''), obs, links_str, "Concluída"
         ])
+        
+        # Registra automaticamente na aba de Controle de Reposição se houver itens faltantes
+        if irregulares and "conformidade" not in irregulares.lower():
+            try:
+                ws_rep = planilha.worksheet("Controle_Reposicao")
+            except:
+                ws_rep = planilha.add_worksheet(title="Controle_Reposicao", rows=100, cols=7)
+                ws_rep.append_row(["ID_Vistoria", "Data", "RE_IQ", "Nome_IQ", "Nome_Tecnico", "Itens_Faltantes", "Status_Reposicao"])
+            ws_rep.append_row([vistoria_id, data_hora, str(re_iq), nome_iq, nome_tec, irregulares, "Pendente"])
+
         st.cache_data.clear()
         return vistoria_id
     except Exception as e:
@@ -703,6 +713,10 @@ else:
         if st.button("🛠️ Vistoria de Instalação", use_container_width=True): 
             registrar_log_acesso(re_logado_str, st.session_state['nome_iq'], "NAVEGACAO", "Instalacao")
             st.session_state['pagina_atual'] = "Instalacao"
+            st.rerun()
+        if st.button("📦 Controle de Reposição", use_container_width=True): 
+            registrar_log_acesso(re_logado_str, st.session_state['nome_iq'], "NAVEGACAO", "Reposicao")
+            st.session_state['pagina_atual'] = "Reposicao"
             st.rerun()
         if st.button("📂 Histórico e Edições", use_container_width=True): 
             registrar_log_acesso(re_logado_str, st.session_state['nome_iq'], "NAVEGACAO", "HistoricoEdicoes")
@@ -1180,7 +1194,6 @@ else:
                 st.markdown(f'<a href="{st.session_state["zap_matinal_pronto"]}" target="_blank" style="display: block; text-align: center; padding: 0.9em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">💬 2. ENVIAR NO WHATSAPP (GRUPO IQ)</a>', unsafe_allow_html=True)
                 st.write("")
                 if st.button("✅ Já enviei no WhatsApp, Concluir Processo"):
-                    # Remove o técnico da agenda de forma definitiva e limpa os estados
                     tec_concluido = st.session_state.get('tec_concluido_atual')
                     if tec_concluido and tec_concluido in st.session_state['agenda_matinal']:
                         del st.session_state['agenda_matinal'][tec_concluido]
@@ -1216,7 +1229,7 @@ else:
                     if tec_atual != "Selecione...":
                         st.info(f"⚠️ **Atenção:** Marque abaixo **APENAS** os itens que estiverem **FALTANDO** ou **AUSENTES** para **{tec_atual}** ({data_selecionada_exec}).")
                         
-                        st.markdown("### 🏷️ Informações de Veículo, Lotes, Validades e Tamanhos (Preenchimento Obrigatório)")
+                        st.markdown("### 🏷️️ Informações de Veículo, Lotes, Validades e Tamanhos (Preenchimento Obrigatório)")
                         col_p1, col_l1, col_l2 = st.columns(3)
                         with col_p1:
                             placa_veiculo = st.text_input("Placa do Veículo *")
@@ -1345,7 +1358,11 @@ else:
                                 if aba_monitoramento_escolhida:
                                     atualizar_celula_especifica(aba_monitoramento_escolhida, tec_login, 'ACOMPANHAMENTO', 'SIM')
                                     
-                                # Guarda o nome para remoção definitiva após os passos obrigatórios
+                                # Remove o técnico da agenda imediatamente ao gravar
+                                if tec_atual in st.session_state['agenda_matinal']:
+                                    del st.session_state['agenda_matinal'][tec_atual]
+                                    salvar_agenda_no_sheets(st.session_state['agenda_matinal'])
+
                                 st.session_state['tec_concluido_atual'] = tec_atual
                                 
                                 fotos_txt = "\n".join(links_fn for links_fn in links_fotos) if 'links_fotos' in locals() else ""
@@ -1462,6 +1479,55 @@ else:
                         st.session_state['email_instalacao'] = url_email
                         st.session_state['email_inst_enviado'] = False
                         st.rerun()
+
+    # --- PÁGINA: CONTROLE DE REPOSIÇÃO ---
+    elif st.session_state['pagina_atual'] == "Reposicao":
+        st.title("📦 Controle de Reposição de Itens Faltantes")
+        st.write("Acompanhe e atualize o status de reposição dos itens apontados nas vistorias matinais.")
+        
+        try:
+            planilha_rep = conectar_planilha()
+            try:
+                ws_rep = planilha_rep.worksheet("Controle_Reposicao")
+            except:
+                ws_rep = planilha_rep.add_worksheet(title="Controle_Reposicao", rows=100, cols=7)
+                ws_rep.append_row(["ID_Vistoria", "Data", "RE_IQ", "Nome_IQ", "Nome_Tecnico", "Itens_Faltantes", "Status_Reposicao"])
+            
+            registros_rep = ws_rep.get_all_records()
+            df_rep = pd.DataFrame(registros_rep) if registros_rep else pd.DataFrame()
+        except:
+            df_rep = pd.DataFrame()
+
+        if df_rep.empty:
+            st.info("Nenhum item faltante registrado para controle de reposição até o momento.")
+        else:
+            if perfil_usuario != 'GESTÃO':
+                df_rep = df_rep[df_rep['RE_IQ'].astype(str).str.strip().str.replace('.0','') == re_logado_str]
+
+            st.dataframe(df_rep, hide_index=True, use_container_width=True)
+            st.write("")
+
+            id_reposicao = st.selectbox("Selecione o ID da Vistoria para atualizar status:", ["Selecione..."] + df_rep['ID_Vistoria'].astype(str).tolist(), key="sel_rep")
+
+            if id_reposicao != "Selecione...":
+                reg_r = df_rep[df_rep['ID_Vistoria'].astype(str) == id_reposicao].iloc[0]
+                status_atual = str(reg_r.get('Status_Reposicao', 'Pendente'))
+
+                with st.form("form_atualiza_reposicao"):
+                    st.subheader(f"Atualizar Reposição - Vistoria ID: {id_reposicao} ({reg_r.get('Nome_Tecnico','')})")
+                    st.write(f"**Itens Faltantes:** {reg_r.get('Itens_Faltantes','')}")
+                    
+                    novo_status = st.selectbox("Status da Reposição:", ["Pendente", "Em Transporte", "Reposição Concluída"], index=["Pendente", "Em Transporte", "Reposição Concluída"].index(status_atual) if status_atual in ["Pendente", "Em Transporte", "Reposição Concluída"] else 0)
+                    
+                    btn_salvar_rep = st.form_submit_button("Atualizar Status", type="primary")
+                    
+                    if btn_salvar_rep:
+                        cell_rep = ws_rep.find(id_reposicao)
+                        if cell_rep:
+                            ws_rep.update_cell(cell_rep.row, 7, novo_status)
+                            st.success("✅ Status de reposição atualizado com sucesso!")
+                            time.sleep(1)
+                            st.rerun()
 
     # --- PÁGINA: HISTÓRICO E EDIÇÕES (BUSCA SIMPLES POR TÉCNICO) ---
     elif st.session_state['pagina_atual'] == "HistoricoEdicoes":
@@ -1636,7 +1702,7 @@ else:
                     st.download_button(
                         label="📥 Baixar Excel (Instalação)",
                         data=excel_inst,
-                        file_name=f"Vistorias_Matinal_{datetime.now(fuso_brasil).strftime('%Y-%m-%d')}.xlsx",
+                        file_name=f"Vistorias_Instalacao_{datetime.now(fuso_brasil).strftime('%Y-%m-%d')}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         type="primary"
                     )
