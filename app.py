@@ -726,13 +726,9 @@ else:
             registrar_log_acesso(re_logado_str, st.session_state['nome_iq'], "NAVEGACAO", "Instalacao")
             st.session_state['pagina_atual'] = "Instalacao"
             st.rerun()
-        if st.button("📦 Controle de Reposição", use_container_width=True): 
-            registrar_log_acesso(re_logado_str, st.session_state['nome_iq'], "NAVEGACAO", "Reposicao")
-            st.session_state['pagina_atual'] = "Reposicao"
-            st.rerun()
-        if st.button("📂 Histórico e Edições", use_container_width=True): 
-            registrar_log_acesso(re_logado_str, st.session_state['nome_iq'], "NAVEGACAO", "HistoricoEdicoes")
-            st.session_state['pagina_atual'] = "HistoricoEdicoes"
+        if st.button("📦 Controle de Reposição e Edições", use_container_width=True): 
+            registrar_log_acesso(re_logado_str, st.session_state['nome_iq'], "NAVEGACAO", "ReposicaoEdicoes")
+            st.session_state['pagina_atual'] = "ReposicaoEdicoes"
             st.rerun()
         if st.button("🔑 Alterar Senha", use_container_width=True):
             registrar_log_acesso(re_logado_str, st.session_state['nome_iq'], "NAVEGACAO", "AlterarSenha")
@@ -960,7 +956,7 @@ else:
 
         st.divider()
 
-        # --- RESUMO DE REPOSIÇÕES PENDENTES NA TELA INICIAL (LOGADO APÓS A MATINAL) ---
+        # --- ALERTA DE REPOSIÇÃO DE ITENS (POSICIONADO APÓS A MATINAL) ---
         try:
             planilha_dash_rep = conectar_planilha()
             try:
@@ -1030,7 +1026,7 @@ else:
                     c_tec_rep1.write(f"👤 **{prow.get('Nome_Tecnico', '')}** (IQ: {prow.get('Nome_IQ', '')})")
                     if c_tec_rep2.button("Ver Técnico ➔", key=f"btn_ir_tec_{prow.get('Nome_Tecnico','')}"):
                         st.session_state['filtro_tec_reposicao'] = prow.get('Nome_Tecnico', '')
-                        st.session_state['pagina_atual'] = "Reposicao"
+                        st.session_state['pagina_atual'] = "ReposicaoEdicoes"
                         st.rerun()
                 st.write("")
 
@@ -1326,7 +1322,7 @@ else:
                     if tec_atual != "Selecione...":
                         st.info(f"⚠️ **Atenção:** Marque abaixo **APENAS** os itens que estiverem **FALTANDO** ou **AUSENTES** para **{tec_atual}** ({data_selecionada_exec}).")
                         
-                        st.markdown("### 🏷️ Informações de Veículo, Lotes, Validades e Tamanhos (Preenchimento Obrigatório)")
+                        st.markdown("### 🏷️️ Informações de Veículo, Lotes, Validades e Tamanhos (Preenchimento Obrigatório)")
                         col_p1, col_l1, col_l2 = st.columns(3)
                         with col_p1:
                             placa_veiculo = st.text_input("Placa do Veículo *")
@@ -1554,9 +1550,9 @@ else:
                 
                 if st.button("Gravar Auditoria e Iniciar Envio", type="primary"):
                     if not num_contrato.strip():
-                        st.warning("⚠️ O número do contrato é obrigatório para realizar a vistoria.")
+                        st.warning("⚠️️ O número do contrato é obrigatório para realizar a vistoria.")
                     elif not fotos_inst:
-                        st.warning("⚠️ O envio de ao menos uma foto é obrigatório para comprovar a auditoria.")
+                        st.warning("⚠️️ O envio de ao menos uma foto é obrigatório para comprovar a auditoria.")
                     else:
                         tec_row = dados_completos[dados_completos['nome'] == tec_inst]
                         tec_login = tec_row['login'].iloc[0] if not tec_row.empty else "N/A"
@@ -1600,193 +1596,192 @@ else:
                         st.session_state['zap_tec_inst_enviado'] = False
                         st.rerun()
 
-    # --- PÁGINA: CONTROLE DE REPOSIÇÃO ---
-    elif st.session_state['pagina_atual'] == "Reposicao":
-        st.title("📦 Controle de Reposição de Itens Faltantes")
-        st.write("Selecione o técnico para visualizar os itens faltantes e ticar o que foi reposto.")
+    # --- PÁGINA: CONTROLE DE REPOSIÇÃO E EDIÇÕES UNIFICADO ---
+    elif st.session_state['pagina_atual'] == "ReposicaoEdicoes":
+        st.title("📦 Controle de Reposição e Edição de Vistorias")
+        st.write("Gerencie os itens faltantes para reposição ou consulte e edite vistorias anteriores gerando errata.")
         
-        try:
-            planilha_rep = conectar_planilha()
-            ws_rep = planilha_rep.worksheet("Controle_Reposicao")
-            df_rep = pd.DataFrame(ws_rep.get_all_records())
-        except:
-            df_rep = pd.DataFrame()
-
-        if df_rep.empty or 'ID_Item' not in df_rep.columns:
-            st.info("Nenhum item faltante registrado para controle de reposição até o momento.")
-        else:
-            if perfil_usuario != 'GESTÃO':
-                df_rep = df_rep[df_rep['RE_IQ'].astype(str).str.strip().str.replace('.0','') == re_logado_str]
-
-            pendentes_df = df_rep[df_rep['Status_Reposicao'].astype(str).str.upper() == 'PENDENTE']
-
-            if pendentes_df.empty:
-                st.success("🎉 Não há itens pendentes de reposição no momento!")
-            else:
-                lista_tecnicos_pendentes = sorted(pendentes_df['Nome_Tecnico'].dropna().unique().tolist())
-                
-                idx_tec_ini = 0
-                filtro_inicial_tec = st.session_state.get('filtro_tec_reposicao', None)
-                if filtro_inicial_tec in lista_tecnicos_pendentes:
-                    idx_tec_ini = lista_tecnicos_pendentes.index(filtro_inicial_tec) + 1
-
-                escolha_tec = st.selectbox("👤 Selecione o Técnico:", ["Selecione o técnico..."] + lista_tecnicos_pendentes, index=idx_tec_ini)
-
-                if escolha_tec != "Selecione o técnico...":
-                    st.session_state['filtro_tec_reposicao'] = None
-                    
-                    itens_tec_df = pendentes_df[pendentes_df['Nome_Tecnico'] == escolha_tec]
-                    
-                    st.write(f"### Itens Faltantes para: **{escolha_tec}**")
-                    st.write("Tique abaixo os itens que **já foram repostos** e clique em atualizar:")
-
-                    with st.form("form_ticar_reposicao"):
-                        itens_selecionados_baixa = []
-                        for _, r_item in itens_tec_df.iterrows():
-                            id_i = str(r_item.get('ID_Item', ''))
-                            nome_it = str(r_item.get('Item_Faltante', ''))
-                            data_it = str(r_item.get('Data', ''))[:10]
-                            
-                            if st.checkbox(f"Repor: **{nome_it}** (Data da Vistoria: {data_it})", key=f"chk_rep_{id_i}"):
-                                itens_selecionados_baixa.append(id_i)
-
-                        btn_dar_baixa = st.form_submit_button("✅ Concluir Reposição dos Itens Ticados", type="primary")
-
-                        if btn_dar_baixa:
-                            if not itens_selecionados_baixa:
-                                st.warning("⚠️ Nenhum item foi selecionado para dar baixa.")
-                            else:
-                                for id_baixa in itens_selecionados_baixa:
-                                    cell_rep = ws_rep.find(id_baixa)
-                                    if cell_rep:
-                                        ws_rep.update_cell(cell_rep.row, 8, "Reposição Concluída")
-                                st.success("🎉 Reposição dos itens selecionados concluída com sucesso!")
-                                time.sleep(1)
-                                st.rerun()
-
-    # --- PÁGINA 5: HISTÓRICO E EDIÇÕES (BUSCA SIMPLES POR TÉCNICO) ---
-    elif st.session_state['pagina_atual'] == "HistoricoEdicoes":
-        st.title("📂 Histórico e Edição de Vistorias")
-        st.write("Busque pelo nome do técnico para localizar, editar e reenviar o relatório com aviso de **ERRATA**.")
+        tab_rep_unificada, tab_edit_unificada = st.tabs(["📦 1. Controle de Reposição de Itens", "📂 2. Histórico e Edição (Erratas)"])
         
-        planilha_hist = conectar_planilha()
-        tipo_hist = st.radio("Selecione o tipo de vistoria:", ["📊 Vistorias Matinais", "🛠️ Vistorias de Instalação"], horizontal=True)
-        
-        busca_tec_nome = st.text_input("🔍 Digite o nome do técnico para buscar:")
-        
-        if tipo_hist == "📊 Vistorias Matinais":
+        with tab_rep_unificada:
             try:
-                ws_hmat = planilha_hist.worksheet("Vistorias_Matinal")
-                dados_hmat = ws_hmat.get_all_records()
-                df_hmat = pd.DataFrame(dados_hmat) if dados_hmat else pd.DataFrame()
+                planilha_rep = conectar_planilha()
+                ws_rep = planilha_rep.worksheet("Controle_Reposicao")
+                df_rep = pd.DataFrame(ws_rep.get_all_records())
             except:
-                df_hmat = pd.DataFrame()
-                
-            if df_hmat.empty:
-                st.info("Nenhuma vistoria matinal registrada até o momento.")
+                df_rep = pd.DataFrame()
+
+            if df_rep.empty or 'ID_Item' not in df_rep.columns:
+                st.info("Nenhum item faltante registrado para controle de reposição até o momento.")
             else:
                 if perfil_usuario != 'GESTÃO':
-                    df_hmat = df_hmat[df_hmat['RE_IQ'].astype(str).str.strip().str.replace('.0','') == re_logado_str]
-                
-                if busca_tec_nome.strip():
-                    df_hmat = df_hmat[df_hmat['Nome_Tecnico'].astype(str).str.contains(busca_tec_nome, case=False, na=False)]
-                
+                    df_rep = df_rep[df_rep['RE_IQ'].astype(str).str.strip().str.replace('.0','') == re_logado_str]
+
+                pendentes_df = df_rep[df_rep['Status_Reposicao'].astype(str).str.upper() == 'PENDENTE']
+
+                if pendentes_df.empty:
+                    st.success("🎉 Não há itens pendentes de reposição no momento!")
+                else:
+                    lista_tecnicos_pendentes = sorted(pendentes_df['Nome_Tecnico'].dropna().unique().tolist())
+                    
+                    idx_tec_ini = 0
+                    filtro_inicial_tec = st.session_state.get('filtro_tec_reposicao', None)
+                    if filtro_inicial_tec in lista_tecnicos_pendentes:
+                        idx_tec_ini = lista_tecnicos_pendentes.index(filtro_inicial_tec) + 1
+
+                    escolha_tec = st.selectbox("👤 Selecione o Técnico:", ["Selecione o técnico..."] + lista_tecnicos_pendentes, index=idx_tec_ini, key="sel_tec_rep_aba")
+
+                    if escolha_tec != "Selecione o técnico...":
+                        st.session_state['filtro_tec_reposicao'] = None
+                        
+                        itens_tec_df = pendentes_df[pendentes_df['Nome_Tecnico'] == escolha_tec]
+                        
+                        st.write(f"### Itens Faltantes para: **{escolha_tec}**")
+                        st.write("Tique abaixo os itens que **já foram repostos** e clique em atualizar:")
+
+                        with st.form("form_ticar_reposicao_aba"):
+                            itens_selecionados_baixa = []
+                            for _, r_item in itens_tec_df.iterrows():
+                                id_i = str(r_item.get('ID_Item', ''))
+                                nome_it = str(r_item.get('Item_Faltante', ''))
+                                data_it = str(r_item.get('Data', ''))[:10]
+                                
+                                if st.checkbox(f"Repor: **{nome_it}** (Data da Vistoria: {data_it})", key=f"chk_rep_{id_i}"):
+                                    itens_selecionados_baixa.append(id_i)
+
+                            btn_dar_baixa = st.form_submit_button("✅ Concluir Reposição dos Itens Ticados", type="primary")
+
+                            if btn_dar_baixa:
+                                if not itens_selecionados_baixa:
+                                    st.warning("⚠️ Nenhum item foi selecionado para dar baixa.")
+                                else:
+                                    for id_baixa in itens_selecionados_baixa:
+                                        cell_rep = ws_rep.find(id_baixa)
+                                        if cell_rep:
+                                            ws_rep.update_cell(cell_rep.row, 8, "Reposição Concluída")
+                                    st.success("🎉 Reposição dos itens selecionados concluída com sucesso!")
+                                    time.sleep(1)
+                                    st.rerun()
+
+        with tab_edit_unificada:
+            planilha_hist = conectar_planilha()
+            tipo_hist = st.radio("Selecione o tipo de vistoria:", ["📊 Vistorias Matinais", "🛠️ Vistorias de Instalação"], horizontal=True, key="tipo_hist_unificado")
+            
+            busca_tec_nome = st.text_input("🔍 Digite o nome do técnico para buscar:", key="busca_tec_unificado")
+            
+            if tipo_hist == "📊 Vistorias Matinais":
+                try:
+                    ws_hmat = planilha_hist.worksheet("Vistorias_Matinal")
+                    dados_hmat = ws_hmat.get_all_records()
+                    df_hmat = pd.DataFrame(dados_hmat) if dados_hmat else pd.DataFrame()
+                except:
+                    df_hmat = pd.DataFrame()
+                    
                 if df_hmat.empty:
-                    st.warning("Nenhum registro encontrado para este técnico.")
+                    st.info("Nenhuma vistoria matinal registrada até o momento.")
                 else:
-                    st.dataframe(df_hmat, hide_index=True, use_container_width=True)
-                    st.write("")
+                    if perfil_usuario != 'GESTÃO':
+                        df_hmat = df_hmat[df_hmat['RE_IQ'].astype(str).str.strip().str.replace('.0','') == re_logado_str]
                     
-                    id_busca_mat = st.selectbox("Selecione o ID da Matinal para Editar/Reenviar:", ["Selecione..."] + df_hmat['ID_Vistoria'].astype(str).tolist(), key="sel_ed_mat")
+                    if busca_tec_nome.strip():
+                        df_hmat = df_hmat[df_hmat['Nome_Tecnico'].astype(str).str.contains(busca_tec_nome, case=False, na=False)]
                     
-                    if id_busca_mat != "Selecione...":
-                        reg_sel = df_hmat[df_hmat['ID_Vistoria'].astype(str) == id_busca_mat].iloc[0]
+                    if df_hmat.empty:
+                        st.warning("Nenhum registro encontrado para este técnico.")
+                    else:
+                        st.dataframe(df_hmat, hide_index=True, use_container_width=True)
+                        st.write("")
                         
-                        with st.form("form_edita_mat"):
-                            st.subheader(f"Editando Vistoria Matinal ID: {id_busca_mat}")
-                            edit_tec = st.text_input("Técnico", value=str(reg_sel.get('Nome_Tecnico', '')))
-                            edit_placa = st.text_input("Placa do Veículo", value=str(reg_sel.get('Placa_Veiculo', '')))
-                            edit_irreg = st.text_area("Itens Faltantes / Irregulares", value=str(reg_sel.get('Itens_Irregulares', '')))
-                            edit_obs = st.text_area("Observações", value=str(reg_sel.get('Observacao', '')))
+                        id_busca_mat = st.selectbox("Selecione o ID da Matinal para Editar/Reenviar:", ["Selecione..."] + df_hmat['ID_Vistoria'].astype(str).tolist(), key="sel_ed_mat_unificado")
+                        
+                        if id_busca_mat != "Selecione...":
+                            reg_sel = df_hmat[df_hmat['ID_Vistoria'].astype(str) == id_busca_mat].iloc[0]
                             
-                            btn_salvar_edicao_mat = st.form_submit_button("Salvar Edição e Gerar Errata", type="primary")
-                            
-                            if btn_salvar_edicao_mat:
-                                cell_id = ws_hmat.find(id_busca_mat)
-                                if cell_id:
-                                    row_i = cell_id.row
-                                    ws_hmat.update_cell(row_i, 8, edit_irreg)
-                                    ws_hmat.update_cell(row_i, 9, edit_placa)
-                                    ws_hmat.update_cell(row_i, 20, edit_obs)
+                            with st.form("form_edita_mat_unificado"):
+                                st.subheader(f"Editando Vistoria Matinal ID: {id_busca_mat}")
+                                edit_tec = st.text_input("Técnico", value=str(reg_sel.get('Nome_Tecnico', '')))
+                                edit_placa = st.text_input("Placa do Veículo", value=str(reg_sel.get('Placa_Veiculo', '')))
+                                edit_irreg = st.text_area("Itens Faltantes / Irregulares", value=str(reg_sel.get('Itens_Irregulares', '')))
+                                edit_obs = st.text_area("Observações", value=str(reg_sel.get('Observacao', '')))
                                 
-                                links_f = str(reg_sel.get('Links_Fotos', ''))
+                                btn_salvar_edicao_mat = st.form_submit_button("Salvar Edição e Gerar Errata", type="primary")
                                 
-                                msg_errata_zap = f"⚠️ *[ERRATA - RELATÓRIO EDITADO]*\n*RELATÓRIO DE MATINAL (IVM 2026)*\n*ID da Vistoria:* {id_busca_mat}\n*Técnico:* {edit_tec}\n\n*Placa do Veículo:* {edit_placa}\n*Itens Faltantes / Irregulares:*\n- {edit_irreg}\n\n*Observações (Atualizadas):*\n{edit_obs}\n\n*Evidências (Fotos):*\n{links_f}"
-                                url_errata_zap = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_errata_zap)}"
-                                
-                                corpo_errata_email = f"⚠️ [ERRATA - RELATÓRIO EDITADO]\nRELATÓRIO DE MATINAL (IVM 2026)\nID da Vistoria: {id_busca_mat}\nTécnico: {edit_tec}\n\nPlaca do Veículo: {edit_placa}\nItens Faltantes / Irregulares:\n- {edit_irreg}\n\nObservações (Atualizadas):\n{edit_obs}\n\nEVIDÊNCIAS FOTOS:\n{links_f}"
-                                url_errata_email = f"mailto:{DESTINATARIOS_MATINAL}?subject=ERRATA - Relatorio Matinal [ID {id_busca_mat}] - {edit_tec}&body={urllib.parse.quote(corpo_errata_email)}"
-                                
-                                st.success("✅ Vistoria atualizada com sucesso! Utilize os links abaixo para enviar a ERRATA:")
-                                st.markdown(f'<a href="{url_errata_email}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #007BFF; border-radius: 8px; text-decoration: none; font-weight: bold; margin-bottom: 10px;">📩 1. ENVIAR ERRATA POR E-MAIL (GESTÃO)</a>', unsafe_allow_html=True)
-                                st.markdown(f'<a href="{url_errata_zap}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold;">💬 2. ENVIAR ERRATA NO WHATSAPP (GRUPO IQ)</a>', unsafe_allow_html=True)
+                                if btn_salvar_edicao_mat:
+                                    cell_id = ws_hmat.find(id_busca_mat)
+                                    if cell_id:
+                                        row_i = cell_id.row
+                                        ws_hmat.update_cell(row_i, 8, edit_irreg)
+                                        ws_hmat.update_cell(row_i, 9, edit_placa)
+                                        ws_hmat.update_cell(row_i, 20, edit_obs)
+                                    
+                                    links_f = str(reg_sel.get('Links_Fotos', ''))
+                                    
+                                    msg_errata_zap = f"⚠️ *[ERRATA - RELATÓRIO EDITADO]*\n*RELATÓRIO DE MATINAL (IVM 2026)*\n*ID da Vistoria:* {id_busca_mat}\n*Técnico:* {edit_tec}\n\n*Placa do Veículo:* {edit_placa}\n*Itens Faltantes / Irregulares:*\n- {edit_irreg}\n\n*Observações (Atualizadas):*\n{edit_obs}\n\n*Evidências (Fotos):*\n{links_f}"
+                                    url_errata_zap = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_errata_zap)}"
+                                    
+                                    corpo_errata_email = f"⚠️ [ERRATA - RELATÓRIO EDITADO]\nRELATÓRIO DE MATINAL (IVM 2026)\nID da Vistoria: {id_busca_mat}\nTécnico: {edit_tec}\n\nPlaca do Veículo: {edit_placa}\nItens Faltantes / Irregulares:\n- {edit_irreg}\n\nObservações (Atualizadas):\n{edit_obs}\n\nEVIDÊNCIAS FOTOS:\n{links_f}"
+                                    url_errata_email = f"mailto:{DESTINATARIOS_MATINAL}?subject=ERRATA - Relatorio Matinal [ID {id_busca_mat}] - {edit_tec}&body={urllib.parse.quote(corpo_errata_email)}"
+                                    
+                                    st.success("✅ Vistoria atualizada com sucesso! Utilize os links abaixo para enviar a ERRATA:")
+                                    st.markdown(f'<a href="{url_errata_email}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #007BFF; border-radius: 8px; text-decoration: none; font-weight: bold; margin-bottom: 10px;">📩 1. ENVIAR ERRATA POR E-MAIL (GESTÃO)</a>', unsafe_allow_html=True)
+                                    st.markdown(f'<a href="{url_errata_zap}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold;">💬 2. ENVIAR ERRATA NO WHATSAPP (GRUPO IQ)</a>', unsafe_allow_html=True)
 
-        else:
-            try:
-                ws_hinst = planilha_hist.worksheet("Vistoria_Instalacao")
-                dados_hinst = ws_hinst.get_all_records()
-                df_hinst = pd.DataFrame(dados_hinst) if dados_hinst else pd.DataFrame()
-            except:
-                df_hinst = pd.DataFrame()
-                
-            if df_hinst.empty:
-                st.info("Nenhuma auditoria de instalação registrada até o momento.")
             else:
-                if perfil_usuario != 'GESTÃO':
-                    df_hinst = df_hinst[df_hinst['RE_IQ'].astype(str).str.strip().str.replace('.0','') == re_logado_str]
-                
-                if busca_tec_nome.strip():
-                    df_hinst = df_hinst[df_hinst['Nome_Tecnico'].astype(str).str.contains(busca_tec_nome, case=False, na=False)]
-                
+                try:
+                    ws_hinst = planilha_hist.worksheet("Vistoria_Instalacao")
+                    dados_hinst = ws_hinst.get_all_records()
+                    df_hinst = pd.DataFrame(dados_hinst) if dados_hinst else pd.DataFrame()
+                except:
+                    df_hinst = pd.DataFrame()
+                    
                 if df_hinst.empty:
-                    st.warning("Nenhum registro encontrado para este técnico.")
+                    st.info("Nenhuma auditoria de instalação registrada até o momento.")
                 else:
-                    st.dataframe(df_hinst, hide_index=True, use_container_width=True)
-                    st.write("")
+                    if perfil_usuario != 'GESTÃO':
+                        df_hinst = df_hinst[df_hinst['RE_IQ'].astype(str).str.strip().str.replace('.0','') == re_logado_str]
                     
-                    id_busca_inst = st.selectbox("Selecione o ID da Instalação para Editar/Reenviar:", ["Selecione..."] + df_hinst['ID_Vistoria'].astype(str).tolist(), key="sel_ed_inst")
+                    if busca_tec_nome.strip():
+                        df_hinst = df_hinst[df_hinst['Nome_Tecnico'].astype(str).str.contains(busca_tec_nome, case=False, na=False)]
                     
-                    if id_busca_inst != "Selecione...":
-                        reg_inst_sel = df_hinst[df_hinst['ID_Vistoria'].astype(str) == id_busca_inst].iloc[0]
+                    if df_hinst.empty:
+                        st.warning("Nenhum registro encontrado para este técnico.")
+                    else:
+                        st.dataframe(df_hinst, hide_index=True, use_container_width=True)
+                        st.write("")
                         
-                        with st.form("form_edita_inst"):
-                            st.subheader(f"Editando Auditoria de Instalação ID: {id_busca_inst}")
-                            edit_tec_i = st.text_input("Técnico", value=str(reg_inst_sel.get('Nome_Tecnico', '')))
-                            edit_contrato = st.text_input("Contrato", value=str(reg_inst_sel.get('Contrato', '')))
-                            edit_erros = st.text_area("Erros de Instalação", value=str(reg_inst_sel.get('Erros_Instalacao', '')))
-                            edit_obs_i = st.text_area("Observações", value=str(reg_inst_sel.get('Observacao', '')))
+                        id_busca_inst = st.selectbox("Selecione o ID da Instalação para Editar/Reenviar:", ["Selecione..."] + df_hinst['ID_Vistoria'].astype(str).tolist(), key="sel_ed_inst_unificado")
+                        
+                        if id_busca_inst != "Selecione...":
+                            reg_inst_sel = df_hinst[df_hinst['ID_Vistoria'].astype(str) == id_busca_inst].iloc[0]
                             
-                            btn_salvar_edicao_inst = st.form_submit_button("Salvar Edição e Gerar Errata", type="primary")
-                            
-                            if btn_salvar_edicao_inst:
-                                cell_id_i = ws_hinst.find(id_busca_inst)
-                                if cell_id_i:
-                                    row_ii = cell_id_i.row
-                                    ws_hinst.update_cell(row_ii, 7, edit_contrato)
-                                    ws_hinst.update_cell(row_ii, 8, edit_erros)
-                                    ws_hinst.update_cell(row_ii, 9, edit_obs_i)
+                            with st.form("form_edita_inst_unificado"):
+                                st.subheader(f"Editando Auditoria de Instalação ID: {id_busca_inst}")
+                                edit_tec_i = st.text_input("Técnico", value=str(reg_inst_sel.get('Nome_Tecnico', '')))
+                                edit_contrato = st.text_input("Contrato", value=str(reg_inst_sel.get('Contrato', '')))
+                                edit_erros = st.text_area("Erros de Instalação", value=str(reg_inst_sel.get('Erros_Instalacao', '')))
+                                edit_obs_i = st.text_area("Observações", value=str(reg_inst_sel.get('Observacao', '')))
                                 
-                                links_fi = str(reg_inst_sel.get('Links_Fotos', ''))
+                                btn_salvar_edicao_inst = st.form_submit_button("Salvar Edição e Gerar Errata", type="primary")
                                 
-                                msg_errata_zap_i = f"⚠️ *[ERRATA - RELATÓRIO EDITADO]*\n*AUDITORIA DE INSTALAÇÃO - TOTALE ABC*\n*ID da Vistoria:* {id_busca_inst}\n\n*Contrato:* {edit_contrato}\n*Técnico:* {edit_tec_i}\n\n*Falhas Encontradas (Atualizadas):*\n- {edit_erros}\n\n*Observações:* {edit_obs_i}\n\n*Evidências (Fotos):*\n{links_fi}"
-                                url_errata_zap_i = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_errata_zap_i)}"
-                                
-                                corpo_errata_email_i = f"⚠️ [ERRATA - RELATÓRIO EDITADO]\nAUDITORIA DE INSTALAÇÃO\nID da Vistoria: {id_busca_inst}\nContrato: {edit_contrato}\nTécnico: {edit_tec_i}\n\nFalhas Encontradas (Atualizadas):\n- {edit_erros}\n\nObservações:\n{edit_obs_i}\n\nEVIDÊNCIA FOTO:\n{links_fi}"
-                                url_errata_email_i = f"mailto:{DESTINATARIOS_INSTALACAO}?subject=ERRATA - Auditoria [ID {id_busca_inst}] - Contrato {edit_contrato} - {edit_tec_i}&body={urllib.parse.quote(corpo_errata_email_i)}"
-                                
-                                st.success("✅ Auditoria atualizada com sucesso! Utilize os links abaixo para enviar a ERRATA:")
-                                st.markdown(f'<a href="{url_errata_email_i}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #007BFF; border-radius: 8px; text-decoration: none; font-weight: bold; margin-bottom: 10px;">📩 1. ENVIAR ERRATA POR E-MAIL (GESTÃO)</a>', unsafe_allow_html=True)
-                                st.markdown(f'<a href="{url_errata_zap_i}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold;">💬 2. ENVIAR ERRATA NO WHATSAPP (GRUPO IQ)</a>', unsafe_allow_html=True)
+                                if btn_salvar_edicao_inst:
+                                    cell_id_i = ws_hinst.find(id_busca_inst)
+                                    if cell_id_i:
+                                        row_ii = cell_id_i.row
+                                        ws_hinst.update_cell(row_ii, 7, edit_contrato)
+                                        ws_hinst.update_cell(row_ii, 8, edit_erros)
+                                        ws_hinst.update_cell(row_ii, 9, edit_obs_i)
+                                    
+                                    links_fi = str(reg_inst_sel.get('Links_Fotos', ''))
+                                    
+                                    msg_errata_zap_i = f"⚠️ *[ERRATA - RELATÓRIO EDITADO]*\n*AUDITORIA DE INSTALAÇÃO - TOTALE ABC*\n*ID da Vistoria:* {id_busca_inst}\n\n*Contrato:* {edit_contrato}\n*Técnico:* {edit_tec_i}\n\n*Falhas Encontradas (Atualizadas):*\n- {edit_erros}\n\n*Observações:* {edit_obs_i}\n\n*Evidências (Fotos):*\n{links_fi}"
+                                    url_errata_zap_i = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_errata_zap_i)}"
+                                    
+                                    corpo_errata_email_i = f"⚠️ [ERRATA - RELATÓRIO EDITADO]\nAUDITORIA DE INSTALAÇÃO\nID da Vistoria: {id_busca_inst}\nContrato: {edit_contrato}\nTécnico: {edit_tec_i}\n\nFalhas Encontradas (Atualizadas):\n- {edit_erros}\n\nObservações:\n{edit_obs_i}\n\nEVIDÊNCIA FOTO:\n{links_fi}"
+                                    url_errata_email_i = f"mailto:{DESTINATARIOS_INSTALACAO}?subject=ERRATA - Auditoria [ID {id_busca_inst}] - Contrato {edit_contrato} - {edit_tec_i}&body={urllib.parse.quote(corpo_errata_email_i)}"
+                                    
+                                    st.success("✅ Auditoria atualizada com sucesso! Utilize os links abaixo para enviar a ERRATA:")
+                                    st.markdown(f'<a href="{url_errata_email_i}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #007BFF; border-radius: 8px; text-decoration: none; font-weight: bold; margin-bottom: 10px;">📩 1. ENVIAR ERRATA POR E-MAIL (GESTÃO)</a>', unsafe_allow_html=True)
+                                    st.markdown(f'<a href="{url_errata_zap_i}" target="_blank" style="display: block; text-align: center; padding: 0.8em; color: white; background-color: #25D366; border-radius: 8px; text-decoration: none; font-weight: bold;">💬 2. ENVIAR ERRATA NO WHATSAPP (GRUPO IQ)</a>', unsafe_allow_html=True)
 
     # --- PÁGINA 6: RELATÓRIOS E EXPORTAÇÃO (EXCLUSIVO PARA GESTÃO) ---
     elif st.session_state['pagina_atual'] == "Relatorios":
