@@ -74,7 +74,7 @@ FALHAS_INSTALACAO = {
 }
 
 ITENS_MATINAL = {
-    "🛠️️ Ferramental": [
+    "🛠️ Ferramental": [
         "ALICATE CRIMPADOR RG59/58 (PRESSÃO)", "ALICATE CRIMPADOR RJ11/45", "ALICATE DE BICO RETO 6\"", 
         "ALICATE DE CORTE DIAGONAL 6\"", "ALICATE UNIVERSAL 8\"", "CHAVE DE FENDA 1/4 (GRANDE)", 
         "CHAVE DE FENDA 3/16 (MÉDIA)", "CHAVE DE FENDA 1/8 (PEQUENA)", "CHAVE PHILLIPS 1/4 (GRANDE)", 
@@ -133,6 +133,7 @@ if 'zap_agenda_pronto' not in st.session_state: st.session_state['zap_agenda_pro
 if 'gcal_status' not in st.session_state: st.session_state['gcal_status'] = None
 if 'tec_selecionado_atalho' not in st.session_state: st.session_state['tec_selecionado_atalho'] = None
 if 'aba_matinal_ativa' not in st.session_state: st.session_state['aba_matinal_ativa'] = 0
+if 'filtro_tec_reposicao' not in st.session_state: st.session_state['filtro_tec_reposicao'] = None
 
 # --- Estilização CSS ---
 st.markdown("""
@@ -785,7 +786,7 @@ else:
         st.title(titulo_painel)
         st.write("")
 
-        # --- RESUMO DE REPOSIÇÕES PENDENTES COM ALERTA ---
+        # --- RESUMO DE REPOSIÇÕES PENDENTES COM ALERTA E TÉCNICOS ---
         try:
             planilha_dash_rep = conectar_planilha()
             ws_drep = planilha_dash_rep.worksheet("Controle_Reposicao")
@@ -799,7 +800,6 @@ else:
             
             pendentes_rep = df_drep[df_drep['Status_Reposicao'].astype(str).str.upper() == 'PENDENTE']
             
-            # Identifica itens "velhos" (com mais de 5 dias)
             hoje_dt = datetime.now(fuso_brasil)
             antigos_count = 0
             for _, r in pendentes_rep.iterrows():
@@ -819,8 +819,17 @@ else:
                 if antigos_count > 0:
                     st.markdown(f'<div class="metric-sub">⚠️ Atenção: Existem <b>{antigos_count}</b> itens com mais de 5 dias aguardando reposição!</div>', unsafe_allow_html=True)
                 else:
-                    st.markdown(f'<div class="metric-sub">Acompanhe os itens faltantes na aba "Controle de Reposição".</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="metric-sub">Clique abaixo no técnico para ir direto à reposição.</div>', unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
+
+                st.write("**Técnicos com itens pendentes de reposição:**")
+                for _, prow in pendentes_rep.iterrows():
+                    c_tec_rep1, c_tec_rep2 = st.columns([4, 1])
+                    c_tec_rep1.write(f"• **{prow.get('Nome_Tecnico', '')}** (IQ: {prow.get('Nome_IQ', '')}) — *{prow.get('Itens_Faltantes', '')}*")
+                    if c_tec_rep2.button("Ver Reposição ➔", key=f"btn_ir_rep_{prow.get('ID_Vistoria','')}"):
+                        st.session_state['filtro_tec_reposicao'] = prow.get('Nome_Tecnico', '')
+                        st.session_state['pagina_atual'] = "Reposicao"
+                        st.rerun()
                 st.write("")
 
         df_res_mat = carregar_resultados_matinal()
@@ -1299,7 +1308,7 @@ else:
                         faltas = []
                         
                         t_ferr, t_gpon, t_epi, t_asseio, t_sis, t_veic = st.tabs([
-                            "🛠️️ Ferramental", "📡 GPON/Outros", "👷 EPI / EPC", "🧹 Asseio", "📱 Sistemas", "🚗 Veículo"
+                            "🛠️ Ferramental", "📡 GPON/Outros", "👷 EPI / EPC", "🧹 Asseio", "📱 Sistemas", "🚗 Veículo"
                         ])
                         
                         def renderizar_itens_matinal(lista_itens, aba):
@@ -1541,7 +1550,11 @@ else:
             if perfil_usuario != 'GESTÃO':
                 df_rep = df_rep[df_rep['RE_IQ'].astype(str).str.strip().str.replace('.0','') == re_logado_str]
 
-            # Destaque visual e alerta para itens com mais de 5 dias
+            # Filtra automaticamente se veio do clique no Dashboard
+            filtro_inicial_tec = st.session_state.get('filtro_tec_reposicao', None)
+            if filtro_inicial_tec:
+                df_rep = df_rep[df_rep['Nome_Tecnico'].astype(str).str.contains(filtro_inicial_tec, case=False, na=False)]
+
             def destacar_antigos(row):
                 try:
                     dt_r = datetime.strptime(str(row.get('Data', ''))[:10], "%d/%m/%Y").replace(tzinfo=fuso_brasil)
@@ -1553,6 +1566,11 @@ else:
 
             st.dataframe(df_rep.style.apply(destacar_antigos, axis=1), hide_index=True, use_container_width=True)
             st.write("")
+
+            if filtro_inicial_tec:
+                if st.button("🧹 Limpar Filtro de Técnico"):
+                    st.session_state['filtro_tec_reposicao'] = None
+                    st.rerun()
 
             id_reposicao = st.selectbox("Selecione o ID da Vistoria para atualizar status:", ["Selecione..."] + df_rep['ID_Vistoria'].astype(str).tolist(), key="sel_rep")
 
@@ -1582,7 +1600,7 @@ else:
         st.write("Busque pelo nome do técnico para localizar, editar e reenviar o relatório com aviso de **ERRATA**.")
         
         planilha_hist = conectar_planilha()
-        tipo_hist = st.radio("Selecione o tipo de vistoria:", ["📊 Vistorias Matinais", "🛠️️ Vistorias de Instalação"], horizontal=True)
+        tipo_hist = st.radio("Selecione o tipo de vistoria:", ["📊 Vistorias Matinais", "🛠️ Vistorias de Instalação"], horizontal=True)
         
         busca_tec_nome = st.text_input("🔍 Digite o nome do técnico para buscar:")
         
@@ -1633,7 +1651,7 @@ else:
                                 
                                 links_f = str(reg_sel.get('Links_Fotos', ''))
                                 
-                                msg_errata_zap = f"⚠️ *[ERRATA - RELATÓRIO EDITADO]*\n*RELATÓRIO DE MATINAL (IVM 2026)*\n*ID da Vistoria:* {id_busca_mat}\n*Técnico:* {edit_tec}\n\n*Placa do Veículo:* {edit_placa}\n*Itens Faltantes / Irregulares:*\n- {edit_irreg}\n\n*Observações (Atualizadas):*\n{edit_obs}\n\n*Evidências (Fotos):*\n{links_f}"
+                                msg_errata_zap = f"⚠️️ *[ERRATA - RELATÓRIO EDITADO]*\n*RELATÓRIO DE MATINAL (IVM 2026)*\n*ID da Vistoria:* {id_busca_mat}\n*Técnico:* {edit_tec}\n\n*Placa do Veículo:* {edit_placa}\n*Itens Faltantes / Irregulares:*\n- {edit_irreg}\n\n*Observações (Atualizadas):*\n{edit_obs}\n\n*Evidências (Fotos):*\n{links_f}"
                                 url_errata_zap = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_errata_zap)}"
                                 
                                 corpo_errata_email = f"⚠️ [ERRATA - RELATÓRIO EDITADO]\nRELATÓRIO DE MATINAL (IVM 2026)\nID da Vistoria: {id_busca_mat}\nTécnico: {edit_tec}\n\nPlaca do Veículo: {edit_placa}\nItens Faltantes / Irregulares:\n- {edit_irreg}\n\nObservações (Atualizadas):\n{edit_obs}\n\nEVIDÊNCIAS FOTOS:\n{links_f}"
@@ -1693,7 +1711,7 @@ else:
                                 msg_errata_zap_i = f"⚠️ *[ERRATA - RELATÓRIO EDITADO]*\n*AUDITORIA DE INSTALAÇÃO - TOTALE ABC*\n*ID da Vistoria:* {id_busca_inst}\n\n*Contrato:* {edit_contrato}\n*Técnico:* {edit_tec_i}\n\n*Falhas Encontradas (Atualizadas):*\n- {edit_erros}\n\n*Observações:* {edit_obs_i}\n\n*Evidências (Fotos):*\n{links_fi}"
                                 url_errata_zap_i = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_errata_zap_i)}"
                                 
-                                corpo_errata_email_i = f"⚠️ [ERRATA - RELATÓRIO EDITADO]\nAUDITORIA DE INSTALAÇÃO\nID da Vistoria: {id_busca_inst}\nContrato: {edit_contrato}\nTécnico: {edit_tec_i}\n\nFalhas Encontradas (Atualizadas):\n- {edit_erros}\n\nObservações:\n{edit_obs_i}\n\nEVIDÊNCIA FOTO:\n{links_fi}"
+                                corpo_errata_email_i = f"⚠️️ [ERRATA - RELATÓRIO EDITADO]\nAUDITORIA DE INSTALAÇÃO\nID da Vistoria: {id_busca_inst}\nContrato: {edit_contrato}\nTécnico: {edit_tec_i}\n\nFalhas Encontradas (Atualizadas):\n- {edit_erros}\n\nObservações:\n{edit_obs_i}\n\nEVIDÊNCIA FOTO:\n{links_fi}"
                                 url_errata_email_i = f"mailto:{DESTINATARIOS_INSTALACAO}?subject=ERRATA - Auditoria [ID {id_busca_inst}] - Contrato {edit_contrato} - {edit_tec_i}&body={urllib.parse.quote(corpo_errata_email_i)}"
                                 
                                 st.success("✅ Auditoria atualizada com sucesso! Utilize os links abaixo para enviar a ERRATA:")
