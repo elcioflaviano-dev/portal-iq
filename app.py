@@ -74,7 +74,7 @@ FALHAS_INSTALACAO = {
 }
 
 ITENS_MATINAL = {
-    "🛠️ Ferramental": [
+    "🛠️️ Ferramental": [
         "ALICATE CRIMPADOR RG59/58 (PRESSÃO)", "ALICATE CRIMPADOR RJ11/45", "ALICATE DE BICO RETO 6\"", 
         "ALICATE DE CORTE DIAGONAL 6\"", "ALICATE UNIVERSAL 8\"", "CHAVE DE FENDA 1/4 (GRANDE)", 
         "CHAVE DE FENDA 3/16 (MÉDIA)", "CHAVE DE FENDA 1/8 (PEQUENA)", "CHAVE PHILLIPS 1/4 (GRANDE)", 
@@ -137,7 +137,7 @@ if 'aba_matinal_ativa' not in st.session_state: st.session_state['aba_matinal_at
 # --- Estilização CSS ---
 st.markdown("""
     <style>
-    .metric-card-blue, .metric-card-green, .metric-card-orange, .metric-card-purple {
+    .metric-card-blue, .metric-card-green, .metric-card-orange, .metric-card-purple, .metric-card-red {
         padding: 20px;
         border-radius: 12px;
         color: white !important;
@@ -148,8 +148,9 @@ st.markdown("""
     .metric-card-green { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
     .metric-card-orange { background: linear-gradient(135deg, #f2994a 0%, #f2c94c 100%); }
     .metric-card-purple { background: linear-gradient(135deg, #654ea3 0%, #eaafc8 100%); }
+    .metric-card-red { background: linear-gradient(135deg, #cb2d3e 0%, #ef473a 100%); }
     
-    .metric-card-blue *, .metric-card-purple *, .metric-card-green *, .metric-card-orange * { color: white !important; }
+    .metric-card-blue *, .metric-card-purple *, .metric-card-green *, .metric-card-orange *, .metric-card-red * { color: white !important; }
     .metric-title { font-size: 14px; font-weight: 600; text-transform: uppercase; margin-bottom: 8px; opacity: 0.9; }
     .metric-value { font-size: 28px; font-weight: 700; margin-bottom: 5px; }
     .metric-sub { font-size: 12px; opacity: 0.85; }
@@ -539,7 +540,6 @@ def registrar_vistoria_completa(re_iq, nome_iq, login_tec, nome_tec, tipo, irreg
             extra_info.get('tam_jaqueta', ''), obs, links_str, "Concluída"
         ])
         
-        # Registra automaticamente na aba de Controle de Reposição se houver itens faltantes
         if irregulares and "conformidade" not in irregulares.lower():
             try:
                 ws_rep = planilha.worksheet("Controle_Reposicao")
@@ -784,6 +784,44 @@ else:
         
         st.title(titulo_painel)
         st.write("")
+
+        # --- RESUMO DE REPOSIÇÕES PENDENTES COM ALERTA ---
+        try:
+            planilha_dash_rep = conectar_planilha()
+            ws_drep = planilha_dash_rep.worksheet("Controle_Reposicao")
+            df_drep = pd.DataFrame(ws_drep.get_all_records())
+        except:
+            df_drep = pd.DataFrame()
+
+        if not df_drep.empty:
+            if perfil_usuario != 'GESTÃO':
+                df_drep = df_drep[df_drep['RE_IQ'].astype(str).str.strip().str.replace('.0','') == re_logado_str]
+            
+            pendentes_rep = df_drep[df_drep['Status_Reposicao'].astype(str).str.upper() == 'PENDENTE']
+            
+            # Identifica itens "velhos" (com mais de 5 dias)
+            hoje_dt = datetime.now(fuso_brasil)
+            antigos_count = 0
+            for _, r in pendentes_rep.iterrows():
+                try:
+                    dt_reg = datetime.strptime(str(r.get('Data', ''))[:10], "%d/%m/%Y").replace(tzinfo=fuso_brasil)
+                    if (hoje_dt - dt_reg).days > 5:
+                        antigos_count += 1
+                except:
+                    pass
+
+            total_pendentes_rep = len(pendentes_rep)
+            if total_pendentes_rep > 0:
+                card_tipo = "metric-card-red" if antigos_count > 0 else "metric-card-orange"
+                st.markdown(f'<div class="{card_tipo}">', unsafe_allow_html=True)
+                st.markdown('<div class="metric-title">📦 ALERTA DE REPOSIÇÃO DE ITENS</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="metric-value">{total_pendentes_rep} Pedidos Pendentes</div>', unsafe_allow_html=True)
+                if antigos_count > 0:
+                    st.markdown(f'<div class="metric-sub">⚠️ Atenção: Existem <b>{antigos_count}</b> itens com mais de 5 dias aguardando reposição!</div>', unsafe_allow_html=True)
+                else:
+                    st.markdown(f'<div class="metric-sub">Acompanhe os itens faltantes na aba "Controle de Reposição".</div>', unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+                st.write("")
 
         df_res_mat = carregar_resultados_matinal()
         nota_geral_val = "Aguardando lançamento"
@@ -1229,7 +1267,7 @@ else:
                     if tec_atual != "Selecione...":
                         st.info(f"⚠️ **Atenção:** Marque abaixo **APENAS** os itens que estiverem **FALTANDO** ou **AUSENTES** para **{tec_atual}** ({data_selecionada_exec}).")
                         
-                        st.markdown("### 🏷️️ Informações de Veículo, Lotes, Validades e Tamanhos (Preenchimento Obrigatório)")
+                        st.markdown("### 🏷️ Informações de Veículo, Lotes, Validades e Tamanhos (Preenchimento Obrigatório)")
                         col_p1, col_l1, col_l2 = st.columns(3)
                         with col_p1:
                             placa_veiculo = st.text_input("Placa do Veículo *")
@@ -1261,7 +1299,7 @@ else:
                         faltas = []
                         
                         t_ferr, t_gpon, t_epi, t_asseio, t_sis, t_veic = st.tabs([
-                            "🛠️ Ferramental", "📡 GPON/Outros", "👷 EPI / EPC", "🧹 Asseio", "📱 Sistemas", "🚗 Veículo"
+                            "🛠️️ Ferramental", "📡 GPON/Outros", "👷 EPI / EPC", "🧹 Asseio", "📱 Sistemas", "🚗 Veículo"
                         ])
                         
                         def renderizar_itens_matinal(lista_itens, aba):
@@ -1358,7 +1396,6 @@ else:
                                 if aba_monitoramento_escolhida:
                                     atualizar_celula_especifica(aba_monitoramento_escolhida, tec_login, 'ACOMPANHAMENTO', 'SIM')
                                     
-                                # Remove o técnico da agenda imediatamente ao gravar
                                 if tec_atual in st.session_state['agenda_matinal']:
                                     del st.session_state['agenda_matinal'][tec_atual]
                                     salvar_agenda_no_sheets(st.session_state['agenda_matinal'])
@@ -1504,7 +1541,17 @@ else:
             if perfil_usuario != 'GESTÃO':
                 df_rep = df_rep[df_rep['RE_IQ'].astype(str).str.strip().str.replace('.0','') == re_logado_str]
 
-            st.dataframe(df_rep, hide_index=True, use_container_width=True)
+            # Destaque visual e alerta para itens com mais de 5 dias
+            def destacar_antigos(row):
+                try:
+                    dt_r = datetime.strptime(str(row.get('Data', ''))[:10], "%d/%m/%Y").replace(tzinfo=fuso_brasil)
+                    if row.get('Status_Reposicao', '').upper() == 'PENDENTE' and (datetime.now(fuso_brasil) - dt_r).days > 5:
+                        return ['background-color: #f8d7da; color: #721c24; font-weight: bold;'] * len(row)
+                except:
+                    pass
+                return [''] * len(row)
+
+            st.dataframe(df_rep.style.apply(destacar_antigos, axis=1), hide_index=True, use_container_width=True)
             st.write("")
 
             id_reposicao = st.selectbox("Selecione o ID da Vistoria para atualizar status:", ["Selecione..."] + df_rep['ID_Vistoria'].astype(str).tolist(), key="sel_rep")
@@ -1535,7 +1582,7 @@ else:
         st.write("Busque pelo nome do técnico para localizar, editar e reenviar o relatório com aviso de **ERRATA**.")
         
         planilha_hist = conectar_planilha()
-        tipo_hist = st.radio("Selecione o tipo de vistoria:", ["📊 Vistorias Matinais", "🛠️ Vistorias de Instalação"], horizontal=True)
+        tipo_hist = st.radio("Selecione o tipo de vistoria:", ["📊 Vistorias Matinais", "🛠️️ Vistorias de Instalação"], horizontal=True)
         
         busca_tec_nome = st.text_input("🔍 Digite o nome do técnico para buscar:")
         
