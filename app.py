@@ -1011,29 +1011,7 @@ else:
         except:
             df_drep = pd.DataFrame()
 
-        if not df_drep.empty:
-            if 'ID_Item' not in df_drep.columns and 'Itens_Faltantes' in df_drep.columns:
-                novos_registros = []
-                for _, r in df_drep.iterrows():
-                    itens_sep = [it.strip() for it in str(r.get('Itens_Faltantes', '')).split('/') if it.strip()]
-                    for it in itens_sep:
-                        novos_registros.append({
-                            "ID_Item": str(uuid.uuid4())[:8].upper(),
-                            "ID_Vistoria": r.get('ID_Vistoria', ''),
-                            "Data": r.get('Data', ''),
-                            "RE_IQ": r.get('RE_IQ', ''),
-                            "Nome_IQ": r.get('Nome_IQ', ''),
-                            "Nome_Tecnico": r.get('Nome_Tecnico', ''),
-                            "Item_Faltante": it,
-                            "Status_Reposicao": r.get('Status_Reposicao', 'Pendente')
-                        })
-                if novos_registros:
-                    df_drep = pd.DataFrame(novos_registros)
-                    ws_drep.clear()
-                    ws_drep.append_row(["ID_Item", "ID_Vistoria", "Data", "RE_IQ", "Nome_IQ", "Nome_Tecnico", "Item_Faltante", "Status_Reposicao"])
-                    ws_drep.append_rows([[r["ID_Item"], r["ID_Vistoria"], r["Data"], r["RE_IQ"], r["Nome_IQ"], r["Nome_Tecnico"], r["Item_Faltante"], r["Status_Reposicao"]] for r in novos_registros])
-
-        if df_rep.empty or 'ID_Item' not in df_rep.columns:
+        if df_drep.empty or 'ID_Item' not in df_drep.columns:
             try:
                 ws_vmat = planilha_dash_rep.worksheet("Vistorias_Matinal")
                 reg_vmat = ws_vmat.get_all_records()
@@ -1141,7 +1119,7 @@ else:
 
         if mes_monitoramento_escolhido:
             if perfil_usuario == 'GESTÃO' and not re_alvo_str:
-                st.info("ℹ️ Selecione um IQ específico no menu lateral esquerdo para visualizar e gerenciar as monitorias pendentes da equipe.")
+                st.info("ℹ️ Selecione um IQ específico no menu lateral esquerdo para gerenciar as monitorias pendentes da equipe.")
                 tecnicos_nao_cert = pd.DataFrame()
             else:
                 tecnicos_nao_cert = equipe_vigente[(equipe_vigente[mes_monitoramento_escolhido] == 'NÃO') & (equipe_vigente[f'ACOMPANHAMENTO_{mes_monitoramento_escolhido}'] != 'SIM')]
