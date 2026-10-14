@@ -73,9 +73,9 @@ FALHAS_INSTALACAO = {
     ]
 }
 
-ITENS_MATINAL = {
+ITENS_MATINAL_CASA = {
     "🛠️ Ferramental": [
-        "ALICATE CRIMPADOR RG59/6 (PRESSÃO)", "ALICATE CRIMPADOR RJ11/45", "ALICATE DE BICO RETO 6\"", 
+        "ALICATE CRIMPADOR RG59/58 (PRESSÃO)", "ALICATE CRIMPADOR RJ11/45", "ALICATE DE BICO RETO 6\"", 
         "ALICATE DE CORTE DIAGONAL 6\"", "ALICATE UNIVERSAL 8\"", "CHAVE DE FENDA 1/4 (GRANDE)", 
         "CHAVE DE FENDA 3/16 (MÉDIA)", "CHAVE DE FENDA 1/8 (PEQUENA)", "CHAVE PHILLIPS 1/4 (GRANDE)", 
         "CHAVE PHILLIPS 3/16 (MÉDIA)", "CHAVE PHILLIPS 1/8 (PEQUENA)", "CHAVE TRAVA LOCK - (Preta)", 
@@ -116,6 +116,49 @@ ITENS_MATINAL = {
         "Veículo Interno: Óleo no Nível?", "Veículo Externo: Lâmpadas Queimadas?", 
         "Veículo Externo: Pneus em Boas Condições?", "Veículo Externo: Calotas OK?", 
         "Veículo Externo: Rack OK?", "Veículo Externo: Avarias?", "Veículo Externo: Bandeirola OK?", "Veículo Externo: Adesivos OK?"
+    ]
+}
+
+ITENS_MATINAL_APTO = {
+    "🛠️ Ferramental": [
+        "ALICATE CRIMPADOR RG59/58 (PRESSÃO)", "ALICATE CRIMPADOR RJ11/45", "ALICATE DE BICO RETO 6\"", 
+        "ALICATE DE CORTE DIAGONAL 6\"", "ALICATE UNIVERSAL 8\"", "CHAVE DE FENDA 1/4 (GRANDE)", 
+        "CHAVE DE FENDA 3/16 (MÉDIA)", "CHAVE DE FENDA 1/8 (PEQUENA)", "CHAVE PHILLIPS 1/4 (GRANDE)", 
+        "CHAVE PHILLIPS 3/16 (MÉDIA)", "CHAVE PHILLIPS 1/8 (PEQUENA)", "CHAVE TRAVA LOCK - (Preta)", 
+        "CHAVE GTP SEGURANÇA - (Azul)", "ESTILETE 18MM C/ TRAVA", "CHAVE TORQUE", "CHAVE BQ", 
+        "ORGANIZADOR DE FERRAMENTAS", "STRIPER (DESCASCADOR) RG59/58", "FITA GUIA DE NYLON 20Mts", 
+        "MARTELO UNHA (500G)", "FUZIMEC (CINTADEIRA)", "FURADEIRA DE IMPACTO", 
+        "EXTENSÃO DE TOMADA ELÉTRICA DE 10 A 20M", "BROCA DE WÍDEA LONGA 8\"", "BROCA DE WÍDEA LONGA 10\"", 
+        "MALA DE FERRAMENTAS", "BALDE DE LONA (BORNAL)", "TELEFONE GÔNDOLA COM IDENTIFICADOR DE CHAMADA", 
+        "LANTERNA", "ESCADA DE 4 E/OU 5 DEGRAUS ALTURA UTIL 1.50m (MÍNIMO)", 
+        "CÂMERA SONDA ENDOSCÓPICA", "CHAVEIRO MINI ISOLATOR", "capa de mini", "numeral"
+    ],
+    "📡 GPON/Outros": [
+        "CLIVADOR COM GABARITO PROFIBER", "GABARITO DE CONECTORIZAÇÃO", "ALICATE DECAPADOR DE FIBRA ÓPTICA", 
+        "SUPORTE PARA BOBINA DE CABO", "TESTADOR DE CABO DE REDE", 
+        "CANETA DE LIMPEZA ÓPTICA", "ALICATE DECAPADOR DE DROP (BETTER)",
+        "BOOK FISCAL", "MANTA DE PROTEÇÃO", "FLANELA", "CHIP DE TELEFONIA", "ESCOVA DE LIMPEZA E PÁ DE LIXO", 
+        "KIT LENÇOS PARA LIMPEZA FIBRA AGC", "ÁLCOOL ISOPROPÍLICO", "DISPENSER PARA LÍQUIDOS",
+        "DBAM / TRILITHIC", "POWER METER", "CANETA ÓPTICA"
+    ],
+    "👷 EPI / EPC": [
+        "CAPACETE COM ABA TOTAL E JUGULAR", "CAPA DE CHUVA", "CINTO DE SEGURANÇA", 
+        "PAR DE LUVAS PIGMENTADA", "PAR DE LUVAS DE VAQUETA (COURO)", "ÓCULOS DE PROTEÇÃO", 
+        "MULTIMETRO OU CHAVE TESTE", "MÁSCARA PROTEÇÃO SEMIFACIAL", "PROTETOR SOLAR", "PRO-PÉ"
+    ],
+    "🧹 Asseio": [
+        "Barba feita", "Higiene pessoal", "Corte de cabelo padrão Claro", "Uso de adornos", "Crachá"
+    ],
+    "📱 Sistemas": [
+        "PDA (Logado e bateria com mínimo de 50%)", 
+        "Acesso Conectado/Nota 10 (verificar treinamentos de 1 ponto pendentes)", 
+        "Acesso ao Conectale (portal da empresa)"
+    ],
+    "🚗 Veículo": [
+        "Veículo Interno: Organizado?", "Veículo Interno: Limpo?", "Veículo Interno: Tomada Carregamento OK?", 
+        "Veículo Interno: Óleo no Nível?", "Veículo Externo: Lâmpadas Queimadas?", 
+        "Veículo Externo: Pneus em Boas Condições?", "Veículo Externo: Calotas OK?", 
+        "Veículo Externo: Rack OK?", "Veículo Externo: Avarias?", "Veículo Externo: Adesivos OK?"
     ]
 }
 
@@ -543,14 +586,13 @@ def registrar_vistoria_completa(re_iq, nome_iq, login_tec, nome_tec, tipo, irreg
             extra_info.get('tam_jaqueta', ''), obs, links_str, "Concluída"
         ])
         
-        # Sincronização inteligente com a aba Controle_Reposicao unificando os dados já gravados no Sheets
-        try:
-            ws_rep = planilha.worksheet("Controle_Reposicao")
-        except:
-            ws_rep = planilha.add_worksheet(title="Controle_Reposicao", rows=100, cols=8)
-            ws_rep.append_row(["ID_Item", "ID_Vistoria", "Data", "RE_IQ", "Nome_IQ", "Nome_Tecnico", "Item_Faltante", "Status_Reposicao"])
-
         if irregulares and "conformidade" not in irregulares.lower():
+            try:
+                ws_rep = planilha.worksheet("Controle_Reposicao")
+            except:
+                ws_rep = planilha.add_worksheet(title="Controle_Reposicao", rows=100, cols=8)
+                ws_rep.append_row(["ID_Item", "ID_Vistoria", "Data", "RE_IQ", "Nome_IQ", "Nome_Tecnico", "Item_Faltante", "Status_Reposicao"])
+            
             cab_rep = [str(c).upper() for c in ws_rep.row_values(1)]
             if "ID_ITEM" not in cab_rep:
                 ws_rep.clear()
@@ -969,8 +1011,29 @@ else:
         except:
             df_drep = pd.DataFrame()
 
-        # Sincronização automática para ler dados já gravados no Sheets (Vistorias_Matinal ou Controle_Reposicao antigo)
-        if df_drep.empty or 'ID_Item' not in df_drep.columns:
+        if not df_drep.empty:
+            if 'ID_Item' not in df_drep.columns and 'Itens_Faltantes' in df_drep.columns:
+                novos_registros = []
+                for _, r in df_drep.iterrows():
+                    itens_sep = [it.strip() for it in str(r.get('Itens_Faltantes', '')).split('/') if it.strip()]
+                    for it in itens_sep:
+                        novos_registros.append({
+                            "ID_Item": str(uuid.uuid4())[:8].upper(),
+                            "ID_Vistoria": r.get('ID_Vistoria', ''),
+                            "Data": r.get('Data', ''),
+                            "RE_IQ": r.get('RE_IQ', ''),
+                            "Nome_IQ": r.get('Nome_IQ', ''),
+                            "Nome_Tecnico": r.get('Nome_Tecnico', ''),
+                            "Item_Faltante": it,
+                            "Status_Reposicao": r.get('Status_Reposicao', 'Pendente')
+                        })
+                if novos_registros:
+                    df_drep = pd.DataFrame(novos_registros)
+                    ws_drep.clear()
+                    ws_drep.append_row(["ID_Item", "ID_Vistoria", "Data", "RE_IQ", "Nome_IQ", "Nome_Tecnico", "Item_Faltante", "Status_Reposicao"])
+                    ws_drep.append_rows([[r["ID_Item"], r["ID_Vistoria"], r["Data"], r["RE_IQ"], r["Nome_IQ"], r["Nome_Tecnico"], r["Item_Faltante"], r["Status_Reposicao"]] for r in novos_registros])
+
+        if df_rep.empty or 'ID_Item' not in df_rep.columns:
             try:
                 ws_vmat = planilha_dash_rep.worksheet("Vistorias_Matinal")
                 reg_vmat = ws_vmat.get_all_records()
@@ -1024,7 +1087,7 @@ else:
                 st.markdown('<div class="metric-title">📦 ALERTA DE REPOSIÇÃO DE ITENS</div>', unsafe_allow_html=True)
                 st.markdown(f'<div class="metric-value">{total_tecnicos_pendentes} Técnicos com Itens Pendentes</div>', unsafe_allow_html=True)
                 if antigos_count > 0:
-                    st.markdown(f'<div class="metric-sub">⚠️️ Atenção: Existem <b>{antigos_count}</b> técnicos com pendências há mais de 5 dias!</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="metric-sub">⚠️ Atenção: Existem <b>{antigos_count}</b> técnicos com pendências há mais de 5 dias!</div>', unsafe_allow_html=True)
                 else:
                     st.markdown(f'<div class="metric-sub">Clique no nome do técnico para gerenciar a reposição.</div>', unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
@@ -1329,6 +1392,9 @@ else:
                         tec_atual = st.selectbox("Selecione o Técnico Agendado:", ["Selecione..."] + tecs_na_data, index=indice_default)
                     
                     if tec_atual != "Selecione...":
+                        st.write("")
+                        tipo_instalacao_matinal = st.radio("🏢 Selecione o tipo de instalação do técnico:", ["Instalação de Casa", "Instalação de Apartamento"], horizontal=True)
+
                         st.info(f"⚠️ **Atenção:** Marque abaixo **APENAS** os itens que estiverem **FALTANDO** ou **AUSENTES** para **{tec_atual}** ({data_selecionada_exec}).")
                         
                         st.markdown("### 🏷️ Informações de Veículo, Lotes, Validades e Tamanhos (Preenchimento Obrigatório)")
@@ -1362,6 +1428,9 @@ else:
                         st.divider()
                         faltas = []
                         
+                        # Define a lista de itens com base no tipo de instalação (Casa x Apto sem escadas/LVM)
+                        itens_base_atual = ITENS_MATINAL_CASA if tipo_instalacao_matinal == "Instalação de Casa" else ITENS_MATINAL_APTO
+
                         t_ferr, t_gpon, t_epi, t_asseio, t_sis, t_veic = st.tabs([
                             "🛠️ Ferramental", "📡 GPON/Outros", "👷 EPI / EPC", "🧹 Asseio", "📱 Sistemas", "🚗 Veículo"
                         ])
@@ -1375,32 +1444,33 @@ else:
                                     if col_atual.checkbox(item, key=f"mat_{item}_{i}"):
                                         faltas.append(item)
 
-                        renderizar_itens_matinal(ITENS_MATINAL["🛠️ Ferramental"], t_ferr)
-                        renderizar_itens_matinal(ITENS_MATINAL["📡 GPON/Outros"], t_gpon)
+                        renderizar_itens_matinal(itens_base_atual["🛠️ Ferramental"], t_ferr)
+                        renderizar_itens_matinal(itens_base_atual["📡 GPON/Outros"], t_gpon)
                         
                         with t_epi:
                             st.caption("💡 Ticar apenas se estiver faltando/ausente:")
                             cols_epi = st.columns(2)
-                            itens_epi_base = ITENS_MATINAL["👷 EPI / EPC"]
+                            itens_epi_base = itens_base_atual["👷 EPI / EPC"]
                             for i, item in enumerate(itens_epi_base):
                                 if cols_epi[i % 2].checkbox(item, key=f"mat_epi_{i}"):
                                     faltas.append(item)
                             
-                            st.divider()
-                            st.write("**EPIs e Itens de Segurança Obrigatórios:**")
-                            if cols_epi[0].checkbox("Capacete / Carneira ausente", key="posse_cap"): faltas.append("Capacete/Carneira ausente")
-                            if cols_epi[1].checkbox("Cinto de Segurança ausente", key="posse_cin"): faltas.append("Cinto ausente")
-                            if cols_epi[0].checkbox("Talabarte ausente", key="posse_tal"): faltas.append("Talabarte ausente")
-                            if cols_epi[1].checkbox("Luva Pigmentada ausente", key="posse_lvp"): faltas.append("Luva Pigmentada ausente")
-                            if cols_epi[0].checkbox("Luva Vaqueta ausente", key="posse_lvv"): faltas.append("Luva Vaqueta ausente")
-                            if cols_epi[1].checkbox("Protetor Solar ausente", key="posse_pro"): faltas.append("Protetor Solar ausente")
+                            if tipo_instalacao_matinal == "Instalação de Casa":
+                                st.divider()
+                                st.write("**EPIs e Itens de Segurança Obrigatórios (Casa):**")
+                                if cols_epi[0].checkbox("Capacete / Carneira ausente", key="posse_cap"): faltas.append("Capacete/Carneira ausente")
+                                if cols_epi[1].checkbox("Cinto de Segurança ausente", key="posse_cin"): faltas.append("Cinto ausente")
+                                if cols_epi[0].checkbox("Talabarte ausente", key="posse_tal"): faltas.append("Talabarte ausente")
+                                if cols_epi[1].checkbox("Luva Pigmentada ausente", key="posse_lvp"): faltas.append("Luva Pigmentada ausente")
+                                if cols_epi[0].checkbox("Luva Vaqueta ausente", key="posse_lvv"): faltas.append("Luva Vaqueta ausente")
+                                if cols_epi[1].checkbox("Protetor Solar ausente", key="posse_pro"): faltas.append("Protetor Solar ausente")
 
-                        renderizar_itens_matinal(ITENS_MATINAL["🧹 Asseio"], t_asseio)
+                        renderizar_itens_matinal(itens_base_atual["🧹 Asseio"], t_asseio)
                         
                         with t_sis:
                             st.caption("💡 Ticar apenas se estiver faltando/ausente:")
                             cols_sis = st.columns(2)
-                            itens_sis_base = ITENS_MATINAL["📱 Sistemas"]
+                            itens_sis_base = itens_base_atual["📱 Sistemas"]
                             for i, item in enumerate(itens_sis_base):
                                 if cols_sis[i % 2].checkbox(item, key=f"mat_sis_{i}"):
                                     faltas.append(item)
@@ -1411,7 +1481,7 @@ else:
                             if cols_sis[1].checkbox("Uniforme - Calça ausente", key="posse_calc"): faltas.append("Uniforme Calça ausente")
                             if cols_sis[0].checkbox("Uniforme - Jaqueta ausente", key="posse_jaq"): faltas.append("Uniforme Jaqueta ausente")
 
-                        renderizar_itens_matinal(ITENS_MATINAL["🚗 Veículo"], t_veic)
+                        renderizar_itens_matinal(itens_base_atual["🚗 Veículo"], t_veic)
 
                         st.divider()
                         fotos_upload = st.file_uploader("📸 Anexar Fotos da Vistoria (Múltiplas fotos permitidas)", type=['png', 'jpg', 'jpeg', 'heic'], accept_multiple_files=True)
@@ -1451,7 +1521,7 @@ else:
                                     nome_iq=st.session_state['nome_iq'],
                                     login_tec=tec_login,
                                     nome_tec=tec_atual,
-                                    tipo="Matinal",
+                                    tipo=f"Matinal ({tipo_instalacao_matinal})",
                                     irregulares=resumo_faltas,
                                     extra_info=extra_info,
                                     obs=obs_final,
@@ -1469,14 +1539,14 @@ else:
                                 
                                 fotos_txt = "\n".join(links_fn for links_fn in links_fotos) if 'links_fotos' in locals() else ""
                                 
-                                msg_zap_tec_mat = f"Olá *{tec_atual}*,\n\nSua *Vistoria Matinal (IVM)* foi realizada pelo IQ *{st.session_state['nome_iq']}*.\n\n*Itens Faltantes / Irregulares apontados:*\n- {resumo_faltas}\n\n*Observações:* {obs_final}\n\nPor favor, providencie a regularização dos itens."
+                                msg_zap_tec_mat = f"Olá *{tec_atual}*,\n\nSua *Vistoria Matinal ({tipo_instalacao_matinal})* foi realizada pelo IQ *{st.session_state['nome_iq']}*.\n\n*Itens Faltantes / Irregulares apontados:*\n- {resumo_faltas}\n\n*Observações:* {obs_final}\n\nPor favor, providencie a regularização dos itens."
                                 url_zap_tec_mat = f"https://api.whatsapp.com/send?phone={tel_tec}&text={urllib.parse.quote(msg_zap_tec_mat)}"
 
-                                msg_whatsapp_mat = f"*RELATÓRIO DE MATINAL (IVM 2026)*\n*ID da Vistoria:* {vistoria_id}\n*Técnico:* {tec_atual}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Placa do Veículo:* {placa_veiculo}\n*Itens Faltantes / Irregulares:*\n- {resumo_faltas}\n\n*Observações:* {obs_final}\n\n*Evidências (Fotos):*\n{fotos_txt}"
+                                msg_whatsapp_mat = f"*RELATÓRIO DE MATINAL ({tipo_instalacao_matinal.upper()} 2026)*\n*ID da Vistoria:* {vistoria_id}\n*Técnico:* {tec_atual}\n*IQ Responsável:* {st.session_state['nome_iq']}\n\n*Placa do Veículo:* {placa_veiculo}\n*Itens Faltantes / Irregulares:*\n- {resumo_faltas}\n\n*Observações:* {obs_final}\n\n*Evidências (Fotos):*\n{fotos_txt}"
                                 url_zap_mat = f"https://api.whatsapp.com/send?phone={WHATSAPP_GRUPO_ID}&text={urllib.parse.quote(msg_whatsapp_mat)}"
 
-                                corpo_email = f"RELATÓRIO DE MATINAL (IVM 2026)\nID da Vistoria: {vistoria_id}\nRE: {tec_re}\nTécnico: {tec_atual}\nIQ: {st.session_state['nome_iq']}\n\nVEÍCULOS, LOTES, VALIDADES E TAMANHOS:\n- Placa do Veículo: {placa_veiculo}\n- Lote Capacete: {lote_capacete}\n- Vencimento Carneira: {venc_carneira}\n- Lote Cinto: {lote_cinto}\n- Lote Talabarte: {lote_talabarte}\n- Lote Luva Pigmentada: {lote_luva_pig}\n- Lote Luva Vaqueta: {lote_luva_vaq}\n- Venc. Protetor Solar: {venc_protetor}\n- Tamanho Camisa: {tam_camisa}\n- Tamanho Calça: {tam_calca}\n- Tamanho Jaqueta: {tam_jaqueta}\n\nITENS FALTANTES/IRREGULARES:\n- {resumo_faltas}\n\nOBSERVAÇÕES:\n{obs_final}\n\nEVIDÊNCIAS FOTOS:\n{fotos_txt}"
-                                url_email = f"mailto:{DESTINATARIOS_MATINAL}?subject=Relatorio Matinal [ID {vistoria_id}] - RE {tec_re} - {tec_atual}&body={urllib.parse.quote(corpo_email)}"
+                                corpo_email = f"RELATÓRIO DE MATINAL ({tipo_instalacao_matinal.upper()} 2026)\nID da Vistoria: {vistoria_id}\nRE: {tec_re}\nTécnico: {tec_atual}\nIQ: {st.session_state['nome_iq']}\n\nVEÍCULOS, LOTES, VALIDADES E TAMANHOS:\n- Placa do Veículo: {placa_veiculo}\n- Lote Capacete: {lote_capacete}\n- Vencimento Carneira: {venc_carneira}\n- Lote Cinto: {lote_cinto}\n- Lote Talabarte: {lote_talabarte}\n- Lote Luva Pigmentada: {lote_luva_pig}\n- Lote Luva Vaqueta: {lote_luva_vaq}\n- Venc. Protetor Solar: {venc_protetor}\n- Tamanho Camisa: {tam_camisa}\n- Tamanho Calça: {tam_calca}\n- Tamanho Jaqueta: {tam_jaqueta}\n\nITENS FALTANTES/IRREGULARES:\n- {resumo_faltas}\n\nOBSERVAÇÕES:\n{obs_final}\n\nEVIDÊNCIAS FOTOS:\n{fotos_txt}"
+                                url_email = f"mailto:{DESTINATARIOS_MATINAL}?subject=Relatorio Matinal [{tipo_instalacao_matinal}] [ID {vistoria_id}] - RE {tec_re} - {tec_atual}&body={urllib.parse.quote(corpo_email)}"
                                 
                                 st.session_state['zap_matinal_pronto'] = url_zap_mat
                                 st.session_state['zap_tec_matinal'] = url_zap_tec_mat
@@ -1620,7 +1690,6 @@ else:
             except:
                 df_rep = pd.DataFrame()
 
-            # Sincronização inteligente com vistorias matinais já gravadas no Sheets caso a aba esteja vazia
             if df_rep.empty or 'ID_Item' not in df_rep.columns:
                 try:
                     ws_vmat = planilha_rep.worksheet("Vistorias_Matinal")
