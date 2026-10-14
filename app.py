@@ -1119,7 +1119,7 @@ else:
 
         if mes_monitoramento_escolhido:
             if perfil_usuario == 'GESTÃO' and not re_alvo_str:
-                st.info("ℹ️ Selecione um IQ específico no menu lateral esquerdo para gerenciar as monitorias pendentes da equipe.")
+                st.info("ℹ️ Selecione um IQ específico no menu lateral esquerdo para visualizar e gerenciar as monitorias pendentes da equipe.")
                 tecnicos_nao_cert = pd.DataFrame()
             else:
                 tecnicos_nao_cert = equipe_vigente[(equipe_vigente[mes_monitoramento_escolhido] == 'NÃO') & (equipe_vigente[f'ACOMPANHAMENTO_{mes_monitoramento_escolhido}'] != 'SIM')]
@@ -1382,9 +1382,11 @@ else:
                             lote_capacete = st.text_input("Lote Capacete *")
                         with col_l1:
                             venc_carneira = st.text_input("Vencimento Carneira *")
-                            lote_cinto = st.text_input("Lote Cinto *")
+                            # Lote cinto exibido apenas para Casa
+                            lote_cinto = st.text_input("Lote Cinto *") if tipo_instalacao_matinal == "Instalação de Casa" else "N/A (Apto)"
                         with col_l2:
-                            lote_talabarte = st.text_input("Lote Talabarte *")
+                            # Lote talabarte exibido apenas para Casa
+                            lote_talabarte = st.text_input("Lote Talabarte *") if tipo_instalacao_matinal == "Instalação de Casa" else "N/A (Apto)"
                             lote_luva_pig = st.text_input("Lote Luva Pigmentada *")
 
                         st.write("")
@@ -1467,9 +1469,13 @@ else:
                         resumo_faltas = " / ".join(faltas) if faltas else "Todas as ferramentas e condições em conformidade."
                         
                         if st.button("Gravar Vistoria e Iniciar Envio", type="primary"):
+                            campos_obrigatorios_ok = placa_veiculo.strip() and lote_capacete.strip() and venc_carneira.strip() and lote_luva_pig.strip() and lote_luva_vaq.strip() and venc_protetor.strip() and tam_camisa.strip() and tam_calca.strip() and tam_jaqueta.strip()
+                            if tipo_instalacao_matinal == "Instalação de Casa":
+                                campos_obrigatorios_ok = campos_obrigatorios_ok and lote_cinto.strip() and lote_talabarte.strip()
+
                             if not fotos_upload:
                                 st.warning("⚠️ O envio de ao menos uma foto é obrigatório para comprovação.")
-                            elif not (placa_veiculo.strip() and lote_capacete.strip() and venc_carneira.strip() and lote_cinto.strip() and lote_talabarte.strip() and lote_luva_pig.strip() and lote_luva_vaq.strip() and venc_protetor.strip() and tam_camisa.strip() and tam_calca.strip() and tam_jaqueta.strip()):
+                            elif not campos_obrigatorios_ok:
                                 st.warning("⚠️ Todos os campos de Placa do Veículo, Lotes, Validades e Tamanhos de Uniformes são obrigatórios.")
                             else:
                                 tec_row = equipe_vigente[equipe_vigente['nome'] == tec_atual]
@@ -1483,8 +1489,8 @@ else:
                                     'placa_veiculo': placa_veiculo,
                                     'lote_capacete': lote_capacete,
                                     'venc_carneira': venc_carneira,
-                                    'lote_cinto': lote_cinto,
-                                    'lote_talabarte': lote_talabarte,
+                                    'lote_cinto': lote_cinto if tipo_instalacao_matinal == "Instalação de Casa" else "N/A (Apto)",
+                                    'lote_talabarte': lote_talabarte if tipo_instalacao_matinal == "Instalação de Casa" else "N/A (Apto)",
                                     'lote_luva_pig': lote_luva_pig,
                                     'lote_luva_vaq': lote_luva_vaq,
                                     'venc_protetor': venc_protetor,
