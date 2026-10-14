@@ -104,7 +104,7 @@ ITENS_MATINAL_CASA = {
         "Escada: Bandeirola", "Escada: Papagaio", "Escada: Sapata", "Escada: Guia de ponta da escada", "Escada: Cinta de Borracha"
     ],
     "🧹 Asseio": [
-        "Barba feita", "Higiene pessoal", "Corte de cabelo padrão Claro", "Uso de adornos", "Crachá"
+        "Barba feita", "Higiene pessoal", "Corte de cabelo padrão Claro", "Uso de adornos", "Crachá", "Uso do cinto de couro preto"
     ],
     "📱 Sistemas": [
         "PDA (Logado e bateria com mínimo de 50%)", 
@@ -142,12 +142,12 @@ ITENS_MATINAL_APTO = {
         "DBAM / TRILITHIC", "POWER METER", "CANETA ÓPTICA"
     ],
     "👷 EPI / EPC": [
-        "CAPACETE COM ABA TOTAL E JUGULAR", "CAPA DE CHUVA", "CINTO DE SEGURANÇA", 
+        "CAPACETE COM ABA TOTAL E JUGULAR", "CAPA DE CHUVA", 
         "PAR DE LUVAS PIGMENTADA", "PAR DE LUVAS DE VAQUETA (COURO)", "ÓCULOS DE PROTEÇÃO", 
         "MULTIMETRO OU CHAVE TESTE", "MÁSCARA PROTEÇÃO SEMIFACIAL", "PROTETOR SOLAR", "PRO-PÉ"
     ],
     "🧹 Asseio": [
-        "Barba feita", "Higiene pessoal", "Corte de cabelo padrão Claro", "Uso de adornos", "Crachá"
+        "Barba feita", "Higiene pessoal", "Corte de cabelo padrão Claro", "Uso de adornos", "Crachá", "Uso do cinto de couro preto"
     ],
     "📱 Sistemas": [
         "PDA (Logado e bateria com mínimo de 50%)", 
@@ -158,7 +158,7 @@ ITENS_MATINAL_APTO = {
         "Veículo Interno: Organizado?", "Veículo Interno: Limpo?", "Veículo Interno: Tomada Carregamento OK?", 
         "Veículo Interno: Óleo no Nível?", "Veículo Externo: Lâmpadas Queimadas?", 
         "Veículo Externo: Pneus em Boas Condições?", "Veículo Externo: Calotas OK?", 
-        "Veículo Externo: Rack OK?", "Veículo Externo: Avarias?", "Veículo Externo: Adesivos OK?"
+        "Veículo Externo: Rack OK?", "Veículo Externo: Avarias?", "Veículo Externo: Bandeirola OK?", "Veículo Externo: Adesivos OK?"
     ]
 }
 
@@ -1406,7 +1406,6 @@ else:
                         st.divider()
                         faltas = []
                         
-                        # Define a lista de itens com base no tipo de instalação (Casa x Apto sem escadas/LVM)
                         itens_base_atual = ITENS_MATINAL_CASA if tipo_instalacao_matinal == "Instalação de Casa" else ITENS_MATINAL_APTO
 
                         t_ferr, t_gpon, t_epi, t_asseio, t_sis, t_veic = st.tabs([
