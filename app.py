@@ -1080,7 +1080,7 @@ else:
                         st.rerun()
                 st.write("")
 
-        # --- ACOMPANHAMENTO PENDENTE FILTRADO COM SELETOR DE MÊS E CHECKLIST ---
+        # --- ACOMPANHAMENTO PENDENTE COM SELETOR DE MÊS E CHECKLIST SEGURO ---
         st.subheader("⚠️ Acompanhamento Pendente")
         
         if meses_info:
@@ -1088,6 +1088,7 @@ else:
             idx_mes_sel = lista_meses_disp.index(st.session_state['mes_referencia_global']) if st.session_state['mes_referencia_global'] in lista_meses_disp else len(lista_meses_disp)-1
             mes_monitoramento_escolhido = st.selectbox("📅 Selecione o Mês para o Acompanhamento:", lista_meses_disp, index=idx_mes_sel, key="sel_mes_acompanhamento_dash")
             st.session_state['mes_referencia_global'] = mes_monitoramento_escolhido
+            
             aba_monitoramento_escolhida = next((m['nome_aba'] for m in meses_info if m['mes_nome'] == mes_monitoramento_escolhido), None)
             col_re_mes_escolhido = f're_iq_responsavel_{mes_monitoramento_escolhido}'
 
@@ -1100,7 +1101,10 @@ else:
                 st.info("ℹ️ Selecione um IQ específico no menu lateral esquerdo para visualizar e gerenciar as monitorias pendentes da equipe.")
                 tecnicos_nao_cert = pd.DataFrame()
             else:
-                tecnicos_nao_cert = equipe_vigente_mes[(equipe_vigente_mes[mes_monitoramento_escolhido] == 'NÃO') & (equipe_vigente_mes[f'ACOMPANHAMENTO_{mes_monitoramento_escolhido}'] != 'SIM')]
+                if mes_monitoramento_escolhido in equipe_vigente_mes.columns and f'ACOMPANHAMENTO_{mes_monitoramento_escolhido}' in equipe_vigente_mes.columns:
+                    tecnicos_nao_cert = equipe_vigente_mes[(equipe_vigente_mes[mes_monitoramento_escolhido] == 'NÃO') & (equipe_vigente[f'ACOMPANHAMENTO_{mes_monitoramento_escolhido}'] != 'SIM')]
+                else:
+                    tecnicos_nao_cert = pd.DataFrame()
             
             if tecnicos_nao_cert.empty:
                 st.success(f"Nenhum técnico pendente encontrado para o mês de {mes_monitoramento_escolhido}.")
@@ -1358,10 +1362,8 @@ else:
                             lote_capacete = st.text_input("Lote Capacete *")
                         with col_l1:
                             venc_carneira = st.text_input("Vencimento Carneira *")
-                            # Lote cinto exibido apenas para Casa
                             lote_cinto = st.text_input("Lote Cinto *") if tipo_instalacao_matinal == "Instalação de Casa" else "N/A (Apto)"
                         with col_l2:
-                            # Lote talabarte exibido apenas para Casa
                             lote_talabarte = st.text_input("Lote Talabarte *") if tipo_instalacao_matinal == "Instalação de Casa" else "N/A (Apto)"
                             lote_luva_pig = st.text_input("Lote Luva Pigmentada *")
 
