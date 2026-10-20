@@ -85,7 +85,7 @@ ITENS_MATINAL_CASA = {
         "EXTENSÃO DE TOMADA ELÉTRICA DE 10 A 20M", "BROCA DE WÍDEA LONGA 8\"", "BROCA DE WÍDEA LONGA 10\"", 
         "MALA DE FERRAMENTAS", "BALDE DE LONA (BORNAL)", "TELEFONE GÔNDOLA COM IDENTIFICADOR DE CHAMADA", 
         "LANTERNA", "ESCADA DE FIBRA (6Mts)", "ESCADA DE 4 E/OU 5 DEGRAUS ALTURA UTIL 1.50m (MÍNIMO)", 
-        "CÂMERA SONDA ENDOSCÓPICA", "CHAVEIRO MINI ISOLATOR", "CAPA DE MINI", "NUMERAL"
+        "CÂMERA SONDA ENDOSCÓPICA", "CHAVEIRO MINI ISOLATOR", "capa de mini", "numeral"
     ],
     "📡 GPON/Outros": [
         "CLIVADOR COM GABARITO PROFIBER", "GABARITO DE CONECTORIZAÇÃO", "ALICATE DECAPADOR DE FIBRA ÓPTICA", 
@@ -131,7 +131,7 @@ ITENS_MATINAL_APTO = {
         "EXTENSÃO DE TOMADA ELÉTRICA DE 10 A 20M", "BROCA DE WÍDEA LONGA 8\"", "BROCA DE WÍDEA LONGA 10\"", 
         "MALA DE FERRAMENTAS", "BALDE DE LONA (BORNAL)", "TELEFONE GÔNDOLA COM IDENTIFICADOR DE CHAMADA", 
         "LANTERNA", "ESCADA DE 4 E/OU 5 DEGRAUS ALTURA UTIL 1.50m (MÍNIMO)", 
-        "CÂMERA SONDA ENDOSCÓPICA", "CHAVEIRO MINI ISOLATOR", "CAPA DE MINI", "NUMERAL"
+        "CÂMERA SONDA ENDOSCÓPICA", "CHAVEIRO MINI ISOLATOR", "capa de mini", "numeral"
     ],
     "📡 GPON/Outros": [
         "CLIVADOR COM GABARITO PROFIBER", "GABARITO DE CONECTORIZAÇÃO", "ALICATE DECAPADOR DE FIBRA ÓPTICA", 
@@ -1080,52 +1080,30 @@ else:
                         st.rerun()
                 st.write("")
 
-        # --- ACOMPANHAMENTO PENDENTE FILTRADO ---
-        st.subheader(f"⚠️ Acompanhamento Pendente (Referência: {mes_monitoramento_escolhido})")
+        # --- ACOMPANHAMENTO PENDENTE FILTRADO COM SELETOR DE MÊS E CHECKLIST ---
+        st.subheader("⚠️ Acompanhamento Pendente")
+        
+        if meses_info:
+            lista_meses_disp = [m['mes_nome'] for m in meses_info]
+            idx_mes_sel = lista_meses_disp.index(st.session_state['mes_referencia_global']) if st.session_state['mes_referencia_global'] in lista_meses_disp else len(lista_meses_disp)-1
+            mes_monitoramento_escolhido = st.selectbox("📅 Selecione o Mês para o Acompanhamento:", lista_meses_disp, index=idx_mes_sel, key="sel_mes_acompanhamento_dash")
+            st.session_state['mes_referencia_global'] = mes_monitoramento_escolhido
+            aba_monitoramento_escolhida = next((m['nome_aba'] for m in meses_info if m['mes_nome'] == mes_monitoramento_escolhido), None)
+            col_re_mes_escolhido = f're_iq_responsavel_{mes_monitoramento_escolhido}'
 
-        # --- SEÇÃO EXCLUSIVA DE GESTÃO: ATRIBUIR TÉCNICO A IQ ---
-        if perfil_usuario == 'GESTÃO':
-            with st.expander("🛠️ [Gestão] Atribuir / Adicionar Técnico a um IQ por Mês"):
-                st.write("Selecione o técnico e para qual IQ ele deve ser direcionado no mês de referência.")
-                lista_todos_tecnicos = dados_completos['nome'].tolist() if 'nome' in dados_completos.columns else []
-                lista_iqs_disponiveis = dados_iqs[dados_iqs['PERFIL'] != 'GESTÃO'][['re_iq', 'nome_iq']].drop_duplicates()
-                opcoes_iq_gestao = [f"{row['re_iq']} - {row['nome_iq']}" for _, row in lista_iqs_disponiveis.iterrows()]
-                
-                with st.form("form_atribuir_tec"):
-                    c_att1, c_att2, c_att3 = st.columns(3)
-                    with c_att1:
-                        tec_escolhido = st.selectbox("Técnico:", lista_todos_tecnicos)
-                    with c_att2:
-                        iq_escolhido_str = st.selectbox("Novo IQ Responsável:", opcoes_iq_gestao)
-                    with c_att3:
-                        mes_atribuicao = st.selectbox("Mês de Referência:", [m['mes_nome'] for m in meses_info], index=len(meses_info)-1)
-                        
-                    btn_salvar_atribuicao = st.form_submit_button("Salvar Atribuição", type="primary")
-                    
-                    if btn_salvar_atribuicao:
-                        re_novo_iq = iq_escolhido_str.split(" - ")[0].strip()
-                        tec_row_sel = dados_completos[dados_completos['nome'] == tec_escolhido]
-                        if not tec_row_sel.empty:
-                            login_tec_sel = tec_row_sel.iloc[0]['login']
-                            aba_alvo_mes = next((m['nome_aba'] for m in meses_info if m['mes_nome'] == mes_atribuicao), aba_monitoramento_escolhida)
-                            
-                            sucesso_atrib, msg_atrib = atribuir_tecnico_a_iq(aba_alvo_mes, login_tec_sel, re_novo_iq, mes_atribuicao)
-                            if sucesso_atrib:
-                                st.success(f"✅ {msg_atrib}")
-                                time.sleep(1)
-                                st.rerun()
-                            else:
-                                st.error(f"Erro: {msg_atrib}")
+            if re_alvo_str and col_re_mes_escolhido in dados_completos.columns:
+                equipe_vigente_mes = dados_completos[dados_completos[col_re_mes_escolhido].astype(str).str.replace('.0', '') == str(re_alvo_str)]
+            else:
+                equipe_vigente_mes = dados_completos
 
-        if mes_monitoramento_escolhido:
             if perfil_usuario == 'GESTÃO' and not re_alvo_str:
                 st.info("ℹ️ Selecione um IQ específico no menu lateral esquerdo para visualizar e gerenciar as monitorias pendentes da equipe.")
                 tecnicos_nao_cert = pd.DataFrame()
             else:
-                tecnicos_nao_cert = equipe_vigente[(equipe_vigente[mes_monitoramento_escolhido] == 'NÃO') & (equipe_vigente[f'ACOMPANHAMENTO_{mes_monitoramento_escolhido}'] != 'SIM')]
+                tecnicos_nao_cert = equipe_vigente_mes[(equipe_vigente_mes[mes_monitoramento_escolhido] == 'NÃO') & (equipe_vigente_mes[f'ACOMPANHAMENTO_{mes_monitoramento_escolhido}'] != 'SIM')]
             
             if tecnicos_nao_cert.empty:
-                st.success(f"Nenhum técnico pendente encontrado para o filtro selecionado no mês de {mes_monitoramento_escolhido}.")
+                st.success(f"Nenhum técnico pendente encontrado para o mês de {mes_monitoramento_escolhido}.")
             else:
                 for index, row in tecnicos_nao_cert.iterrows():
                     tec_login = row['login']
@@ -1165,8 +1143,6 @@ else:
                             st.success(f"Monitorias de {tec_nome} salvas com sucesso!")
                             st.rerun()
                     st.divider()
-        else:
-            st.info("Crie abas de certificados mensais para habilitar o acompanhamento.")
 
     # --- PÁGINA 2: HISTÓRICO DE CERTIFICADOS ---
     elif st.session_state['pagina_atual'] == "Historico":
